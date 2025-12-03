@@ -76,8 +76,8 @@ impl Lexer {
     pub fn lex(&mut self, input: &str) {
         let mut it = input.chars().peekable();
 
-        while let Some(c) = it.peek() {
-            if *c != '\n' && self.error_mode {
+        while let Some(c) = it.peek().as_deref().cloned() {
+            if c != '\n' && self.error_mode {
                 it.next();
                 self.origin.column += 1;
                 self.origin.offset += 1;
@@ -86,6 +86,15 @@ impl Lexer {
             match c {
                 _ if c.is_whitespace() => {
                     it.next();
+
+                    self.origin.offset += 1;
+
+                    if c == '\n' {
+                        self.origin.column = 1;
+                        self.origin.line += 1;
+                    } else {
+                        self.origin.column += 1;
+                    }
                 }
                 _ if c.is_digit(10) => self.lex_literal_number(&mut it),
                 _ => self.add_error(ErrorKind::UnknownToken, 1),
@@ -117,16 +126,16 @@ mod tests {
     #[test]
     fn lex_unknown() {
         let mut lexer = Lexer::new();
-        lexer.lex("&");
+        lexer.lex(" &");
 
         assert!(lexer.tokens.is_empty());
         assert_eq!(lexer.errors.len(), 1);
 
         let err = &lexer.errors[0];
         assert_eq!(err.kind, ErrorKind::UnknownToken);
-        assert_eq!(err.origin.offset, 0);
+        assert_eq!(err.origin.offset, 1);
         assert_eq!(err.origin.line, 1);
-        assert_eq!(err.origin.column, 1);
+        assert_eq!(err.origin.column, 2);
         assert_eq!(err.origin.len, 1);
     }
 }
