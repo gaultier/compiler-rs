@@ -56,6 +56,7 @@ impl Lexer {
                 break;
             }
 
+            it.next().unwrap();
             self.origin.column += 1;
             self.origin.offset += 1;
         }
