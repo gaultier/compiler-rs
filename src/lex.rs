@@ -29,15 +29,16 @@ pub struct Token {
 impl Lexer {
     pub fn new() -> Self {
         Self {
-            origin: Origin::new(1, 1, 0 /*, Rc::new(Vec::new())*/),
+            origin: Origin::new(1, 1, 0, 0 /*, Rc::new(Vec::new())*/),
             error_mode: false,
             errors: Vec::new(),
             tokens: Vec::new(),
         }
     }
 
-    fn add_error(&mut self, kind: ErrorKind) {
-        self.errors.push(Error::new(kind, self.origin));
+    fn add_error(&mut self, kind: ErrorKind, len: u32) {
+        let origin = Origin { len, ..self.origin };
+        self.errors.push(Error::new(kind, origin));
         self.error_mode = true;
     }
 
@@ -49,7 +50,7 @@ impl Lexer {
         self.origin.offset += 1;
 
         if first == '0' {
-            self.add_error(ErrorKind::InvalidLiteralNumber);
+            self.add_error(ErrorKind::InvalidLiteralNumber, 1);
             return;
         }
 
@@ -58,14 +59,17 @@ impl Lexer {
                 break;
             }
 
-            it.next().unwrap();
+            it.next();
             self.origin.column += 1;
             self.origin.offset += 1;
         }
 
         self.tokens.push(Token {
             kind: TokenKind::LiteralNumber,
-            origin: start_origin,
+            origin: Origin {
+                len: self.origin.offset - start_origin.offset,
+                ..start_origin
+            },
         });
     }
 
@@ -80,8 +84,11 @@ impl Lexer {
                 continue;
             }
             match c {
+                _ if c.is_whitespace() => {
+                    it.next();
+                }
                 _ if c.is_digit(10) => self.lex_literal_number(&mut it),
-                _ => self.add_error(ErrorKind::UnknownToken),
+                _ => self.add_error(ErrorKind::UnknownToken, 1),
             }
         }
     }
@@ -92,7 +99,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn lex() {
+    fn lex_number() {
         let mut lexer = Lexer::new();
         lexer.lex("123");
 
@@ -101,5 +108,25 @@ mod tests {
 
         let token = &lexer.tokens[0];
         assert_eq!(token.kind, TokenKind::LiteralNumber);
+        assert_eq!(token.origin.offset, 0);
+        assert_eq!(token.origin.line, 1);
+        assert_eq!(token.origin.column, 1);
+        assert_eq!(token.origin.len, 3);
+    }
+
+    #[test]
+    fn lex_unknown() {
+        let mut lexer = Lexer::new();
+        lexer.lex("&");
+
+        assert!(lexer.tokens.is_empty());
+        assert_eq!(lexer.errors.len(), 1);
+
+        let err = &lexer.errors[0];
+        assert_eq!(err.kind, ErrorKind::UnknownToken);
+        assert_eq!(err.origin.offset, 0);
+        assert_eq!(err.origin.line, 1);
+        assert_eq!(err.origin.column, 1);
+        assert_eq!(err.origin.len, 1);
     }
 }

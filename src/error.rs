@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::origin::Origin;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum ErrorKind {
     UnknownToken,
     InvalidLiteralNumber,
