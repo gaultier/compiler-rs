@@ -42,6 +42,11 @@ impl Lexer {
         self.error_mode = true;
     }
 
+    fn add_error_at(&mut self, kind: ErrorKind, origin: Origin) {
+        self.errors.push(Error::new(kind, origin));
+        self.error_mode = true;
+    }
+
     fn lex_literal_number(&mut self, it: &mut Peekable<Chars<'_>>) {
         let start_origin = self.origin;
         let first = it.next().unwrap();
@@ -49,27 +54,30 @@ impl Lexer {
         self.origin.column += 1;
         self.origin.offset += 1;
 
-        if first == '0' {
-            self.add_error(ErrorKind::InvalidLiteralNumber, 1);
-            return;
-        }
-
         while let Some(c) = it.peek() {
             if !c.is_digit(10) {
                 break;
             }
 
-            it.next();
             self.origin.column += 1;
             self.origin.offset += 1;
+            it.next();
+        }
+
+        let len = self.origin.offset - start_origin.offset;
+        let origin = Origin {
+            len,
+            ..start_origin
+        };
+
+        if first == '0' {
+            self.add_error_at(ErrorKind::InvalidLiteralNumber, origin);
+            return;
         }
 
         self.tokens.push(Token {
             kind: TokenKind::LiteralNumber,
-            origin: Origin {
-                len: self.origin.offset - start_origin.offset,
-                ..start_origin
-            },
+            origin,
         });
     }
 
@@ -77,16 +85,15 @@ impl Lexer {
         let mut it = input.chars().peekable();
 
         while let Some(c) = it.peek().as_deref().cloned() {
+            eprintln!("off={} c={}", self.origin.offset, c);
             if c != '\n' && self.error_mode {
-                it.next();
                 self.origin.column += 1;
                 self.origin.offset += 1;
+                it.next();
                 continue;
             }
             match c {
                 _ if c.is_whitespace() => {
-                    it.next();
-
                     self.origin.offset += 1;
 
                     if c == '\n' {
@@ -95,9 +102,15 @@ impl Lexer {
                     } else {
                         self.origin.column += 1;
                     }
+                    it.next();
                 }
                 _ if c.is_digit(10) => self.lex_literal_number(&mut it),
-                _ => self.add_error(ErrorKind::UnknownToken, 1),
+                _ => {
+                    self.add_error(ErrorKind::UnknownToken, 1);
+                    self.origin.column += 1;
+                    self.origin.offset += 1;
+                    it.next();
+                }
             }
         }
     }
@@ -110,17 +123,35 @@ mod tests {
     #[test]
     fn lex_number() {
         let mut lexer = Lexer::new();
-        lexer.lex("123");
+        lexer.lex("123 4567\n 01");
 
-        assert!(lexer.errors.is_empty());
-        assert_eq!(lexer.tokens.len(), 1);
+        assert_eq!(lexer.errors.len(), 1);
+        assert_eq!(lexer.tokens.len(), 2);
 
-        let token = &lexer.tokens[0];
-        assert_eq!(token.kind, TokenKind::LiteralNumber);
-        assert_eq!(token.origin.offset, 0);
-        assert_eq!(token.origin.line, 1);
-        assert_eq!(token.origin.column, 1);
-        assert_eq!(token.origin.len, 3);
+        {
+            let token = &lexer.tokens[0];
+            assert_eq!(token.kind, TokenKind::LiteralNumber);
+            assert_eq!(token.origin.offset, 0);
+            assert_eq!(token.origin.line, 1);
+            assert_eq!(token.origin.column, 1);
+            assert_eq!(token.origin.len, 3);
+        }
+        {
+            let token = &lexer.tokens[1];
+            assert_eq!(token.kind, TokenKind::LiteralNumber);
+            assert_eq!(token.origin.offset, 4);
+            assert_eq!(token.origin.line, 1);
+            assert_eq!(token.origin.column, 5);
+            assert_eq!(token.origin.len, 4);
+        }
+        {
+            let err = &lexer.errors[0];
+            assert_eq!(err.kind, ErrorKind::InvalidLiteralNumber);
+            assert_eq!(err.origin.offset, 10);
+            assert_eq!(err.origin.line, 2);
+            assert_eq!(err.origin.column, 2);
+            assert_eq!(err.origin.len, 2);
+        }
     }
 
     #[test]
