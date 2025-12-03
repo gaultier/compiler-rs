@@ -1,4 +1,5 @@
-use std::{iter::Peekable, rc::Rc, str::Chars};
+use serde::{Deserialize, Serialize};
+use std::{iter::Peekable, str::Chars};
 
 use crate::{
     error::{Error, ErrorKind},
@@ -8,17 +9,18 @@ use crate::{
 pub struct Lexer {
     origin: Origin,
     error_mode: bool,
-    errors: Vec<Error>,
-    tokens: Vec<Token>,
+    pub errors: Vec<Error>,
+    pub tokens: Vec<Token>,
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum TokenKind {
     Whitespace,
     LiteralNumber,
     Plus,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Token {
     pub kind: TokenKind,
     pub origin: Origin,
@@ -27,7 +29,7 @@ pub struct Token {
 impl Lexer {
     pub fn new() -> Self {
         Self {
-            origin: Origin::new(1, 1, 0, Rc::new(Vec::new())),
+            origin: Origin::new(1, 1, 0 /*, Rc::new(Vec::new())*/),
             error_mode: false,
             errors: Vec::new(),
             tokens: Vec::new(),
@@ -35,12 +37,12 @@ impl Lexer {
     }
 
     fn add_error(&mut self, kind: ErrorKind) {
-        self.errors.push(Error::new(kind, self.origin.clone()));
+        self.errors.push(Error::new(kind, self.origin));
         self.error_mode = true;
     }
 
     fn lex_literal_number(&mut self, it: &mut Peekable<Chars<'_>>) {
-        let start_origin = self.origin.clone();
+        let start_origin = self.origin;
         let first = it.next().unwrap();
         assert!(first.is_digit(10));
         self.origin.column += 1;

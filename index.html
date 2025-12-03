@@ -1,35 +1,9 @@
 <!DOCTYPE html>
 <html>
   <body>
+      <pre>
+          <code id="root"></code>
+      </pre>
   </body>
-  <script>
-async function loadWasm() {
-    const memory = new WebAssembly.Memory({ initial: 256, maximum: 256 });
-
-//    const importsObject = createImports(memory);
-
-    try {
-        const result = await WebAssembly.instantiateStreaming(
-            fetch("target/wasm32-unknown-unknown/debug/compiler_rs_lib.wasm"),
-            //importsObject // Provide the required imports (host functions, memory)
-        );
-
-        // Extract the exports, which are the C functions marked with __attribute__((export_name))
-        const exports = result.instance.exports;
-
-        console.log("WebAssembly module loaded and instantiated successfully.", exports);
-
-        if (exports.add) {
-            console.log("Calling WASM exported function 'add'...");
-            const res = exports.add(3n, 7n); 
-            console.log(res);
-        }
-    } catch (error) {
-        console.error("Error loading or running WASM:", error);
-    }
-}
-
-// Start the loading process
-loadWasm();
-  </script>
+  <script type="module" src="./index.js"></script>
 </html>
