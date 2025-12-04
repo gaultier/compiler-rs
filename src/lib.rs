@@ -1,3 +1,5 @@
+use std::alloc::Layout;
+
 use crate::lex::Lexer;
 
 pub mod error;
@@ -16,10 +18,16 @@ impl WasmMemoryHandle {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn alloc_u8(size: usize) -> usize {
-    let v: Vec<u8> = Vec::with_capacity(size);
-    let ptr = v.as_ptr();
-    std::mem::forget(v);
+    let layout = Layout::from_size_align(size, std::mem::align_of::<u8>()).unwrap();
+    let ptr = unsafe { std::alloc::alloc(layout) };
+    assert!(!ptr.is_null());
     ptr as usize
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn dealloc_u8(ptr: usize, size: usize) {
+    let layout = Layout::from_size_align(size, std::mem::align_of::<u8>()).unwrap();
+    unsafe { std::alloc::dealloc(ptr as *mut u8, layout) };
 }
 
 #[unsafe(no_mangle)]
@@ -36,5 +44,6 @@ pub extern "C" fn lex(in_ptr: *const u8, in_len: usize) -> WasmMemoryHandle {
 
     let res = WasmMemoryHandle::new(json.as_ptr() as usize, json.len());
     std::mem::forget(json);
+
     res
 }
