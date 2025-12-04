@@ -52,6 +52,9 @@ async function loadWasm() {
             const res_str = Utf8BytesToJsString(res_slice);
             console.log(res_slice, res_str);
 
+            const [ tokens, errors ] = JSON.parse(res_str);
+            console.log(tokens,errors);
+
             exports.dealloc_u8_no_metadata(input_ptr, input_len);
             exports.dealloc(handle);
         }
