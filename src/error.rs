@@ -11,7 +11,7 @@ pub enum ErrorKind {
     ParseFactorMissingRhs,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct Error {
     pub kind: ErrorKind,
     pub origin: Origin,

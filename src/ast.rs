@@ -11,12 +11,12 @@ pub enum NodeKind {
     Add,
 }
 
-#[derive(Serialize, Copy, Clone, Default)]
+#[derive(Serialize, Copy, Clone, Default, Debug)]
 pub struct NodeData {
     num: u64,
 }
 
-#[derive(Serialize, Copy, Clone)]
+#[derive(Serialize, Copy, Clone, Debug)]
 pub struct Node {
     kind: NodeKind,
     data: NodeData,
@@ -25,10 +25,10 @@ pub struct Node {
 
 pub struct Parser<'a> {
     error_mode: bool,
-    pub(crate) tokens: Vec<Token>,
+    pub tokens: Vec<Token>,
     tokens_consumed: usize,
-    pub(crate) errors: Vec<Error>,
-    pub(crate) nodes: Vec<Node>,
+    pub errors: Vec<Error>,
+    pub nodes: Vec<Node>,
     input: &'a str,
 }
 
@@ -341,7 +341,7 @@ mod tests {
 
     #[test]
     fn parse_add() {
-        let input = "123 +45";
+        let input = "123 + 45 + 0";
         let mut lexer = Lexer::new();
         lexer.lex(&input);
 
@@ -351,7 +351,7 @@ mod tests {
         parser.parse();
 
         assert!(parser.errors.is_empty());
-        assert_eq!(parser.nodes.len(), 3);
+        assert_eq!(parser.nodes.len(), 5);
 
         {
             let node = &parser.nodes[0];
@@ -365,6 +365,15 @@ mod tests {
         }
         {
             let node = &parser.nodes[2];
+            assert_eq!(node.kind, NodeKind::Add);
+        }
+        {
+            let node = &parser.nodes[3];
+            assert_eq!(node.kind, NodeKind::Number);
+            assert_eq!(node.data.num, 0);
+        }
+        {
+            let node = &parser.nodes[4];
             assert_eq!(node.kind, NodeKind::Add);
         }
     }
