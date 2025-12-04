@@ -18,10 +18,11 @@ pub enum TokenKind {
     Whitespace,
     LiteralNumber,
     Plus,
+    Newline,
     Eof,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
 pub struct Token {
     pub kind: TokenKind,
     pub origin: Origin,
@@ -94,6 +95,20 @@ impl Lexer {
                 continue;
             }
             match c {
+                '\n' => {
+                    let origin = Origin {
+                        len: 1,
+                        ..self.origin
+                    };
+                    self.tokens.push(Token {
+                        kind: TokenKind::Newline,
+                        origin,
+                    });
+                    self.origin.offset += 1;
+                    self.origin.column = 1;
+                    self.origin.line += 1;
+                    it.next();
+                }
                 '+' => {
                     let origin = Origin {
                         len: 1,
@@ -110,12 +125,7 @@ impl Lexer {
                 _ if c.is_whitespace() => {
                     self.origin.offset += 1;
 
-                    if c == '\n' {
-                        self.origin.column = 1;
-                        self.origin.line += 1;
-                    } else {
-                        self.origin.column += 1;
-                    }
+                    self.origin.column += 1;
                     it.next();
                 }
                 _ if c.is_ascii_digit() => self.lex_literal_number(&mut it),
@@ -148,7 +158,7 @@ mod tests {
         lexer.lex("123 4567\n 01");
 
         assert_eq!(lexer.errors.len(), 1);
-        assert_eq!(lexer.tokens.len(), 3);
+        assert_eq!(lexer.tokens.len(), 4);
 
         {
             let token = &lexer.tokens[0];
@@ -168,6 +178,14 @@ mod tests {
         }
         {
             let token = &lexer.tokens[2];
+            assert_eq!(token.kind, TokenKind::Newline);
+            assert_eq!(token.origin.offset, 8);
+            assert_eq!(token.origin.line, 1);
+            assert_eq!(token.origin.column, 9);
+            assert_eq!(token.origin.len, 1);
+        }
+        {
+            let token = &lexer.tokens[3];
             assert_eq!(token.kind, TokenKind::Eof);
         }
         {

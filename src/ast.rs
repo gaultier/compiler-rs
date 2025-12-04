@@ -72,36 +72,49 @@ impl<'a> Parser<'a> {
         self.advance_to_next_line_from_last_error();
     }
 
+    fn match_kind(&mut self, kind: TokenKind) -> Option<Token> {
+        let token = &self.tokens[self.tokens_consumed];
+        if token.kind != kind {
+            return None;
+        }
+
+        self.tokens_consumed += 1;
+        Some(token.clone())
+    }
+
+    fn match_kind1_or_kind2(&mut self, kind1: TokenKind, kind2: TokenKind) -> Option<Token> {
+        let token = &self.tokens[self.tokens_consumed];
+        if !(token.kind == kind1 || token.kind == kind2) {
+            return None;
+        }
+
+        self.tokens_consumed += 1;
+        Some(token.clone())
+    }
+
     fn parse_primary(&mut self) -> bool {
         if self.error_mode {
             return false;
         }
 
-        let token = &self.tokens[self.tokens_consumed];
-
-        match token.kind {
-            TokenKind::LiteralNumber => {
-                self.tokens_consumed += 1;
-
-                let src = &self.input[token.origin.offset as usize..][..token.origin.len as usize];
-                let num = match u64::from_str_radix(src, 10) {
-                    Ok(num) => num,
-                    Err(_) => {
-                        self.add_error(ErrorKind::InvalidLiteralNumber, token.origin);
-                        return false;
-                    }
-                };
-                let node = Node {
-                    kind: NodeKind::Number(num),
-                    origin: token.origin,
-                };
-                self.nodes.push(node);
-                return true;
-            }
-            _ => {
-                return false;
-            }
+        if let Some(token) = self.match_kind(TokenKind::LiteralNumber) {
+            let src = &self.input[token.origin.offset as usize..][..token.origin.len as usize];
+            let num = match u64::from_str_radix(src, 10) {
+                Ok(num) => num,
+                Err(_) => {
+                    self.add_error(ErrorKind::InvalidLiteralNumber, token.origin);
+                    return false;
+                }
+            };
+            let node = Node {
+                kind: NodeKind::Number(num),
+                origin: token.origin,
+            };
+            self.nodes.push(node);
+            return true;
         }
+
+        return false;
     }
 
     fn parse_expr(&mut self) -> bool {
@@ -110,6 +123,29 @@ impl<'a> Parser<'a> {
         }
 
         if self.parse_primary() {
+            return true;
+        }
+
+        false
+    }
+
+    fn parse_statement(&mut self) -> bool {
+        if self.error_mode {
+            return false;
+        }
+
+        if self.parse_expr() {
+            if !self
+                .match_kind1_or_kind2(TokenKind::Newline, TokenKind::Eof)
+                .is_some()
+            {
+                self.add_error(
+                    ErrorKind::MissingNewline,
+                    self.current_or_last_token_origin()
+                        .unwrap_or(self.nodes.last().unwrap().origin),
+                );
+                return false;
+            }
             return true;
         }
 
@@ -154,7 +190,7 @@ impl<'a> Parser<'a> {
                 }
                 // TODO: err mode skip.
                 _ => {
-                    if self.parse_expr() {
+                    if self.parse_statement() {
                         continue;
                     }
 

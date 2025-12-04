@@ -7,6 +7,7 @@ pub enum ErrorKind {
     UnknownToken,
     InvalidLiteralNumber,
     ParseStatement,
+    MissingNewline,
 }
 
 #[derive(Serialize, Deserialize)]
