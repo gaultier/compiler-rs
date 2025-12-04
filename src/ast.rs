@@ -1,6 +1,6 @@
 use crate::{
     error::{Error, ErrorKind},
-    lex::{Token, TokenKind},
+    lex::{Lexer, Token, TokenKind},
     origin::Origin,
 };
 
@@ -14,14 +14,27 @@ pub struct Node {
     origin: Origin,
 }
 
-pub struct Parser {
+pub struct Parser<'a> {
     error_mode: bool,
     tokens: Vec<Token>,
     tokens_consumed: usize,
     errors: Vec<Error>,
+    nodes: Vec<Node>,
+    input: &'a str,
 }
 
-impl Parser {
+impl<'a> Parser<'a> {
+    pub fn new(input: &'a str, lexer: Lexer) -> Self {
+        Self {
+            error_mode: false,
+            tokens: lexer.tokens,
+            tokens_consumed: 0,
+            errors: lexer.errors,
+            nodes: Vec::new(),
+            input,
+        }
+    }
+
     fn advance_to_next_line_from_last_error(&mut self) {
         assert!(self.tokens_consumed <= self.tokens.len());
         if self.tokens_consumed == self.tokens.len() {
@@ -59,12 +72,46 @@ impl Parser {
         self.advance_to_next_line_from_last_error();
     }
 
+    fn parse_primary(&mut self) -> bool {
+        if self.error_mode {
+            return false;
+        }
+
+        let token = &self.tokens[self.tokens_consumed];
+
+        match token.kind {
+            TokenKind::LiteralNumber => {
+                self.tokens_consumed += 1;
+
+                let src = &self.input[token.origin.offset as usize..][..token.origin.len as usize];
+                let num = match u64::from_str_radix(src, 10) {
+                    Ok(num) => num,
+                    Err(_) => {
+                        self.add_error(ErrorKind::InvalidLiteralNumber, token.origin);
+                        return false;
+                    }
+                };
+                let node = Node {
+                    kind: NodeKind::Number(num),
+                    origin: token.origin,
+                };
+                self.nodes.push(node);
+                return true;
+            }
+            _ => {
+                return false;
+            }
+        }
+    }
+
     fn parse_expr(&mut self) -> bool {
         if self.error_mode {
             return false;
         }
 
-        // TODO
+        if self.parse_primary() {
+            return true;
+        }
 
         false
     }
@@ -87,7 +134,7 @@ impl Parser {
         }
     }
 
-    pub fn emit(&mut self) {
+    pub fn parse(&mut self) {
         for _i in 0..self.tokens.len() {
             assert!(self.tokens_consumed <= self.tokens.len());
             if self.tokens_consumed == self.tokens.len() {
@@ -118,6 +165,34 @@ impl Parser {
                     );
                 }
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_number() {
+        let input = "123 ";
+        let mut lexer = Lexer::new();
+        lexer.lex(&input);
+
+        assert!(lexer.errors.is_empty());
+
+        let mut parser = Parser::new(input, lexer);
+        parser.parse();
+
+        assert!(parser.errors.is_empty());
+        assert_eq!(parser.nodes.len(), 1);
+
+        {
+            let node = &parser.nodes[0];
+            match node.kind {
+                NodeKind::Number(123) => {}
+                _ => assert!(false),
+            };
         }
     }
 }
