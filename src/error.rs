@@ -73,7 +73,7 @@ impl Error {
         }
 
         if !self.explanation.is_empty() {
-            w.write_all(&self.explanation.as_bytes())?;
+            w.write_all(self.explanation.as_bytes())?;
             w.write_all(b"\n")?;
         }
         w.write_all(b"\n")?;

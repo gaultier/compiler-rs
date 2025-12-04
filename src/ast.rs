@@ -100,7 +100,7 @@ impl<'a> Parser<'a> {
         }
 
         self.tokens_consumed += 1;
-        Some(token.clone())
+        Some(*token)
     }
 
     fn match_kind1_or_kind2(&mut self, kind1: TokenKind, kind2: TokenKind) -> Option<Token> {
@@ -110,7 +110,7 @@ impl<'a> Parser<'a> {
         }
 
         self.tokens_consumed += 1;
-        Some(token.clone())
+        Some(*token)
     }
 
     fn parse_primary(&mut self) -> bool {
@@ -120,7 +120,7 @@ impl<'a> Parser<'a> {
 
         if let Some(token) = self.match_kind(TokenKind::LiteralNumber) {
             let src = &self.input[token.origin.offset as usize..][..token.origin.len as usize];
-            let num = match u64::from_str_radix(src, 10) {
+            let num = match str::parse(src) {
                 Ok(num) => num,
                 Err(_) => {
                     self.add_error(ErrorKind::InvalidLiteralNumber, token.origin);
@@ -136,7 +136,7 @@ impl<'a> Parser<'a> {
             return true;
         }
 
-        return false;
+        false
     }
 
     fn parse_expr(&mut self) -> bool {
@@ -155,35 +155,35 @@ impl<'a> Parser<'a> {
         if self.error_mode {
             return false;
         }
-        return self.parse_logic_or();
+        self.parse_logic_or()
     }
 
     fn parse_logic_or(&mut self) -> bool {
         if self.error_mode {
             return false;
         }
-        return self.parse_logic_and();
+        self.parse_logic_and()
     }
 
     fn parse_logic_and(&mut self) -> bool {
         if self.error_mode {
             return false;
         }
-        return self.parse_equality();
+        self.parse_equality()
     }
 
     fn parse_equality(&mut self) -> bool {
         if self.error_mode {
             return false;
         }
-        return self.parse_comparison();
+        self.parse_comparison()
     }
 
     fn parse_comparison(&mut self) -> bool {
         if self.error_mode {
             return false;
         }
-        return self.parse_term();
+        self.parse_term()
     }
 
     fn parse_term(&mut self) -> bool {
@@ -220,21 +220,21 @@ impl<'a> Parser<'a> {
         if self.error_mode {
             return false;
         }
-        return self.parse_unary();
+        self.parse_unary()
     }
 
     fn parse_unary(&mut self) -> bool {
         if self.error_mode {
             return false;
         }
-        return self.parse_call();
+        self.parse_call()
     }
 
     fn parse_call(&mut self) -> bool {
         if self.error_mode {
             return false;
         }
-        return self.parse_primary();
+        self.parse_primary()
     }
 
     fn parse_statement(&mut self) -> bool {
@@ -243,9 +243,9 @@ impl<'a> Parser<'a> {
         }
 
         if self.parse_expr() {
-            if !self
+            if self
                 .match_kind1_or_kind2(TokenKind::Newline, TokenKind::Eof)
-                .is_some()
+                .is_none()
             {
                 self.add_error_with_explanation(
                     ErrorKind::MissingNewline,

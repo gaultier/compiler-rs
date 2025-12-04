@@ -1,4 +1,4 @@
-use std::{fmt, io::Write};
+use std::io::Write;
 
 use miniserde::Serialize;
 //use std::rc::Rc;
