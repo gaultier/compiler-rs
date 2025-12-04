@@ -72,7 +72,7 @@ impl Lexer {
             ..start_origin
         };
 
-        if first == '0' {
+        if first == '0' && len > 1 {
             self.add_error_at(ErrorKind::InvalidLiteralNumber, origin);
             return;
         }
