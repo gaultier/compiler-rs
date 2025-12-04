@@ -36,24 +36,24 @@ async function loadWasm() {
             let input_js = " 123 456 ";
             let input_bytes = JsStringToUtf8Bytes(input_js);
             const input_len = input_bytes.length;
-            const input_ptr = exports.alloc_u8(input_len)
+            const input_ptr = exports.alloc_u8_no_metadata(input_len)
             console.log("input_ptr: ", input_ptr);
             const input_mem = new Uint8Array(memory.buffer, input_ptr, input_len);
             input_mem.set(input_bytes); // memcpy.
 
-            let out_ptr = 0;
-            let out_len = 0;
-            const res = exports.lex(input_ptr, input_len); 
-            const res_ptr = Number(res >> 32n);
-            const res_len = Number(res & 0xffffffffn);
-            console.log(res,res_ptr,res_len);
+            const handle = exports.lex(input_ptr, input_len); 
+            console.log(handle);
+            const res_slice_len = new Uint8Array(memory.buffer, handle, 4);
+            console.log(handle, res_slice_len);
+            const len = res_slice_len[0] | res_slice_len[1]<<8 | res_slice_len[2]<<16 | res_slice_len[3]<<24;
+            console.log(len);
 
-            const res_slice = new Uint8Array(memory.buffer, res_ptr, res_len);
+            const res_slice = new Uint8Array(memory.buffer, handle + 9, len);
             const res_str = Utf8BytesToJsString(res_slice);
             console.log(res_slice, res_str);
 
-            exports.dealloc_u8(input_ptr, input_len);
-            exports.dealloc_u8(res_ptr, res_len);
+            exports.dealloc_u8_no_metadata(input_ptr, input_len);
+            exports.dealloc(handle);
         }
     } catch (error) {
         console.error("Error loading or running WASM:", error);

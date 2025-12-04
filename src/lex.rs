@@ -85,7 +85,6 @@ impl Lexer {
         let mut it = input.chars().peekable();
 
         while let Some(c) = it.peek().as_deref().cloned() {
-            eprintln!("off={} c={}", self.origin.offset, c);
             if c != '\n' && self.error_mode {
                 self.origin.column += 1;
                 self.origin.offset += 1;
