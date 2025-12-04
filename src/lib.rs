@@ -27,12 +27,12 @@ impl Allocation {
     fn from_wasm_memory_handle(handle: WasmMemoryHandle) -> (Self, usize) {
         let ptr = handle.0 as *mut u8;
 
-        let length_slice = unsafe { std::slice::from_raw_parts(ptr.add(0 * 4), 4) };
+        let length_slice = unsafe { std::slice::from_raw_parts(ptr, 4) };
         let mut length_array = [0; 4];
         length_array.copy_from_slice(length_slice);
         let length = u32::from_le_bytes(length_array);
 
-        let cap_slice = unsafe { std::slice::from_raw_parts(ptr.add(1 * 4), 4) };
+        let cap_slice = unsafe { std::slice::from_raw_parts(ptr.add(4), 4) };
         let mut cap_array = [0; 4];
         cap_array.copy_from_slice(cap_slice);
         let cap = u32::from_le_bytes(cap_array);
