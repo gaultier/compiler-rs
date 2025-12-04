@@ -57,13 +57,21 @@ impl Error {
 
             // TODO: limit context length.
             let mut excerpt_start = start;
-            while excerpt_start > 0 && input.as_bytes()[excerpt_start] != b'\n' {
+            while excerpt_start > 0 {
                 excerpt_start -= 1;
+                if input.as_bytes()[excerpt_start] == b'\n' {
+                    excerpt_start += 1;
+                    break;
+                }
             }
 
             let mut excerpt_end = end;
-            while excerpt_end < input.len() && input.as_bytes()[excerpt_end] != b'\n' {
+            while excerpt_end < input.len() {
                 excerpt_end += 1;
+                if input.as_bytes()[excerpt_end] == b'\n' {
+                    excerpt_end -= 1;
+                    break;
+                }
             }
 
             let excerpt_before = &input[excerpt_start..start].trim_ascii_start();

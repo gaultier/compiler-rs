@@ -19,8 +19,10 @@ fn main() {
 
     println!("--- Parse ---");
     println!("nodes: {:#?}", &parser.nodes);
-    for err in &lexer.errors {
+    for err in &parser.errors {
         err.write(&mut std::io::stderr(), &file_content, &file_id_to_names)
             .unwrap();
     }
+
+    std::process::exit(if parser.errors.is_empty() { 0 } else { 1 });
 }

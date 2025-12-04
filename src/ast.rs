@@ -94,6 +94,10 @@ impl<'a> Parser<'a> {
     }
 
     fn match_kind(&mut self, kind: TokenKind) -> Option<Token> {
+        if self.tokens_consumed >= self.tokens.len() {
+            return None;
+        }
+
         let token = &self.tokens[self.tokens_consumed];
         if token.kind != kind {
             return None;
@@ -104,6 +108,10 @@ impl<'a> Parser<'a> {
     }
 
     fn match_kind1_or_kind2(&mut self, kind1: TokenKind, kind2: TokenKind) -> Option<Token> {
+        if self.tokens_consumed >= self.tokens.len() {
+            return None;
+        }
+
         let token = &self.tokens[self.tokens_consumed];
         if !(token.kind == kind1 || token.kind == kind2) {
             return None;
@@ -196,7 +204,7 @@ impl<'a> Parser<'a> {
 
         loop {
             let token = match self.match_kind(TokenKind::Plus) {
-                None => return true,
+                None => return self.match_kind(TokenKind::Eof).is_some(),
                 Some(t) => t,
             };
 
@@ -205,6 +213,7 @@ impl<'a> Parser<'a> {
                     ErrorKind::ParseFactorMissingRhs,
                     self.current_or_last_token_origin().unwrap_or(token.origin),
                 );
+                return false;
             }
 
             let node = Node {
@@ -290,6 +299,7 @@ impl<'a> Parser<'a> {
             if self.error_mode {
                 self.advance_to_next_line_from_last_error();
                 self.error_mode = false;
+                continue;
             }
 
             let kind = self.tokens[self.tokens_consumed].kind;
