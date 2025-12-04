@@ -1,39 +1,26 @@
 <!DOCTYPE html>
 <html>
-  <body>
-  </body>
-  <script>
-function JsStringToUtf8Bytes(str) {
-  const encoder = new TextEncoder();
-  return encoder.encode(str);
-}
+    <body>
+        <input id="input"></input>
+        <textarea id="lex"></textarea>
+    </body>
+    <script>
+        function JsStringToUtf8Bytes(str) {
+            const encoder = new TextEncoder();
+            return encoder.encode(str);
+        }
 
-function Utf8BytesToJsString(bytes) {
-    const decoder = new TextDecoder('utf-8');
-    return decoder.decode(bytes);
-}
+        function Utf8BytesToJsString(bytes) {
+            const decoder = new TextDecoder('utf-8');
+            return decoder.decode(bytes);
+        }
 
+        function run(input_js, wasm_instance) {
+            console.log("run", input_js);
 
-async function loadWasm() {
-    const memory = new WebAssembly.Memory({ initial: 256, maximum: 256 });
+            const exports = wasm_instance.exports;
+            const memory = exports.memory;
 
-//    const importsObject = createImports(memory);
-
-    try {
-        const result = await WebAssembly.instantiateStreaming(
-            fetch("target/wasm32-unknown-unknown/debug/compiler_rs_lib.wasm"),
-            //importsObject // Provide the required imports (host functions, memory)
-        );
-
-        // Extract the exports, which are the C functions marked with __attribute__((export_name))
-        const exports = result.instance.exports;
-        const memory = result.instance.exports.memory;
-
-        console.log("WebAssembly module loaded and instantiated successfully.", exports);
-
-        if (exports.lex) {
-            console.log("Calling WASM exported function 'lex'...");
-            let input_js = " 123 456 ";
             let input_bytes = JsStringToUtf8Bytes(input_js);
             const input_len = input_bytes.length;
             const input_ptr = exports.alloc_u8_no_metadata(input_len)
@@ -52,18 +39,40 @@ async function loadWasm() {
             const res_str = Utf8BytesToJsString(res_slice);
             console.log(res_slice, res_str);
 
-            const [ tokens, errors ] = JSON.parse(res_str);
-            console.log(tokens,errors);
+            // const lex_res = JSON.parse(res_str);
+            // console.log(lex_res);
 
             exports.dealloc_u8_no_metadata(input_ptr, input_len);
             exports.dealloc(handle);
-        }
-    } catch (error) {
-        console.error("Error loading or running WASM:", error);
-    }
-}
 
-// Start the loading process
-loadWasm();
-  </script>
+            const lex_dom = document.getElementById("lex");
+            lex_dom.innerText = res_str;
+
+        }
+
+        async function loadWasm() {
+            const memory = new WebAssembly.Memory({ initial: 256, maximum: 256 });
+
+            //    const importsObject = createImports(memory);
+
+            try {
+                const result = await WebAssembly.instantiateStreaming(
+                    fetch("target/wasm32-unknown-unknown/debug/compiler_rs_lib.wasm"),
+                    //importsObject // Provide the required imports (host functions, memory)
+                );
+
+                console.log("WebAssembly module loaded and instantiated successfully.", result.instance.exports);
+
+                const input_dom = document.getElementById("input");
+                input_dom.addEventListener('input', function(event) {
+                    run(event.target.value, result.instance);
+                });
+            } catch (error) {
+                console.error("Error loading or running WASM:", error);
+            }
+        }
+
+        // Start the loading process
+        loadWasm();
+    </script>
 </html>
