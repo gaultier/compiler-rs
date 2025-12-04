@@ -36,21 +36,21 @@ async function loadWasm() {
             let input_js = " 123 456 ";
             let input_bytes = JsStringToUtf8Bytes(input_js);
             const input_length = input_bytes.length;
-            console.log(input_length);
             const input_ptr = exports.alloc_u8(input_length)
-            const wasm_heap = new Uint8Array(memory.buffer);
-            wasm_heap.set(input_bytes, input_ptr); // memcpy.
+            console.log("input_ptr: ", input_ptr);
+            const input_mem = new Uint8Array(memory.buffer, input_ptr, input_length);
+            input_mem.set(input_bytes); // memcpy.
 
             let out_ptr = 0;
             let out_len = 0;
             const res = exports.lex(input_ptr, input_length); 
-            const res_ptr = (res >> 32n);
-            const res_len = (res & 0xffffffffn);
+            const res_ptr = Number(res >> 32n);
+            const res_len = Number(res & 0xffffffffn);
             console.log(res,res_ptr,res_len);
 
-            const res_slice = new Uint8Array(wasm_heap, res_ptr, res_len);
+            const res_slice = new Uint8Array(memory.buffer, res_ptr, res_len);
             const res_str = Utf8BytesToJsString(res_slice);
-            console.log(res_str);
+            console.log(res_slice, res_str);
         }
     } catch (error) {
         console.error("Error loading or running WASM:", error);
