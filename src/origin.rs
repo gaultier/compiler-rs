@@ -1,3 +1,5 @@
+use std::{fmt, io::Write};
+
 use miniserde::Serialize;
 //use std::rc::Rc;
 
@@ -24,5 +26,12 @@ impl Origin {
             len,
             //file,
         }
+    }
+
+    pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+        // TODO: file name.
+        write!(w, "{}:{}:{}", self.line, self.column, self.offset)?;
+
+        Ok(())
     }
 }

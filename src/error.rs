@@ -1,8 +1,10 @@
+use std::io::Write;
+
 use miniserde::Serialize;
 
 use crate::origin::Origin;
 
-#[derive(Serialize, Debug, PartialEq, Eq)]
+#[derive(Serialize, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ErrorKind {
     UnknownToken,
     InvalidLiteralNumber,
@@ -11,7 +13,7 @@ pub enum ErrorKind {
     ParseFactorMissingRhs,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub struct Error {
     pub kind: ErrorKind,
     pub origin: Origin,
@@ -25,5 +27,54 @@ impl Error {
             origin,
             explanation,
         }
+    }
+
+    pub fn write<W: Write>(&self, w: &mut W, input: &str) -> std::io::Result<()> {
+        self.origin.write(w)?;
+
+        w.write_all(b": Error: ")?;
+
+        match self.kind {
+            ErrorKind::UnknownToken => w.write_all(b"unknown token")?,
+            ErrorKind::InvalidLiteralNumber => w.write_all(b"invalid number literal")?,
+            ErrorKind::ParseStatement => w.write_all(b"invalid parse statement")?,
+            ErrorKind::MissingNewline => w.write_all(b"missing newline")?,
+            ErrorKind::ParseFactorMissingRhs => {
+                w.write_all(b"missing right operand in +/- operation")?
+            }
+        };
+
+        w.write_all(b": ")?;
+
+        {
+            let start = self.origin.offset as usize;
+            let end = self.origin.offset as usize + self.origin.len as usize;
+
+            // TODO: limit context length.
+            let mut excerpt_start = start;
+            while excerpt_start > 0 && input.as_bytes()[excerpt_start] != b'\n' {
+                excerpt_start -= 1;
+            }
+
+            let mut excerpt_end = end;
+            while excerpt_end < input.len() && input.as_bytes()[excerpt_end] != b'\n' {
+                excerpt_end += 1;
+            }
+
+            let excerpt_before = &input[excerpt_start..start].trim_ascii_start();
+            let excerpt = &input[start..end];
+            let excerpt_after = &input[end..excerpt_end].trim_ascii_end();
+
+            w.write_all(excerpt_before.as_bytes())?;
+            w.write_all(b"\x1B[4m")?;
+            w.write_all(excerpt.as_bytes())?;
+            w.write_all(b"\x1B[0m")?;
+            w.write_all(excerpt_after.as_bytes())?;
+        }
+
+        w.write_all(&self.explanation.as_bytes())?;
+        w.write_all(b"\n")?;
+
+        Ok(())
     }
 }

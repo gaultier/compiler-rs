@@ -136,7 +136,7 @@ pub extern "C" fn parse(in_ptr: *const u8, in_len: usize) -> WasmMemoryHandle {
     let mut lexer = Lexer::new();
     lexer.lex(input_str);
 
-    let mut parser = Parser::new(input_str, lexer);
+    let mut parser = Parser::new(input_str, &lexer);
     parser.parse();
 
     let parser_response = ParseResponse {

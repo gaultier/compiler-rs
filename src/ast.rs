@@ -33,12 +33,12 @@ pub struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(input: &'a str, lexer: Lexer) -> Self {
+    pub fn new(input: &'a str, lexer: &Lexer) -> Self {
         Self {
             error_mode: false,
-            tokens: lexer.tokens,
+            tokens: lexer.tokens.clone(),
             tokens_consumed: 0,
-            errors: lexer.errors,
+            errors: lexer.errors.clone(),
             nodes: Vec::new(),
             input,
         }
@@ -326,7 +326,7 @@ mod tests {
 
         assert!(lexer.errors.is_empty());
 
-        let mut parser = Parser::new(input, lexer);
+        let mut parser = Parser::new(input, &lexer);
         parser.parse();
 
         assert!(parser.errors.is_empty());
@@ -347,7 +347,7 @@ mod tests {
 
         assert!(lexer.errors.is_empty());
 
-        let mut parser = Parser::new(input, lexer);
+        let mut parser = Parser::new(input, &lexer);
         parser.parse();
 
         assert!(parser.errors.is_empty());

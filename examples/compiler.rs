@@ -9,12 +9,13 @@ fn main() {
 
     println!("--- Lex ---");
     println!("tokens: {:#?}", &lexer.tokens);
-    println!("errors: {:#?}", &lexer.errors);
 
-    let mut parser = Parser::new(&file_content, lexer);
+    let mut parser = Parser::new(&file_content, &lexer);
     parser.parse();
 
     println!("--- Parse ---");
     println!("nodes: {:#?}", &parser.nodes);
-    println!("errors: {:#?}", &parser.errors);
+    for err in &lexer.errors {
+        err.write(&mut std::io::stderr(), &file_content).unwrap();
+    }
 }
