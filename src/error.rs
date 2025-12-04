@@ -1,8 +1,8 @@
-use miniserde::{Deserialize, Serialize};
+use miniserde::Serialize;
 
 use crate::origin::Origin;
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Serialize, Debug, PartialEq, Eq)]
 pub enum ErrorKind {
     UnknownToken,
     InvalidLiteralNumber,
@@ -10,7 +10,7 @@ pub enum ErrorKind {
     MissingNewline,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 pub struct Error {
     pub kind: ErrorKind,
     pub origin: Origin,

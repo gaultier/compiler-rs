@@ -3,23 +3,32 @@ use crate::{
     lex::{Lexer, Token, TokenKind},
     origin::Origin,
 };
+use miniserde::Serialize;
 
+#[derive(Serialize, Copy, Clone, PartialEq, Eq, Debug)]
 pub enum NodeKind {
-    Number(u64),
+    Number,
     Add,
 }
 
+#[derive(Serialize, Copy, Clone)]
+pub struct NodeData {
+    num: u64,
+}
+
+#[derive(Serialize, Copy, Clone)]
 pub struct Node {
     kind: NodeKind,
+    data: NodeData,
     origin: Origin,
 }
 
 pub struct Parser<'a> {
     error_mode: bool,
-    tokens: Vec<Token>,
+    pub(crate) tokens: Vec<Token>,
     tokens_consumed: usize,
-    errors: Vec<Error>,
-    nodes: Vec<Node>,
+    pub(crate) errors: Vec<Error>,
+    pub(crate) nodes: Vec<Node>,
     input: &'a str,
 }
 
@@ -64,8 +73,7 @@ impl<'a> Parser<'a> {
             return;
         }
 
-        self.errors
-            .push(Error::new(kind, origin, String::default()));
+        self.errors.push(Error::new(kind, origin, String::new()));
         self.error_mode = true;
 
         // Skip to the next newline to avoid having cascading errors.
@@ -107,7 +115,8 @@ impl<'a> Parser<'a> {
                 }
             };
             let node = Node {
-                kind: NodeKind::Number(num),
+                kind: NodeKind::Number,
+                data: NodeData { num },
                 origin: token.origin,
             };
             self.nodes.push(node);
@@ -225,10 +234,8 @@ mod tests {
 
         {
             let node = &parser.nodes[0];
-            match node.kind {
-                NodeKind::Number(123) => {}
-                _ => assert!(false),
-            };
+            assert_eq!(node.kind, NodeKind::Number);
+            assert_eq!(node.data.num, 123);
         }
     }
 }

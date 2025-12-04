@@ -1,6 +1,11 @@
+use miniserde::Serialize;
 use std::alloc::Layout;
 
-use crate::lex::Lexer;
+use crate::{
+    ast::{Node, Parser},
+    error::Error,
+    lex::{Lexer, Token},
+};
 
 pub mod ast;
 pub mod error;
@@ -80,6 +85,25 @@ pub extern "C" fn dealloc(handle: WasmMemoryHandle) {
     unsafe { std::alloc::dealloc(ptr.ptr, layout) };
 }
 
+fn make_wasm_handle(data: &[u8]) -> WasmMemoryHandle {
+    let mut bytes = Vec::with_capacity(data.len() + 3 * 4 + 1);
+    bytes.extend((data.len() as u32).to_le_bytes()); // len.
+    bytes.extend([0u8; 4]); // cap, backpatched.
+    let align = std::mem::align_of::<usize>() as u8;
+    bytes.extend(align.to_le_bytes()); // align.
+    bytes.extend(data); // data.
+    assert_eq!(bytes.len(), 2 * 4 + 1 + data.len());
+
+    let cap = bytes.capacity() as u32;
+    bytes[4..8].copy_from_slice(cap.to_le_bytes().as_slice());
+
+    let ptr = bytes.as_ptr() as usize;
+
+    std::mem::forget(bytes);
+
+    WasmMemoryHandle(ptr)
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn lex(in_ptr: *const u8, in_len: usize) -> WasmMemoryHandle {
     assert!(!in_ptr.is_null());
@@ -92,22 +116,37 @@ pub extern "C" fn lex(in_ptr: *const u8, in_len: usize) -> WasmMemoryHandle {
 
     let json = miniserde::json::to_string(&(&lexer.tokens, &lexer.errors));
 
-    let mut bytes = Vec::with_capacity(json.len() + 3 * 4 + 1);
-    bytes.extend((json.len() as u32).to_le_bytes()); // len
-    bytes.extend([0u8; 4]); // cap, backpatched.
-    let align = std::mem::align_of::<usize>() as u8;
-    bytes.extend(align.to_le_bytes());
-    bytes.extend(json.as_bytes());
-    assert_eq!(bytes.len(), 2 * 4 + 1 + json.len());
+    make_wasm_handle(json.as_bytes())
+}
 
-    let cap = bytes.capacity() as u32;
-    bytes[4..8].copy_from_slice(cap.to_le_bytes().as_slice());
+#[derive(Serialize)]
+pub struct ParseResponse<'a> {
+    pub tokens: &'a [Token],
+    pub errors: &'a [Error],
+    pub nodes: &'a [Node],
+}
 
-    let ptr = bytes.as_ptr() as usize;
+#[unsafe(no_mangle)]
+pub extern "C" fn parse(in_ptr: *const u8, in_len: usize) -> WasmMemoryHandle {
+    assert!(!in_ptr.is_null());
 
-    std::mem::forget(bytes);
+    let input_bytes = unsafe { &*std::ptr::slice_from_raw_parts(in_ptr, in_len) };
+    let input_str = std::str::from_utf8(input_bytes).unwrap();
 
-    WasmMemoryHandle(ptr)
+    let mut lexer = Lexer::new();
+    lexer.lex(input_str);
+
+    let mut parser = Parser::new(input_str, lexer);
+    parser.parse();
+
+    let parser_response = ParseResponse {
+        tokens: &parser.tokens,
+        nodes: &parser.nodes,
+        errors: &parser.errors,
+    };
+    let json = miniserde::json::to_string(&parser_response);
+
+    make_wasm_handle(json.as_bytes())
 }
 
 #[cfg(test)]

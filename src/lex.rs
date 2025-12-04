@@ -1,4 +1,4 @@
-use miniserde::{Deserialize, Serialize};
+use miniserde::Serialize;
 use std::{iter::Peekable, str::Chars};
 
 use crate::{
@@ -13,7 +13,7 @@ pub struct Lexer {
     pub tokens: Vec<Token>,
 }
 
-#[derive(PartialEq, Eq, Debug, Serialize, Deserialize, Copy, Clone)]
+#[derive(PartialEq, Eq, Debug, Serialize, Copy, Clone)]
 pub enum TokenKind {
     Whitespace,
     LiteralNumber,
@@ -22,7 +22,7 @@ pub enum TokenKind {
     Eof,
 }
 
-#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
+#[derive(Serialize, Debug, Copy, Clone)]
 pub struct Token {
     pub kind: TokenKind,
     pub origin: Origin,

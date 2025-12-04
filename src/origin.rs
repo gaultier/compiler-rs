@@ -1,7 +1,7 @@
-use miniserde::{Deserialize, Serialize};
+use miniserde::Serialize;
 //use std::rc::Rc;
 
-#[derive(PartialEq, Eq, Debug, Serialize, Deserialize, Copy, Clone)]
+#[derive(PartialEq, Eq, Debug, Serialize, Copy, Clone)]
 pub struct Origin {
     pub line: u32,
     pub column: u32,
