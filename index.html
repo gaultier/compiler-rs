@@ -2,7 +2,7 @@
 <html>
     <body>
         <textarea id="input"></textarea>
-        <div id="lex"></div>
+        <div id="run"></div>
     </body>
     <script>
         function JsStringToUtf8Bytes(str) {
@@ -28,7 +28,7 @@
             const input_mem = new Uint8Array(memory.buffer, input_ptr, input_len);
             input_mem.set(input_bytes); // memcpy.
 
-            const handle = exports.lex(input_ptr, input_len); 
+            const handle = exports.parse(input_ptr, input_len); 
             console.log(handle);
             const res_slice_len = new Uint8Array(memory.buffer, handle, 4);
             console.log(handle, res_slice_len);
@@ -45,7 +45,7 @@
             exports.dealloc_u8_no_metadata(input_ptr, input_len);
             exports.dealloc(handle);
 
-            const lex_dom = document.getElementById("lex");
+            const lex_dom = document.getElementById("run");
             lex_dom.innerText = res_str;
 
         }

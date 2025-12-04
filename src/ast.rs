@@ -80,6 +80,19 @@ impl<'a> Parser<'a> {
         self.advance_to_next_line_from_last_error();
     }
 
+    fn add_error_with_explanation(&mut self, kind: ErrorKind, origin: Origin, explanation: &str) {
+        if self.error_mode {
+            return;
+        }
+
+        self.errors
+            .push(Error::new(kind, origin, explanation.to_owned()));
+        self.error_mode = true;
+
+        // Skip to the next newline to avoid having cascading errors.
+        self.advance_to_next_line_from_last_error();
+    }
+
     fn match_kind(&mut self, kind: TokenKind) -> Option<Token> {
         let token = &self.tokens[self.tokens_consumed];
         if token.kind != kind {
@@ -148,10 +161,11 @@ impl<'a> Parser<'a> {
                 .match_kind1_or_kind2(TokenKind::Newline, TokenKind::Eof)
                 .is_some()
             {
-                self.add_error(
+                self.add_error_with_explanation(
                     ErrorKind::MissingNewline,
                     self.current_or_last_token_origin()
                         .unwrap_or(self.nodes.last().unwrap().origin),
+                    "a newline is expected after a statement",
                 );
                 return false;
             }
