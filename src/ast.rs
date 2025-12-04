@@ -11,7 +11,7 @@ pub enum NodeKind {
     Add,
 }
 
-#[derive(Serialize, Copy, Clone)]
+#[derive(Serialize, Copy, Clone, Default)]
 pub struct NodeData {
     num: u64,
 }
@@ -144,11 +144,97 @@ impl<'a> Parser<'a> {
             return false;
         }
 
-        if self.parse_primary() {
+        if self.parse_assignement() {
             return true;
         }
 
         false
+    }
+
+    fn parse_assignement(&mut self) -> bool {
+        if self.error_mode {
+            return false;
+        }
+        return self.parse_logic_or();
+    }
+
+    fn parse_logic_or(&mut self) -> bool {
+        if self.error_mode {
+            return false;
+        }
+        return self.parse_logic_and();
+    }
+
+    fn parse_logic_and(&mut self) -> bool {
+        if self.error_mode {
+            return false;
+        }
+        return self.parse_equality();
+    }
+
+    fn parse_equality(&mut self) -> bool {
+        if self.error_mode {
+            return false;
+        }
+        return self.parse_comparison();
+    }
+
+    fn parse_comparison(&mut self) -> bool {
+        if self.error_mode {
+            return false;
+        }
+        return self.parse_term();
+    }
+
+    fn parse_term(&mut self) -> bool {
+        if self.error_mode {
+            return false;
+        }
+        if !self.parse_factor() {
+            return false;
+        }
+
+        loop {
+            let token = match self.match_kind(TokenKind::Plus) {
+                None => return true,
+                Some(t) => t,
+            };
+
+            if !self.parse_factor() {
+                self.add_error(
+                    ErrorKind::ParseFactorMissingRhs,
+                    self.current_or_last_token_origin().unwrap_or(token.origin),
+                );
+            }
+
+            let node = Node {
+                kind: NodeKind::Add,
+                data: NodeData::default(),
+                origin: token.origin,
+            };
+            self.nodes.push(node);
+        }
+    }
+
+    fn parse_factor(&mut self) -> bool {
+        if self.error_mode {
+            return false;
+        }
+        return self.parse_unary();
+    }
+
+    fn parse_unary(&mut self) -> bool {
+        if self.error_mode {
+            return false;
+        }
+        return self.parse_call();
+    }
+
+    fn parse_call(&mut self) -> bool {
+        if self.error_mode {
+            return false;
+        }
+        return self.parse_primary();
     }
 
     fn parse_statement(&mut self) -> bool {
@@ -250,6 +336,36 @@ mod tests {
             let node = &parser.nodes[0];
             assert_eq!(node.kind, NodeKind::Number);
             assert_eq!(node.data.num, 123);
+        }
+    }
+
+    #[test]
+    fn parse_add() {
+        let input = "123 +45";
+        let mut lexer = Lexer::new();
+        lexer.lex(&input);
+
+        assert!(lexer.errors.is_empty());
+
+        let mut parser = Parser::new(input, lexer);
+        parser.parse();
+
+        assert!(parser.errors.is_empty());
+        assert_eq!(parser.nodes.len(), 3);
+
+        {
+            let node = &parser.nodes[0];
+            assert_eq!(node.kind, NodeKind::Number);
+            assert_eq!(node.data.num, 123);
+        }
+        {
+            let node = &parser.nodes[1];
+            assert_eq!(node.kind, NodeKind::Number);
+            assert_eq!(node.data.num, 45);
+        }
+        {
+            let node = &parser.nodes[2];
+            assert_eq!(node.kind, NodeKind::Add);
         }
     }
 }

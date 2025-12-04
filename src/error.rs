@@ -8,6 +8,7 @@ pub enum ErrorKind {
     InvalidLiteralNumber,
     ParseStatement,
     MissingNewline,
+    ParseFactorMissingRhs,
 }
 
 #[derive(Serialize)]
