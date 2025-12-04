@@ -13,11 +13,12 @@ pub struct Lexer {
     pub tokens: Vec<Token>,
 }
 
-#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize, Copy, Clone)]
 pub enum TokenKind {
     Whitespace,
     LiteralNumber,
     Plus,
+    Eof,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -124,6 +125,15 @@ impl Lexer {
                     it.next();
                 }
             }
+
+            let origin = Origin {
+                len: 0,
+                ..self.origin
+            };
+            self.tokens.push(Token {
+                kind: TokenKind::Eof,
+                origin,
+            });
         }
     }
 }

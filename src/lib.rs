@@ -2,6 +2,7 @@ use std::alloc::Layout;
 
 use crate::lex::Lexer;
 
+pub mod ast;
 pub mod error;
 pub mod lex;
 mod origin;
