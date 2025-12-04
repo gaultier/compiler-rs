@@ -321,7 +321,7 @@ mod tests {
     #[test]
     fn parse_number() {
         let input = "123 ";
-        let mut lexer = Lexer::new();
+        let mut lexer = Lexer::new(1);
         lexer.lex(&input);
 
         assert!(lexer.errors.is_empty());
@@ -342,7 +342,7 @@ mod tests {
     #[test]
     fn parse_add() {
         let input = "123 + 45 + 0";
-        let mut lexer = Lexer::new();
+        let mut lexer = Lexer::new(1);
         lexer.lex(&input);
 
         assert!(lexer.errors.is_empty());

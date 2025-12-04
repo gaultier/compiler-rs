@@ -1,8 +1,8 @@
-use std::io::Write;
+use std::{collections::HashMap, io::Write};
 
 use miniserde::Serialize;
 
-use crate::origin::Origin;
+use crate::origin::{FileId, Origin};
 
 #[derive(Serialize, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ErrorKind {
@@ -29,8 +29,13 @@ impl Error {
         }
     }
 
-    pub fn write<W: Write>(&self, w: &mut W, input: &str) -> std::io::Result<()> {
-        self.origin.write(w)?;
+    pub fn write<W: Write>(
+        &self,
+        w: &mut W,
+        input: &str,
+        file_id_to_names: &HashMap<FileId, String>,
+    ) -> std::io::Result<()> {
+        self.origin.write(w, file_id_to_names)?;
 
         w.write_all(b": Error: ")?;
 

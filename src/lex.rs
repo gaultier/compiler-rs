@@ -3,7 +3,7 @@ use std::{iter::Peekable, str::Chars};
 
 use crate::{
     error::{Error, ErrorKind},
-    origin::Origin,
+    origin::{FileId, Origin},
 };
 
 pub struct Lexer {
@@ -29,9 +29,9 @@ pub struct Token {
 }
 
 impl Lexer {
-    pub fn new() -> Self {
+    pub fn new(file_id: FileId) -> Self {
         Self {
-            origin: Origin::new(1, 1, 0, 0 /*, Rc::new(Vec::new())*/),
+            origin: Origin::new(1, 1, 0, 0, file_id),
             error_mode: false,
             errors: Vec::new(),
             tokens: Vec::new(),
@@ -154,7 +154,7 @@ mod tests {
 
     #[test]
     fn lex_number() {
-        let mut lexer = Lexer::new();
+        let mut lexer = Lexer::new(0);
         lexer.lex("123 4567\n 01");
 
         assert_eq!(lexer.errors.len(), 1);
@@ -200,7 +200,7 @@ mod tests {
 
     #[test]
     fn lex_unknown() {
-        let mut lexer = Lexer::new();
+        let mut lexer = Lexer::new(0);
         lexer.lex(" &");
 
         assert_eq!(lexer.tokens.len(), 1);

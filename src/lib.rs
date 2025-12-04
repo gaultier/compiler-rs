@@ -5,6 +5,7 @@ use crate::{
     ast::{Node, Parser},
     error::Error,
     lex::{Lexer, Token},
+    origin::FileId,
 };
 
 pub mod ast;
@@ -105,13 +106,13 @@ fn make_wasm_handle(data: &[u8]) -> WasmMemoryHandle {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn lex(in_ptr: *const u8, in_len: usize) -> WasmMemoryHandle {
+pub extern "C" fn lex(in_ptr: *const u8, in_len: usize, file_id: FileId) -> WasmMemoryHandle {
     assert!(!in_ptr.is_null());
 
     let input_bytes = unsafe { &*std::ptr::slice_from_raw_parts(in_ptr, in_len) };
     let input_str = std::str::from_utf8(input_bytes).unwrap();
 
-    let mut lexer = Lexer::new();
+    let mut lexer = Lexer::new(file_id);
     lexer.lex(input_str);
 
     let json = miniserde::json::to_string(&(&lexer.tokens, &lexer.errors));
@@ -127,13 +128,13 @@ pub struct ParseResponse<'a> {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn parse(in_ptr: *const u8, in_len: usize) -> WasmMemoryHandle {
+pub extern "C" fn parse(in_ptr: *const u8, in_len: usize, file_id: FileId) -> WasmMemoryHandle {
     assert!(!in_ptr.is_null());
 
     let input_bytes = unsafe { &*std::ptr::slice_from_raw_parts(in_ptr, in_len) };
     let input_str = std::str::from_utf8(input_bytes).unwrap();
 
-    let mut lexer = Lexer::new();
+    let mut lexer = Lexer::new(file_id);
     lexer.lex(input_str);
 
     let mut parser = Parser::new(input_str, &lexer);
@@ -156,7 +157,7 @@ mod tests {
     #[test]
     fn test_lex() {
         let input = " 123 456 ";
-        let handle = lex(input.as_ptr(), input.len());
+        let handle = lex(input.as_ptr(), input.len(), 1);
         let (fat_ptr, _data) = Allocation::from_wasm_memory_handle(handle);
         assert!(fat_ptr.len > 0);
         assert!(fat_ptr.cap > 0);

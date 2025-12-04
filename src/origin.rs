@@ -1,7 +1,8 @@
-use std::io::Write;
+use std::{collections::HashMap, io::Write};
 
 use miniserde::Serialize;
-//use std::rc::Rc;
+
+pub type FileId = u32;
 
 #[derive(PartialEq, Eq, Debug, Serialize, Copy, Clone)]
 pub struct Origin {
@@ -9,28 +10,32 @@ pub struct Origin {
     pub column: u32,
     pub offset: u32,
     pub len: u32,
-    //    pub file: Rc<Vec<u8>>,
+    pub file_id: FileId,
 }
 
 impl Origin {
-    pub(crate) fn new(
-        line: u32,
-        column: u32,
-        offset: u32,
-        len: u32, /*, file: Rc<Vec<u8>>*/
-    ) -> Self {
+    pub(crate) fn new(line: u32, column: u32, offset: u32, len: u32, file_id: FileId) -> Self {
         Self {
             line,
             column,
             offset,
             len,
-            //file,
+            file_id,
         }
     }
 
-    pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+    pub fn write<W: Write>(
+        &self,
+        w: &mut W,
+        file_id_to_names: &HashMap<FileId, String>,
+    ) -> std::io::Result<()> {
         // TODO: file name.
-        write!(w, "{}:{}:{}", self.line, self.column, self.offset)?;
+        let file_name = &file_id_to_names[&self.file_id];
+        write!(
+            w,
+            "{}:{}:{}:{}",
+            file_name, self.line, self.column, self.offset
+        )?;
 
         Ok(())
     }
