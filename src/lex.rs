@@ -126,16 +126,15 @@ impl Lexer {
                     it.next();
                 }
             }
-
-            let origin = Origin {
-                len: 0,
-                ..self.origin
-            };
-            self.tokens.push(Token {
-                kind: TokenKind::Eof,
-                origin,
-            });
         }
+        let origin = Origin {
+            len: 0,
+            ..self.origin
+        };
+        self.tokens.push(Token {
+            kind: TokenKind::Eof,
+            origin,
+        });
     }
 }
 
@@ -149,7 +148,7 @@ mod tests {
         lexer.lex("123 4567\n 01");
 
         assert_eq!(lexer.errors.len(), 1);
-        assert_eq!(lexer.tokens.len(), 2);
+        assert_eq!(lexer.tokens.len(), 3);
 
         {
             let token = &lexer.tokens[0];
@@ -168,6 +167,10 @@ mod tests {
             assert_eq!(token.origin.len, 4);
         }
         {
+            let token = &lexer.tokens[2];
+            assert_eq!(token.kind, TokenKind::Eof);
+        }
+        {
             let err = &lexer.errors[0];
             assert_eq!(err.kind, ErrorKind::InvalidLiteralNumber);
             assert_eq!(err.origin.offset, 10);
@@ -182,8 +185,11 @@ mod tests {
         let mut lexer = Lexer::new();
         lexer.lex(" &");
 
-        assert!(lexer.tokens.is_empty());
+        assert_eq!(lexer.tokens.len(), 1);
         assert_eq!(lexer.errors.len(), 1);
+
+        let token = &lexer.tokens[0];
+        assert_eq!(token.kind, TokenKind::Eof);
 
         let err = &lexer.errors[0];
         assert_eq!(err.kind, ErrorKind::UnknownToken);
