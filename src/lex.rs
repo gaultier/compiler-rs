@@ -92,6 +92,19 @@ impl Lexer {
                 continue;
             }
             match c {
+                '+' => {
+                    let origin = Origin {
+                        len: 1,
+                        ..self.origin
+                    };
+                    self.tokens.push(Token {
+                        kind: TokenKind::Plus,
+                        origin,
+                    });
+                    self.origin.offset += 1;
+                    self.origin.column += 1;
+                    it.next();
+                }
                 _ if c.is_whitespace() => {
                     self.origin.offset += 1;
 
