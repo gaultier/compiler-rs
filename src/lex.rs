@@ -39,12 +39,12 @@ impl Lexer {
 
     fn add_error(&mut self, kind: ErrorKind, len: u32) {
         let origin = Origin { len, ..self.origin };
-        self.errors.push(Error::new(kind, origin));
+        self.errors.push(Error::new(kind, origin, String::new()));
         self.error_mode = true;
     }
 
     fn add_error_at(&mut self, kind: ErrorKind, origin: Origin) {
-        self.errors.push(Error::new(kind, origin));
+        self.errors.push(Error::new(kind, origin, String::new()));
         self.error_mode = true;
     }
 

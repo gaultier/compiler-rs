@@ -6,16 +6,22 @@ use crate::origin::Origin;
 pub enum ErrorKind {
     UnknownToken,
     InvalidLiteralNumber,
+    ParseStatement,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Error {
     pub kind: ErrorKind,
     pub origin: Origin,
+    pub explanation: String,
 }
 
 impl Error {
-    pub(crate) fn new(kind: ErrorKind, origin: Origin) -> Self {
-        Self { kind, origin }
+    pub(crate) fn new(kind: ErrorKind, origin: Origin, explanation: String) -> Self {
+        Self {
+            kind,
+            origin,
+            explanation,
+        }
     }
 }
