@@ -16,6 +16,7 @@
         }
 
         function run(input_js, wasm_instance) {
+            const ts_start = performance.now();
             const exports = wasm_instance.exports;
             const memory = exports.memory;
 
@@ -36,6 +37,8 @@
 
             //exports.dealloc_u8_no_metadata(input_ptr, input_len);
             //exports.dealloc(handle);
+            const ts_end = performance.now();
+            console.log("run time: ", ts_end - ts_start, " ms");
 
             const lex_dom = document.getElementById("run");
             lex_dom.innerText = res_str;
@@ -48,6 +51,7 @@
             //    const importsObject = createImports(memory);
 
             try {
+                // TODO: Fetch release build.
                 const result = await WebAssembly.instantiateStreaming(
                     fetch("target/wasm32-unknown-unknown/debug/compiler_rs_lib.wasm"),
                     //importsObject // Provide the required imports (host functions, memory)
