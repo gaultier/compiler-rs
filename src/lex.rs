@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use miniserde::{Deserialize, Serialize};
 use std::{iter::Peekable, str::Chars};
 
 use crate::{

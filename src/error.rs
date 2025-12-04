@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use miniserde::{Deserialize, Serialize};
 
 use crate::origin::Origin;
 
