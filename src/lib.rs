@@ -65,7 +65,7 @@ pub extern "C" fn dealloc_u8_no_metadata(ptr: usize, size: usize) {
         return;
     }
 
-    let layout = Layout::from_size_align(size as usize, std::mem::align_of::<u8>()).unwrap();
+    let layout = Layout::from_size_align(size, std::mem::align_of::<u8>()).unwrap();
     unsafe { std::alloc::dealloc(ptr, layout) };
 }
 
@@ -77,7 +77,7 @@ pub extern "C" fn dealloc(handle: WasmMemoryHandle) {
     }
 
     let layout = Layout::from_size_align(ptr.cap as usize, ptr.align as usize).unwrap();
-    unsafe { std::alloc::dealloc(ptr.ptr as *mut u8, layout) };
+    unsafe { std::alloc::dealloc(ptr.ptr, layout) };
 }
 
 #[unsafe(no_mangle)]

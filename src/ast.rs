@@ -66,7 +66,7 @@ impl Parser {
 
         // TODO
 
-        return false;
+        false
     }
 
     // Best effort to find the closest token when doing error reporting.
@@ -79,11 +79,11 @@ impl Parser {
 
         let token = &self.tokens[self.tokens_consumed];
         if token.kind != TokenKind::Eof {
-            return Some(token.origin);
+            Some(token.origin)
         } else if self.tokens_consumed > 0 {
-            return Some(self.tokens[self.tokens_consumed - 1].origin);
+            Some(self.tokens[self.tokens_consumed - 1].origin)
         } else {
-            return None;
+            None
         }
     }
 

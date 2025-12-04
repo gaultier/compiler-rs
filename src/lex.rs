@@ -51,12 +51,12 @@ impl Lexer {
     fn lex_literal_number(&mut self, it: &mut Peekable<Chars<'_>>) {
         let start_origin = self.origin;
         let first = it.next().unwrap();
-        assert!(first.is_digit(10));
+        assert!(first.is_ascii_digit());
         self.origin.column += 1;
         self.origin.offset += 1;
 
         while let Some(c) = it.peek() {
-            if !c.is_digit(10) {
+            if !c.is_ascii_digit() {
                 break;
             }
 
@@ -85,7 +85,8 @@ impl Lexer {
     pub fn lex(&mut self, input: &str) {
         let mut it = input.chars().peekable();
 
-        while let Some(c) = it.peek().as_deref().cloned() {
+        while let Some(c) = it.peek() {
+            let c = *c;
             if c != '\n' && self.error_mode {
                 self.origin.column += 1;
                 self.origin.offset += 1;
@@ -117,7 +118,7 @@ impl Lexer {
                     }
                     it.next();
                 }
-                _ if c.is_digit(10) => self.lex_literal_number(&mut it),
+                _ if c.is_ascii_digit() => self.lex_literal_number(&mut it),
                 _ => {
                     self.add_error(ErrorKind::UnknownToken, 1);
                     self.origin.column += 1;
