@@ -45,8 +45,8 @@
 
             const lex_res = JSON.stringify(JSON.parse(res_str), null, 2); // WIP.
 
-            //exports.dealloc_u8_no_metadata(input_ptr, input_len);
-            //exports.dealloc(handle);
+            exports.dealloc_u8_no_metadata(input_ptr, input_len);
+            exports.dealloc(handle);
             const ts_end = performance.now();
             console.log("run time: ", ts_end - ts_start, " ms");
 
