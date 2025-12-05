@@ -10,3 +10,7 @@ body, html {
     flex: 1;
 }
 
+.token {
+    margin: .2rem;
+    border: 1px solid black;
+}

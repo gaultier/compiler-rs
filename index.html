@@ -10,8 +10,9 @@
         <div class="container">
         <textarea id="input" default="123 + 456"></textarea>
         <pre>
-            <code id="run"></code>
+            <code id="json_pretty"></code>
         </pre>
+        <div id="lexed"></div>
         </div>
     </body>
     <script>
@@ -43,15 +44,28 @@
             const res_slice = new Uint8Array(memory.buffer, handle + 9, len);
             const res_str = Utf8BytesToJsString(res_slice);
 
-            const lex_res = JSON.stringify(JSON.parse(res_str), null, 2); // WIP.
+            const res = JSON.parse(res_str); 
+            const res_json_pretty = JSON.stringify(res, null, 2); 
 
             exports.dealloc_u8_no_metadata(input_ptr, input_len);
             exports.dealloc(handle);
             const ts_end = performance.now();
             console.log("run time: ", ts_end - ts_start, " ms");
 
-            const lex_dom = document.getElementById("run");
-            lex_dom.innerText = lex_res;
+            const json_dom = document.getElementById("json_pretty");
+            json_dom.innerText = res_json_pretty;
+
+
+            const lexed_dom = document.getElementById("lexed");
+            lexed_dom.innerHTML ="";
+            for (const token of res.tokens) {
+                const span_bytes = input_bytes.subarray(token.origin.offset, token.origin.offset + token.origin.len);
+                // TODO: Should we just maintain a mapping in JS of utf8 offset -> utf16 offset? 
+                // Or return utf16 offsets from WASM directly?
+                const span_js_string = token.kind == "Eof" ? "EOF" : Utf8BytesToJsString(span_bytes);
+                lexed_dom.innerHTML += `<span class="token" data-src="${token.kind}">${span_js_string}</span>`;
+            }
+
 
         }
 
