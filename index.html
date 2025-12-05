@@ -43,7 +43,7 @@
             const res_slice = new Uint8Array(memory.buffer, handle + 9, len);
             const res_str = Utf8BytesToJsString(res_slice);
 
-            const lex_res = JSON.stringify(JSON.parse(res_str), null, 4); // WIP.
+            const lex_res = JSON.stringify(JSON.parse(res_str), null, 2); // WIP.
 
             //exports.dealloc_u8_no_metadata(input_ptr, input_len);
             //exports.dealloc(handle);

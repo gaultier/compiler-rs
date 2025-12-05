@@ -44,27 +44,28 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn advance_to_next_line_from_last_error(&mut self) {
+    fn peek_token(&self) -> Option<&Token> {
         assert!(self.tokens_consumed <= self.tokens.len());
         if self.tokens_consumed == self.tokens.len() {
-            // Already at EOF.
-            return;
+            None
+        } else {
+            Some(&self.tokens[self.tokens_consumed])
         }
+    }
 
-        let last_error = self.errors.last().unwrap();
-        let line = self.tokens[self.tokens_consumed].origin.line;
-        if line > last_error.origin.line {
-            // No-op.
-            return;
-        }
-
-        while self.tokens_consumed < self.tokens.len() {
-            let token_line = self.tokens[self.tokens_consumed].origin.line;
-            if token_line > line {
-                break;
-            }
-
-            self.tokens_consumed += 1;
+    // Used to avoid an avalanche of errors for the same line.
+    fn skip_to_next_line(&mut self) {
+        loop {
+            match self.peek_token() {
+                None => return,
+                Some(t) if t.kind == TokenKind::Eof || t.kind == TokenKind::Newline => {
+                    self.tokens_consumed += 1;
+                    return;
+                }
+                _ => {
+                    self.tokens_consumed += 1;
+                }
+            };
         }
     }
 
@@ -77,7 +78,7 @@ impl<'a> Parser<'a> {
         self.error_mode = true;
 
         // Skip to the next newline to avoid having cascading errors.
-        self.advance_to_next_line_from_last_error();
+        self.skip_to_next_line();
     }
 
     fn add_error_with_explanation(&mut self, kind: ErrorKind, origin: Origin, explanation: &str) {
@@ -90,35 +91,36 @@ impl<'a> Parser<'a> {
         self.error_mode = true;
 
         // Skip to the next newline to avoid having cascading errors.
-        self.advance_to_next_line_from_last_error();
+        self.skip_to_next_line();
+    }
+
+    fn peek_kind(&mut self, kind: TokenKind) -> Option<Token> {
+        match self.peek_token() {
+            Some(t) if t.kind == kind => Some(*t),
+            _ => None,
+        }
     }
 
     fn match_kind(&mut self, kind: TokenKind) -> Option<Token> {
-        if self.tokens_consumed >= self.tokens.len() {
-            return None;
+        match self.peek_token() {
+            Some(t) if t.kind == kind => {
+                let res = Some(*t);
+                self.tokens_consumed += 1;
+                res
+            }
+            _ => None,
         }
-
-        let token = &self.tokens[self.tokens_consumed];
-        if token.kind != kind {
-            return None;
-        }
-
-        self.tokens_consumed += 1;
-        Some(*token)
     }
 
     fn match_kind1_or_kind2(&mut self, kind1: TokenKind, kind2: TokenKind) -> Option<Token> {
-        if self.tokens_consumed >= self.tokens.len() {
-            return None;
+        match self.peek_token() {
+            Some(t) if t.kind == kind1 || t.kind == kind2 => {
+                let res = Some(*t);
+                self.tokens_consumed += 1;
+                res
+            }
+            _ => None,
         }
-
-        let token = &self.tokens[self.tokens_consumed];
-        if !(token.kind == kind1 || token.kind == kind2) {
-            return None;
-        }
-
-        self.tokens_consumed += 1;
-        Some(*token)
     }
 
     fn parse_primary(&mut self) -> bool {
@@ -204,7 +206,7 @@ impl<'a> Parser<'a> {
 
         loop {
             let token = match self.match_kind(TokenKind::Plus) {
-                None => return self.match_kind(TokenKind::Eof).is_some(),
+                None => return self.peek_kind(TokenKind::Eof).is_some(),
                 Some(t) => t,
             };
 
@@ -290,24 +292,20 @@ impl<'a> Parser<'a> {
 
     pub fn parse(&mut self) {
         for _i in 0..self.tokens.len() {
-            assert!(self.tokens_consumed <= self.tokens.len());
-            if self.tokens_consumed == self.tokens.len() {
-                // EOF.
+            if self.peek_token().is_none() {
                 return;
             }
 
             if self.error_mode {
-                self.advance_to_next_line_from_last_error();
+                self.skip_to_next_line();
                 self.error_mode = false;
                 continue;
             }
 
-            let kind = self.tokens[self.tokens_consumed].kind;
-            match kind {
-                TokenKind::Eof => {
+            match self.peek_token().map(|t| t.kind) {
+                None | Some(TokenKind::Eof) => {
                     return;
                 }
-                // TODO: err mode skip.
                 _ => {
                     if self.parse_statement() {
                         continue;
