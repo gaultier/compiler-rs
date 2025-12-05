@@ -94,13 +94,6 @@ impl<'a> Parser<'a> {
         self.skip_to_next_line();
     }
 
-    fn peek_kind(&mut self, kind: TokenKind) -> Option<Token> {
-        match self.peek_token() {
-            Some(t) if t.kind == kind => Some(*t),
-            _ => None,
-        }
-    }
-
     fn match_kind(&mut self, kind: TokenKind) -> Option<Token> {
         match self.peek_token() {
             Some(t) if t.kind == kind => {
@@ -206,7 +199,7 @@ impl<'a> Parser<'a> {
 
         loop {
             let token = match self.match_kind(TokenKind::Plus) {
-                None => return self.peek_kind(TokenKind::Eof).is_some(),
+                None => return true,
                 Some(t) => t,
             };
 
