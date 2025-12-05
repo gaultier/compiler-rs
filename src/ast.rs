@@ -209,10 +209,11 @@ impl<'a> Parser<'a> {
             };
 
             if !self.parse_factor() {
+                let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
                 self.add_error_with_explanation(
                     ErrorKind::ParseFactorMissingRhs,
                     self.current_or_last_token_origin().unwrap_or(token.origin),
-                    format!("expected expression for the right-hand side of a +/- expression but found: {:?}", self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof)),
+                    format!("expected expression for the right-hand side of a +/- expression but found: {:?}",found),
                 );
                 return false;
             }
@@ -257,11 +258,15 @@ impl<'a> Parser<'a> {
                 .match_kind1_or_kind2(TokenKind::Newline, TokenKind::Eof)
                 .is_none()
             {
+                let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
                 self.add_error_with_explanation(
                     ErrorKind::MissingNewline,
                     self.current_or_last_token_origin()
                         .unwrap_or(self.nodes.last().unwrap().origin),
-                    String::from("a newline is expected after a statement"),
+                    format!(
+                        "a newline is expected after a statement but found: {:?}",
+                        found,
+                    ),
                 );
                 return false;
             }
