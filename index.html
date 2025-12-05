@@ -1,8 +1,18 @@
 <!DOCTYPE html>
 <html>
+<head>
+<title>Live compiler</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" type="text/css" href="main.css">
+</head>
     <body>
-        <textarea id="input"></textarea>
-        <div id="run"></div>
+        <div class="container">
+        <textarea id="input" default="123 + 456"></textarea>
+        <pre>
+            <code id="run"></code>
+        </pre>
+        </div>
     </body>
     <script>
         function JsStringToUtf8Bytes(str) {
@@ -33,7 +43,7 @@
             const res_slice = new Uint8Array(memory.buffer, handle + 9, len);
             const res_str = Utf8BytesToJsString(res_slice);
 
-            // const lex_res = JSON.parse(res_str);
+            const lex_res = JSON.stringify(JSON.parse(res_str), null, 4); // WIP.
 
             //exports.dealloc_u8_no_metadata(input_ptr, input_len);
             //exports.dealloc(handle);
@@ -41,7 +51,7 @@
             console.log("run time: ", ts_end - ts_start, " ms");
 
             const lex_dom = document.getElementById("run");
-            lex_dom.innerText = res_str;
+            lex_dom.innerText = lex_res;
 
         }
 
@@ -60,6 +70,7 @@
                 console.log("WebAssembly module loaded and instantiated successfully.", result.instance.exports);
 
                 const input_dom = document.getElementById("input");
+                run(input_dom.value, result.instance);
                 input_dom.addEventListener('input', function(event) {
                     run(event.target.value, result.instance);
                 });
