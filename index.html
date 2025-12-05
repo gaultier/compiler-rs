@@ -56,7 +56,8 @@
         }
 
         async function loadWasm() {
-            const memory = new WebAssembly.Memory({ initial: 256, maximum: 256 });
+            // Parameters here are page counts. A page is 64 KiB big.
+            const memory = new WebAssembly.Memory({ initial: 1, maximum: 1 });
 
             //    const importsObject = createImports(memory);
 

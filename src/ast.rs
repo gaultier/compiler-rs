@@ -1,3 +1,5 @@
+use std::num::ParseIntError;
+
 use crate::{
     error::{Error, ErrorKind},
     lex::{Lexer, Token, TokenKind},
@@ -81,13 +83,12 @@ impl<'a> Parser<'a> {
         self.skip_to_next_line();
     }
 
-    fn add_error_with_explanation(&mut self, kind: ErrorKind, origin: Origin, explanation: &str) {
+    fn add_error_with_explanation(&mut self, kind: ErrorKind, origin: Origin, explanation: String) {
         if self.error_mode {
             return;
         }
 
-        self.errors
-            .push(Error::new(kind, origin, explanation.to_owned()));
+        self.errors.push(Error::new(kind, origin, explanation));
         self.error_mode = true;
 
         // Skip to the next newline to avoid having cascading errors.
@@ -125,8 +126,12 @@ impl<'a> Parser<'a> {
             let src = &self.input[token.origin.offset as usize..][..token.origin.len as usize];
             let num = match str::parse(src) {
                 Ok(num) => num,
-                Err(_) => {
-                    self.add_error(ErrorKind::InvalidLiteralNumber, token.origin);
+                Err::<_, ParseIntError>(err) => {
+                    self.add_error_with_explanation(
+                        ErrorKind::InvalidLiteralNumber,
+                        token.origin,
+                        err.to_string(),
+                    );
                     return false;
                 }
             };
@@ -255,7 +260,7 @@ impl<'a> Parser<'a> {
                     ErrorKind::MissingNewline,
                     self.current_or_last_token_origin()
                         .unwrap_or(self.nodes.last().unwrap().origin),
-                    "a newline is expected after a statement",
+                    String::from("a newline is expected after a statement"),
                 );
                 return false;
             }
