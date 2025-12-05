@@ -20,6 +20,7 @@ pub enum TokenKind {
     Plus,
     Newline,
     Eof,
+    Unknown,
 }
 
 #[derive(Serialize, Debug, Copy, Clone)]
@@ -130,6 +131,14 @@ impl Lexer {
                 }
                 _ if c.is_ascii_digit() => self.lex_literal_number(&mut it),
                 _ => {
+                    self.tokens.push(Token {
+                        kind: TokenKind::Unknown,
+                        origin: Origin {
+                            len: 1,
+                            ..self.origin
+                        },
+                    });
+
                     self.add_error(ErrorKind::UnknownToken, 1);
                     self.origin.column += 1;
                     self.origin.offset += 1;
@@ -203,11 +212,17 @@ mod tests {
         let mut lexer = Lexer::new(0);
         lexer.lex(" &");
 
-        assert_eq!(lexer.tokens.len(), 1);
+        assert_eq!(lexer.tokens.len(), 2);
         assert_eq!(lexer.errors.len(), 1);
 
-        let token = &lexer.tokens[0];
-        assert_eq!(token.kind, TokenKind::Eof);
+        {
+            let token = &lexer.tokens[0];
+            assert_eq!(token.kind, TokenKind::Unknown);
+        }
+        {
+            let token = &lexer.tokens[1];
+            assert_eq!(token.kind, TokenKind::Eof);
+        }
 
         let err = &lexer.errors[0];
         assert_eq!(err.kind, ErrorKind::UnknownToken);

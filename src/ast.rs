@@ -209,9 +209,10 @@ impl<'a> Parser<'a> {
             };
 
             if !self.parse_factor() {
-                self.add_error(
+                self.add_error_with_explanation(
                     ErrorKind::ParseFactorMissingRhs,
                     self.current_or_last_token_origin().unwrap_or(token.origin),
+                    format!("expected expression for the right-hand side of a +/- expression but found: {:?}", self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof)),
                 );
                 return false;
             }
