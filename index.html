@@ -57,6 +57,9 @@
                 err_dom.classList.add("error");
                 err_dom.innerHTML = `
                     <span>Kind: ${err.kind}</span>
+                    <span>Line: ${err.origin.line}</span>
+                    <span>Column: ${err.origin.column}</span>
+                    <span>Offset: ${err.origin.offset}</span>
                     <span>Explanation: ${err.explanation}</span>
                 `;
 
