@@ -9,9 +9,7 @@
     <body>
         <div class="container">
         <textarea id="input" default="123 + 456"></textarea>
-        <pre>
-            <code id="json_pretty"></code>
-        </pre>
+        <div id="errors"></div>
         <div id="lexed"></div>
         </div>
     </body>
@@ -45,16 +43,25 @@
             const res_str = Utf8BytesToJsString(res_slice);
 
             const res = JSON.parse(res_str); 
-            const res_json_pretty = JSON.stringify(res, null, 2); 
+            console.log(res);
 
             exports.dealloc_u8_no_metadata(input_ptr, input_len);
             exports.dealloc(handle);
             const ts_end = performance.now();
             console.log("run time: ", ts_end - ts_start, " ms");
 
-            const json_dom = document.getElementById("json_pretty");
-            json_dom.innerText = res_json_pretty;
+            const errors_dom = document.getElementById("errors");
+            errors_dom.innerHTML ="";
+            for (const err of res.errors) {
+                const err_dom = document.createElement("div");
+                err_dom.classList.add("error");
+                err_dom.innerHTML = `
+                    <span>Kind: ${err.kind}</span>
+                    <span>Explanation: ${err.explanation}</span>
+                `;
 
+                errors_dom.appendChild(err_dom);
+            }
 
             const lexed_dom = document.getElementById("lexed");
             lexed_dom.innerHTML ="";
@@ -63,7 +70,20 @@
                 // TODO: Should we just maintain a mapping in JS of utf8 offset -> utf16 offset? 
                 // Or return utf16 offsets from WASM directly?
                 const span_js_string = token.kind == "Eof" ? "EOF" : Utf8BytesToJsString(span_bytes);
-                lexed_dom.innerHTML += `<span class="token" data-src="${token.kind}">${span_js_string}</span>`;
+                const token_dom = document.createElement("span");
+                token_dom.classList.add("token");
+                token_dom.innerText = span_js_string;
+                //token_dom.addEventListener('mouseenter', function(event) {
+                //    const token_metadata_dom = document.createElement("span");
+                //    token_metadata_dom.innerHTML = `<span>kind: ${token.kind}</span>`;
+                //    token_dom.appendChild(token_metadata_dom);
+
+                //});
+                //token_dom.addEventListener('mouseleave', function(event) {
+                //    token_dom.removeChild(token_dom.lastChild);
+                //});
+
+                lexed_dom.appendChild(token_dom);
             }
 
 

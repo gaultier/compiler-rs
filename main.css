@@ -8,9 +8,26 @@ body, html {
 
 .container > * {
     flex: 1;
+    border: 1px dashed grey;
+    margin: 0;
+}
+
+#errors:empty {
+    display: none;
+}
+
+#errors {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.error {
+    width: 100%;
 }
 
 .token {
     margin: .2rem;
+    padding: .2rem;
     border: 1px solid black;
+    border-radius: .3rem;
 }
