@@ -16,7 +16,8 @@ mod wasm32 {
         origin::FileId,
     };
 
-    const ARENA_SIZE: usize = 64 * 1024 * 1024;
+    const ARENA_SIZE: usize = 1 * 1024 * 1024;
+    const PAGE_SIZE: usize = 64 * 1024;
 
     struct SimpleAllocator {
         initialized: std::cell::Cell<bool>,
@@ -25,7 +26,8 @@ mod wasm32 {
 
     impl SimpleAllocator {
         fn os_alloc(&self) -> usize {
-            core::arch::wasm32::memory_grow(0, ARENA_SIZE);
+            let page_count = ARENA_SIZE / PAGE_SIZE;
+            core::arch::wasm32::memory_grow(0, page_count);
             0
         }
     }
@@ -103,8 +105,6 @@ mod wasm32 {
 
     #[unsafe(no_mangle)]
     pub extern "C" fn parse(in_ptr: *const u8, in_len: usize, file_id: FileId) -> AllocHandle {
-        assert!(!in_ptr.is_null());
-
         let input_bytes = unsafe { &*std::ptr::slice_from_raw_parts(in_ptr, in_len) };
         let input_str = std::str::from_utf8(input_bytes).unwrap();
 

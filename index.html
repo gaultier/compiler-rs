@@ -10,26 +10,27 @@
         <div class="container">
         <textarea id="input" default="123 + 456"></textarea>
         <div id="errors"></div>
-        <div id="lexed"></div>
+        <div id="compiled"></div>
         </div>
     </body>
     <script>
-        function JsStringToUtf8Bytes(str) {
+        function utf16_to_utf8(str) {
             const encoder = new TextEncoder();
             return encoder.encode(str);
         }
 
-        function Utf8BytesToJsString(bytes) {
+        function utf8_to_utf16(bytes) {
             const decoder = new TextDecoder('utf-8');
             return decoder.decode(bytes);
         }
 
         function run(input_js, wasm_instance) {
+            console.log("input:",input_js);
             const ts_start = performance.now();
             const exports = wasm_instance.exports;
             const memory = exports.memory;
 
-            let input_bytes = JsStringToUtf8Bytes(input_js);
+            let input_bytes = utf16_to_utf8(input_js);
             const input_len = input_bytes.length;
             const input_ptr = exports.alloc_u8(input_len)
             console.log(input_ptr, input_len);
@@ -47,10 +48,11 @@
             console.log(handle_ptr, handle_len);
             
             const res_slice = new Uint8Array(memory.buffer, handle_ptr, handle_len);
-            const res_str = Utf8BytesToJsString(res_slice);
+            const res_str = utf8_to_utf16(res_slice);
 
             const res = JSON.parse(res_str); 
             console.log(res);
+            console.log(exports.alloc_get_size());
 
             //exports.dealloc_u8_no_metadata(input_ptr, input_len);
             //exports.dealloc(handle);
@@ -73,13 +75,13 @@
                 errors_dom.appendChild(err_dom);
             }
 
-            const lexed_dom = document.getElementById("lexed");
-            lexed_dom.innerHTML ="";
+            const compiled_dom = document.getElementById("compiled");
+            compiled_dom.innerHTML ="";
             for (const token of res.tokens) {
                 const span_bytes = input_bytes.subarray(token.origin.offset, token.origin.offset + token.origin.len);
                 // TODO: Should we just maintain a mapping in JS of utf8 offset -> utf16 offset? 
                 // Or return utf16 offsets from WASM directly?
-                const span_js_string = token.kind == "Eof" ? "EOF" : Utf8BytesToJsString(span_bytes);
+                const span_js_string = token.kind == "Eof" ? "EOF" : utf8_to_utf16(span_bytes);
                 const token_dom = document.createElement("span");
                 token_dom.classList.add("token");
                 token_dom.innerText = span_js_string;
@@ -93,7 +95,7 @@
                 //    token_dom.removeChild(token_dom.lastChild);
                 //});
 
-                lexed_dom.appendChild(token_dom);
+                compiled_dom.appendChild(token_dom);
             }
 
 
@@ -101,7 +103,8 @@
 
         async function loadWasm() {
             // Parameters here are page counts. A page is 64 KiB big.
-            const memory = new WebAssembly.Memory({ initial: 1, maximum: 1 });
+            // So: 1MiB.
+            const memory = new WebAssembly.Memory({ initial: 16, maximum: 16 });
 
             //    const importsObject = createImports(memory);
 
