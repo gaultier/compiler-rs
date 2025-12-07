@@ -1,6 +1,6 @@
 use std::{collections::HashMap, io::Write};
 
-use miniserde::Serialize;
+use serde::Serialize;
 
 use crate::origin::{FileId, Origin};
 

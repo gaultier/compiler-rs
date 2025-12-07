@@ -2,10 +2,11 @@ use std::alloc::Layout;
 
 pub mod ast;
 pub mod error;
+pub mod ir;
 pub mod lex;
 mod origin;
 
-use miniserde::Serialize;
+use serde::Serialize;
 
 use crate::{
     ast::{Node, Parser},
@@ -130,7 +131,7 @@ pub extern "C" fn parse(in_ptr: *const u8, in_len: usize, file_id: FileId) -> Al
         nodes: &parser.nodes,
         errors: &parser.errors,
     };
-    let json = miniserde::json::to_string(&parser_response);
+    let json = serde_json::to_string(&parser_response).unwrap();
 
     let ptr = json.as_bytes().as_ptr() as u64;
     let len = json.len() as u32 as u64;

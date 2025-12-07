@@ -5,7 +5,7 @@ use crate::{
     lex::{Lexer, Token, TokenKind},
     origin::Origin,
 };
-use miniserde::Serialize;
+use serde::Serialize;
 
 #[derive(Serialize, Copy, Clone, PartialEq, Eq, Debug)]
 pub enum NodeKind {
@@ -13,16 +13,16 @@ pub enum NodeKind {
     Add,
 }
 
-#[derive(Serialize, Copy, Clone, Default, Debug)]
-pub struct NodeData {
-    num: u64,
+#[derive(Serialize, Copy, Clone, Debug)]
+pub enum NodeData {
+    Num(u64),
 }
 
 #[derive(Serialize, Copy, Clone, Debug)]
 pub struct Node {
-    kind: NodeKind,
-    data: NodeData,
-    origin: Origin,
+    pub kind: NodeKind,
+    pub data: Option<NodeData>,
+    pub origin: Origin,
 }
 
 pub struct Parser<'a> {
@@ -124,7 +124,7 @@ impl<'a> Parser<'a> {
 
         if let Some(token) = self.match_kind(TokenKind::LiteralNumber) {
             let src = &self.input[token.origin.offset as usize..][..token.origin.len as usize];
-            let num = match str::parse(src) {
+            let num: u64 = match str::parse(src) {
                 Ok(num) => num,
                 Err::<_, ParseIntError>(err) => {
                     self.add_error_with_explanation(
@@ -137,7 +137,7 @@ impl<'a> Parser<'a> {
             };
             let node = Node {
                 kind: NodeKind::Number,
-                data: NodeData { num },
+                data: Some(NodeData::Num(num)),
                 origin: token.origin,
             };
             self.nodes.push(node);
@@ -220,7 +220,7 @@ impl<'a> Parser<'a> {
 
             let node = Node {
                 kind: NodeKind::Add,
-                data: NodeData::default(),
+                data: None,
                 origin: token.origin,
             };
             self.nodes.push(node);
@@ -347,7 +347,10 @@ mod tests {
         {
             let node = &parser.nodes[0];
             assert_eq!(node.kind, NodeKind::Number);
-            assert_eq!(node.data.num, 123);
+            match node.data {
+                Some(NodeData::Num(123)) => {}
+                _ => panic!(),
+            };
         }
     }
 
@@ -368,12 +371,18 @@ mod tests {
         {
             let node = &parser.nodes[0];
             assert_eq!(node.kind, NodeKind::Number);
-            assert_eq!(node.data.num, 123);
+            match node.data {
+                Some(NodeData::Num(123)) => {}
+                _ => panic!(),
+            };
         }
         {
             let node = &parser.nodes[1];
             assert_eq!(node.kind, NodeKind::Number);
-            assert_eq!(node.data.num, 45);
+            match node.data {
+                Some(NodeData::Num(45)) => {}
+                _ => panic!(),
+            };
         }
         {
             let node = &parser.nodes[2];
@@ -382,7 +391,10 @@ mod tests {
         {
             let node = &parser.nodes[3];
             assert_eq!(node.kind, NodeKind::Number);
-            assert_eq!(node.data.num, 0);
+            match node.data {
+                Some(NodeData::Num(0)) => {}
+                _ => panic!(),
+            };
         }
         {
             let node = &parser.nodes[4];

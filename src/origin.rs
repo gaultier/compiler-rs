@@ -1,6 +1,6 @@
 use std::{collections::HashMap, io::Write};
 
-use miniserde::Serialize;
+use serde::Serialize;
 
 pub type FileId = u32;
 
