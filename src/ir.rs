@@ -30,7 +30,7 @@ pub struct Instruction {
     pub lhs: Operand,
     pub rhs: Operand,
     pub origin: Origin,
-    // TODO: metadata.
+    pub meta_idx: u32,
 }
 
 #[derive(Serialize)]
@@ -57,6 +57,8 @@ impl Emitter {
     }
 
     pub fn emit(&mut self, nodes: &[Node]) {
+        let mut stack = Vec::new();
+
         for node in nodes {
             match node.kind {
                 crate::ast::NodeKind::Number => {
@@ -71,10 +73,29 @@ impl Emitter {
                         lhs: Operand::VReg(metadata_idx),
                         rhs: Operand::Num(num),
                         origin: node.origin,
+                        meta_idx: metadata_idx,
                     };
                     self.instructions.push(ins);
+                    stack.push(metadata_idx);
                 }
-                crate::ast::NodeKind::Add => todo!(),
+                crate::ast::NodeKind::Add => {
+                    // TODO: Checks.
+                    let rhs = stack.pop().unwrap();
+                    let lhs = stack.pop().unwrap();
+
+                    let metadata_idx: u32 = 2; // TODO
+
+                    let ins = Instruction {
+                        kind: InstructionKind::Add,
+                        args_count: 2,
+                        lhs: Operand::VReg(lhs),
+                        rhs: Operand::VReg(rhs),
+                        origin: node.origin,
+                        meta_idx: metadata_idx,
+                    };
+                    self.instructions.push(ins);
+                    stack.push(metadata_idx);
+                }
             }
         }
     }
