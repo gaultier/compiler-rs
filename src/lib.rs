@@ -1,5 +1,10 @@
 use miniserde::Serialize;
-use std::alloc::Layout;
+use std::ptr::null_mut;
+use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+use std::{
+    alloc::{GlobalAlloc, Layout},
+    cell::UnsafeCell,
+};
 
 use crate::{
     ast::{Node, Parser},
@@ -13,51 +18,55 @@ pub mod error;
 pub mod lex;
 mod origin;
 
-#[repr(transparent)]
-#[derive(Copy, Clone)]
-pub struct WasmMemoryHandle(usize);
+const ARENA_SIZE: usize = 1 * 1024 * 1024;
 
-pub struct Allocation {
-    len: u32,
-    cap: u32,
-    align: u8,
-    ptr: *mut u8,
+struct SimpleAllocator {
+    arena: UnsafeCell<[u8; ARENA_SIZE]>,
+    remaining: AtomicUsize,
 }
 
-impl Allocation {
-    fn from_wasm_memory_handle(handle: WasmMemoryHandle) -> (Self, usize) {
-        let ptr = handle.0 as *mut u8;
+#[global_allocator]
+static ALLOCATOR: SimpleAllocator = SimpleAllocator {
+    arena: UnsafeCell::new([0x55; ARENA_SIZE]),
+    remaining: AtomicUsize::new(ARENA_SIZE),
+};
 
-        let length_slice = unsafe { std::slice::from_raw_parts(ptr, 4) };
-        let mut length_array = [0; 4];
-        length_array.copy_from_slice(length_slice);
-        let length = u32::from_le_bytes(length_array);
+unsafe impl Sync for SimpleAllocator {}
 
-        let cap_slice = unsafe { std::slice::from_raw_parts(ptr.add(4), 4) };
-        let mut cap_array = [0; 4];
-        cap_array.copy_from_slice(cap_slice);
-        let cap = u32::from_le_bytes(cap_array);
+unsafe impl GlobalAlloc for SimpleAllocator {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        let size = layout.size();
+        let align = layout.align();
 
-        let align_slice = unsafe { std::slice::from_raw_parts(ptr.add(2 * 4), 1) };
-        let align = align_slice[0];
+        let align_mask_to_round_down = !(align - 1);
         assert!(align <= 8);
 
-        let data = unsafe { ptr.add(2 * 4 + 1) };
-
-        (
-            Self {
-                ptr,
-                len: length,
-                cap,
-                align,
-            },
-            data as usize,
-        )
+        let mut allocated = 0;
+        if self
+            .remaining
+            .fetch_update(Relaxed, Relaxed, |mut remaining| {
+                if size > remaining {
+                    return None;
+                }
+                remaining -= size;
+                remaining &= align_mask_to_round_down;
+                allocated = remaining;
+                Some(remaining)
+            })
+            .is_err()
+        {
+            return null_mut();
+        };
+        unsafe { self.arena.get().cast::<u8>().add(allocated) }
     }
+
+    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {}
 }
 
+pub fn arena_alloc() {}
+
 #[unsafe(no_mangle)]
-pub extern "C" fn alloc_u8_no_metadata(size: u32) -> usize {
+pub extern "C" fn alloc_u8(size: u32) -> usize {
     let layout = Layout::from_size_align(size as usize, std::mem::align_of::<u8>()).unwrap();
     let ptr = unsafe { std::alloc::alloc(layout) };
     assert!(!ptr.is_null());
@@ -65,48 +74,15 @@ pub extern "C" fn alloc_u8_no_metadata(size: u32) -> usize {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn dealloc_u8_no_metadata(ptr: usize, size: usize) {
-    let ptr = ptr as *mut u8;
-    if ptr.is_null() {
-        return;
-    }
-
-    let layout = Layout::from_size_align(size, std::mem::align_of::<u8>()).unwrap();
-    unsafe { std::alloc::dealloc(ptr, layout) };
+pub extern "C" fn dealloc() {
+    todo!()
 }
+
+#[repr(transparent)]
+pub struct AllocHandle(u64);
 
 #[unsafe(no_mangle)]
-pub extern "C" fn dealloc(handle: WasmMemoryHandle) {
-    let (ptr, _) = Allocation::from_wasm_memory_handle(handle);
-    if ptr.cap == 0 {
-        return;
-    }
-
-    let layout = Layout::from_size_align(ptr.cap as usize, ptr.align as usize).unwrap();
-    unsafe { std::alloc::dealloc(ptr.ptr, layout) };
-}
-
-fn make_wasm_handle(data: &[u8]) -> WasmMemoryHandle {
-    let mut bytes = Vec::with_capacity(data.len() + 3 * 4 + 1);
-    bytes.extend((data.len() as u32).to_le_bytes()); // len.
-    bytes.extend([0u8; 4]); // cap, backpatched.
-    let align = std::mem::align_of::<usize>() as u8;
-    bytes.extend(align.to_le_bytes()); // align.
-    bytes.extend(data); // data.
-    assert_eq!(bytes.len(), 2 * 4 + 1 + data.len());
-
-    let cap = bytes.capacity() as u32;
-    bytes[4..8].copy_from_slice(cap.to_le_bytes().as_slice());
-
-    let ptr = bytes.as_ptr() as usize;
-
-    std::mem::forget(bytes);
-
-    WasmMemoryHandle(ptr)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn lex(in_ptr: *const u8, in_len: usize, file_id: FileId) -> WasmMemoryHandle {
+pub extern "C" fn lex(in_ptr: *const u8, in_len: usize, file_id: FileId) -> AllocHandle {
     assert!(!in_ptr.is_null());
 
     let input_bytes = unsafe { &*std::ptr::slice_from_raw_parts(in_ptr, in_len) };
@@ -117,7 +93,10 @@ pub extern "C" fn lex(in_ptr: *const u8, in_len: usize, file_id: FileId) -> Wasm
 
     let json = miniserde::json::to_string(&(&lexer.tokens, &lexer.errors));
 
-    make_wasm_handle(json.as_bytes())
+    let ptr = json.as_bytes().as_ptr() as u64;
+    let len = json.len() as u32 as u64;
+
+    AllocHandle(ptr << 32 | len)
 }
 
 #[derive(Serialize)]
@@ -128,7 +107,7 @@ pub struct ParseResponse<'a> {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn parse(in_ptr: *const u8, in_len: usize, file_id: FileId) -> WasmMemoryHandle {
+pub extern "C" fn parse(in_ptr: *const u8, in_len: usize, file_id: FileId) -> AllocHandle {
     assert!(!in_ptr.is_null());
 
     let input_bytes = unsafe { &*std::ptr::slice_from_raw_parts(in_ptr, in_len) };
@@ -147,7 +126,10 @@ pub extern "C" fn parse(in_ptr: *const u8, in_len: usize, file_id: FileId) -> Wa
     };
     let json = miniserde::json::to_string(&parser_response);
 
-    make_wasm_handle(json.as_bytes())
+    let ptr = json.as_bytes().as_ptr() as u64;
+    let len = json.len() as u32 as u64;
+
+    AllocHandle(ptr << 32 | len)
 }
 
 #[cfg(test)]
