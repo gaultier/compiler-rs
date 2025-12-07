@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-memmap = "0.7.0"
 miniserde = "0.1.43"
 
 [lib]
@@ -12,3 +11,7 @@ crate-type = ["cdylib","lib"]
 
 [profile.release]
 lto = true
+panic = "abort"
+
+[profile.dev]
+panic = "abort"
