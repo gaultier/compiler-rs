@@ -98,7 +98,7 @@ pub extern "C" fn alloc_u8(size: usize) -> usize {
 pub struct AllocHandle(u64);
 
 impl AllocHandle {
-    fn unpack(&self) -> (u32, u32) {
+    pub fn unpack(&self) -> (u32, u32) {
         let ptr = (self.0 >> 32) as u32;
         let len = (self.0 & 0xff_ff_ff_ff) as u32;
         (ptr, len)
