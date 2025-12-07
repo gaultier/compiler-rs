@@ -52,6 +52,9 @@ mod wasm32 {
             if !self.initialized.get() {
                 self.os_alloc();
                 self.initialized.set(true);
+                // HACK: Rust does not like pointers with a value of 0
+                // so we 'do' a dummy allocation.
+                self.offset.set(8);
             }
 
             let offset = self.offset.get();
