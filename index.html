@@ -37,7 +37,7 @@
             const input_mem = new Uint8Array(memory.buffer, input_ptr, input_len);
             input_mem.set(input_bytes); // memcpy.
 
-            const handle = exports.parse(input_ptr, input_len, 1); 
+            const handle = exports.compile(input_ptr, input_len, 1); 
             const handle_ptr = Number(handle >> 32n);
             const handle_len = Number(handle & 0xffffffffn);
             console.log("handle:",handle_ptr, handle_len);

@@ -5,52 +5,58 @@ use crate::{
     origin::Origin,
 };
 
-type VirtualRegister = u32;
+pub type VirtualRegister = u32;
 
-#[derive(Serialize)]
-struct MemoryLocation {}
+#[derive(Serialize, Debug)]
+pub struct MemoryLocation {}
 
-#[derive(Serialize)]
-struct Metadata {
+#[derive(Serialize, Debug)]
+pub struct Metadata {
     // Result of the IR instruction.
-    vreg: VirtualRegister,
-    memory_location: MemoryLocation,
+    pub vreg: VirtualRegister,
+    pub memory_location: MemoryLocation,
 }
 
-#[derive(Serialize)]
-enum InstructionKind {
+#[derive(Serialize, Debug)]
+pub enum InstructionKind {
     Add,
     Set, // Set virtual registers.
 }
 
-#[derive(Serialize)]
-struct Instruction {
-    kind: InstructionKind,
-    args_count: u8,
-    lhs: Operand,
-    rhs: Operand,
-    origin: Origin,
+#[derive(Serialize, Debug)]
+pub struct Instruction {
+    pub kind: InstructionKind,
+    pub args_count: u8,
+    pub lhs: Operand,
+    pub rhs: Operand,
+    pub origin: Origin,
     // TODO: metadata.
 }
 
 #[derive(Serialize)]
-enum OperandKind {
+pub enum OperandKind {
     VReg,
     Num,
 }
 
-#[derive(Serialize)]
-enum Operand {
+#[derive(Serialize, Debug)]
+pub enum Operand {
     Num(u64),
     VReg(u32),
 }
 
-struct Emitter {
-    instructions: Vec<Instruction>,
+pub struct Emitter {
+    pub instructions: Vec<Instruction>,
 }
 
 impl Emitter {
-    fn emit(&mut self, nodes: &[Node]) {
+    pub fn new() -> Self {
+        Self {
+            instructions: Vec::new(),
+        }
+    }
+
+    pub fn emit(&mut self, nodes: &[Node]) {
         for node in nodes {
             match node.kind {
                 crate::ast::NodeKind::Number => {

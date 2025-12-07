@@ -11,6 +11,7 @@ use serde::Serialize;
 use crate::{
     ast::{Node, Parser},
     error::Error,
+    ir::Instruction,
     lex::{Lexer, Token},
     origin::FileId,
 };
@@ -105,14 +106,15 @@ impl AllocHandle {
 }
 
 #[derive(Serialize)]
-pub struct ParseResponse<'a> {
-    pub tokens: &'a [Token],
+pub struct CompileResult<'a> {
     pub errors: &'a [Error],
-    pub nodes: &'a [Node],
+    pub lex_tokens: &'a [Token],
+    pub ast_nodes: &'a [Node],
+    pub ir_instructions: &'a [Instruction],
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn parse(in_ptr: *const u8, in_len: usize, file_id: FileId) -> AllocHandle {
+pub extern "C" fn compile(in_ptr: *const u8, in_len: usize, file_id: FileId) -> AllocHandle {
     let input_bytes = unsafe {
         std::ptr::slice_from_raw_parts(in_ptr, in_len)
             .as_ref()
@@ -126,10 +128,14 @@ pub extern "C" fn parse(in_ptr: *const u8, in_len: usize, file_id: FileId) -> Al
     let mut parser = Parser::new(input_str, &lexer);
     parser.parse();
 
-    let parser_response = ParseResponse {
-        tokens: &parser.tokens,
-        nodes: &parser.nodes,
+    let mut ir_emitter = ir::Emitter::new();
+    ir_emitter.emit(&parser.nodes);
+
+    let parser_response = CompileResult {
+        lex_tokens: &parser.tokens,
+        ast_nodes: &parser.nodes,
         errors: &parser.errors,
+        ir_instructions: &ir_emitter.instructions,
     };
     let json = serde_json::to_string(&parser_response).unwrap();
 
@@ -156,7 +162,7 @@ mod tests {
         let input_slice = unsafe { std::slice::from_raw_parts_mut(input_alloc, input.len()) };
         input_slice.copy_from_slice(input.as_bytes());
 
-        let handle = parse(input_slice.as_ptr(), input_slice.len(), 1);
+        let handle = compile(input_slice.as_ptr(), input_slice.len(), 1);
         let (ptr, len) = handle.unpack();
         println!("handle={} ptr={} len={}", handle.0, ptr, len);
         assert!(ptr > 0);
