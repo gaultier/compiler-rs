@@ -1,20 +1,23 @@
+use std::alloc::Layout;
+
 pub mod ast;
 pub mod error;
 pub mod lex;
 mod origin;
 
+use miniserde::Serialize;
+
+use crate::{
+    ast::{Node, Parser},
+    error::Error,
+    lex::{Lexer, Token},
+    origin::FileId,
+};
+
 #[cfg(target_arch = "wasm32")]
 mod wasm32 {
-    use miniserde::Serialize;
     use std::alloc::GlobalAlloc;
     use std::alloc::Layout;
-
-    use crate::{
-        ast::{Node, Parser},
-        error::Error,
-        lex::{Lexer, Token},
-        origin::FileId,
-    };
 
     const ARENA_SIZE: usize = 1 * 1024 * 1024;
     const PAGE_SIZE: usize = 64 * 1024;
@@ -69,69 +72,73 @@ mod wasm32 {
     }
 
     #[unsafe(no_mangle)]
-    pub extern "C" fn dealloc() {
-        todo!()
-    }
-
-    #[unsafe(no_mangle)]
-    pub extern "C" fn alloc_u8(size: u32) -> usize {
-        let layout = Layout::from_size_align(size as usize, std::mem::align_of::<u8>()).unwrap();
-        let ptr = unsafe { std::alloc::alloc(layout) };
-        ptr as usize
-    }
-
-    #[unsafe(no_mangle)]
     pub extern "C" fn alloc_get_size() -> usize {
         return ALLOCATOR.offset.get();
     }
+}
 
-    #[repr(transparent)]
-    pub struct AllocHandle(u64);
+#[unsafe(no_mangle)]
+pub extern "C" fn dealloc() {
+    todo!()
+}
 
-    impl AllocHandle {
-        fn unpack(&self) -> (u32, u32) {
-            let ptr = (self.0 >> 32) as u32;
-            let len = (self.0 & 0xff_ff_ff_ff) as u32;
-            (ptr, len)
-        }
+#[unsafe(no_mangle)]
+pub extern "C" fn alloc_u8(size: usize) -> usize {
+    let layout = Layout::from_size_align(size as usize, std::mem::align_of::<u8>()).unwrap();
+    let ptr = unsafe { std::alloc::alloc(layout) };
+    ptr as usize
+}
+
+#[repr(transparent)]
+pub struct AllocHandle(u64);
+
+impl AllocHandle {
+    fn unpack(&self) -> (u32, u32) {
+        let ptr = (self.0 >> 32) as u32;
+        let len = (self.0 & 0xff_ff_ff_ff) as u32;
+        (ptr, len)
     }
+}
 
-    #[derive(Serialize)]
-    pub struct ParseResponse<'a> {
-        pub tokens: &'a [Token],
-        pub errors: &'a [Error],
-        pub nodes: &'a [Node],
-    }
+#[derive(Serialize)]
+pub struct ParseResponse<'a> {
+    pub tokens: &'a [Token],
+    pub errors: &'a [Error],
+    pub nodes: &'a [Node],
+}
 
-    #[unsafe(no_mangle)]
-    pub extern "C" fn parse(in_ptr: *const u8, in_len: usize, file_id: FileId) -> AllocHandle {
-        let input_bytes = unsafe { &*std::ptr::slice_from_raw_parts(in_ptr, in_len) };
-        let input_str = std::str::from_utf8(input_bytes).unwrap();
+#[unsafe(no_mangle)]
+pub extern "C" fn parse(in_ptr: *const u8, in_len: usize, file_id: FileId) -> AllocHandle {
+    let input_bytes = unsafe {
+        std::ptr::slice_from_raw_parts(in_ptr, in_len)
+            .as_ref()
+            .unwrap()
+    };
+    let input_str = std::str::from_utf8(input_bytes).unwrap();
 
-        let mut lexer = Lexer::new(file_id);
-        lexer.lex(input_str);
+    let mut lexer = Lexer::new(file_id);
+    lexer.lex(input_str);
 
-        let mut parser = Parser::new(input_str, &lexer);
-        parser.parse();
+    let mut parser = Parser::new(input_str, &lexer);
+    parser.parse();
 
-        let parser_response = ParseResponse {
-            tokens: &parser.tokens,
-            nodes: &parser.nodes,
-            errors: &parser.errors,
-        };
-        let json = miniserde::json::to_string(&parser_response);
+    let parser_response = ParseResponse {
+        tokens: &parser.tokens,
+        nodes: &parser.nodes,
+        errors: &parser.errors,
+    };
+    let json = miniserde::json::to_string(&parser_response);
 
-        let ptr = json.as_bytes().as_ptr() as u64;
-        let len = json.len() as u32 as u64;
-        println!("ptr={}", ptr);
+    let ptr = json.as_bytes().as_ptr() as u64;
+    let len = json.len() as u32 as u64;
+    println!("ptr={}", ptr);
 
-        AllocHandle(ptr << 32 | len)
-    }
+    AllocHandle(ptr << 32 | len)
 }
 
 #[cfg(test)]
 mod tests {
-    //use super::*;
+    use super::*;
 
     #[test]
     fn test_c_api() {
@@ -140,13 +147,17 @@ mod tests {
         let padding = (0usize).wrapping_sub(base) & (align - 1);
         assert_eq!(padding + base, align);
 
-        //let input = " 123 456 ";
-        //let handle = parse(input.as_ptr(), input.len(), 1);
-        //let (ptr, len) = handle.unpack();
-        //println!("handle={} ptr={} len={}", handle.0, ptr, len);
-        //assert!(ptr > 0);
-        //assert!(len > 0);
-        //
+        let input = "123 +1+32444444444444444";
+        let input_alloc = alloc_u8(input.len()) as *mut u8;
+        let input_slice = unsafe { std::slice::from_raw_parts_mut(input_alloc, input.len()) };
+        input_slice.copy_from_slice(input.as_bytes());
+
+        let handle = parse(input_slice.as_ptr(), input_slice.len(), 1);
+        let (ptr, len) = handle.unpack();
+        println!("handle={} ptr={} len={}", handle.0, ptr, len);
+        assert!(ptr > 0);
+        assert!(len > 0);
+
         //let bytes = unsafe { std::slice::from_raw_parts(ptr as usize as *const u8, len as usize) };
         //let s = std::str::from_utf8(bytes).unwrap();
         //assert!(s.len() > 0);
