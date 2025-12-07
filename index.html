@@ -33,8 +33,12 @@
             const input_len = input_bytes.length;
             const input_ptr = exports.alloc_u8(input_len)
             console.log(input_ptr, input_len);
+
             const input_mem = new Uint8Array(memory.buffer, input_ptr, input_len);
             input_mem.set(input_bytes); // memcpy.
+            {
+                console.log(exports.alloc_get_size());
+            }
 
             const handle = exports.parse(input_ptr, input_len, 1); 
             console.log(handle);

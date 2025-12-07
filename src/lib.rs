@@ -8,7 +8,6 @@ mod wasm32 {
     use miniserde::Serialize;
     use std::alloc::GlobalAlloc;
     use std::alloc::Layout;
-    use std::ptr::null_mut;
 
     use crate::{
         ast::{Node, Parser},
@@ -17,7 +16,7 @@ mod wasm32 {
         origin::FileId,
     };
 
-    const ARENA_SIZE: usize = 1 * 1024 * 1024;
+    const ARENA_SIZE: usize = 64 * 1024 * 1024;
 
     struct SimpleAllocator {
         initialized: std::cell::Cell<bool>,
@@ -77,6 +76,11 @@ mod wasm32 {
         let layout = Layout::from_size_align(size as usize, std::mem::align_of::<u8>()).unwrap();
         let ptr = unsafe { std::alloc::alloc(layout) };
         ptr as usize
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn alloc_get_size() -> usize {
+        return ALLOCATOR.offset.get();
     }
 
     #[repr(transparent)]
