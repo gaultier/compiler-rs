@@ -89,7 +89,7 @@ pub extern "C" fn dealloc() {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn alloc_u8(size: usize) -> usize {
-    let layout = Layout::from_size_align(size as usize, std::mem::align_of::<u8>()).unwrap();
+    let layout = Layout::from_size_align(size, std::mem::align_of::<u8>()).unwrap();
     let ptr = unsafe { std::alloc::alloc(layout) };
     ptr as usize
 }
