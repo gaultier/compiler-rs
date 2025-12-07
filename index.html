@@ -72,7 +72,7 @@
 
             const compiled_dom = document.getElementById("compiled");
             compiled_dom.innerHTML ="";
-            for (const token of res.tokens) {
+            for (const token of res.lex_tokens) {
                 const span_bytes = input_bytes.subarray(token.origin.offset, token.origin.offset + token.origin.len);
                 // TODO: Should we just maintain a mapping in JS of utf8 offset -> utf16 offset? 
                 // Or return utf16 offsets from WASM directly?
