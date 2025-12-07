@@ -55,9 +55,11 @@ mod wasm32 {
             assert!(padding <= align);
 
             if padding + offset + size > ARENA_SIZE {
-                return null_mut();
+                panic!();
             }
+
             let allocated = offset + padding;
+            assert!(allocated % align == 0);
             self.offset.set(offset + padding + size);
             allocated as *mut u8
         }
@@ -74,7 +76,6 @@ mod wasm32 {
     pub extern "C" fn alloc_u8(size: u32) -> usize {
         let layout = Layout::from_size_align(size as usize, std::mem::align_of::<u8>()).unwrap();
         let ptr = unsafe { std::alloc::alloc(layout) };
-        assert!(!ptr.is_null());
         ptr as usize
     }
 
@@ -124,23 +125,28 @@ mod wasm32 {
     }
 }
 
-//#[cfg(test)]
-//mod tests {
-//    use super::*;
-//
-//    #[test]
-//    fn test_c_api() {
-//        let input = " 123 456 ";
-//        let handle = parse(input.as_ptr(), input.len(), 1);
-//        let (ptr, len) = handle.unpack();
-//        println!("handle={} ptr={} len={}", handle.0, ptr, len);
-//        assert!(ptr > 0);
-//        assert!(len > 0);
-//
-//        let bytes = unsafe { std::slice::from_raw_parts(ptr as usize as *const u8, len as usize) };
-//        let s = std::str::from_utf8(bytes).unwrap();
-//        assert!(s.len() > 0);
-//
-//        //dealloc(handle);
-//    }
-//}
+#[cfg(test)]
+mod tests {
+    //use super::*;
+
+    #[test]
+    fn test_c_api() {
+        let base = 3;
+        let align = 8;
+        let padding = (0usize).wrapping_sub(base) & (align - 1);
+        assert_eq!(padding + base, align);
+
+        //let input = " 123 456 ";
+        //let handle = parse(input.as_ptr(), input.len(), 1);
+        //let (ptr, len) = handle.unpack();
+        //println!("handle={} ptr={} len={}", handle.0, ptr, len);
+        //assert!(ptr > 0);
+        //assert!(len > 0);
+        //
+        //let bytes = unsafe { std::slice::from_raw_parts(ptr as usize as *const u8, len as usize) };
+        //let s = std::str::from_utf8(bytes).unwrap();
+        //assert!(s.len() > 0);
+        //
+        //dealloc(handle);
+    }
+}
