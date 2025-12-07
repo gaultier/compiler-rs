@@ -32,9 +32,14 @@
             let input_bytes = JsStringToUtf8Bytes(input_js);
             const input_len = input_bytes.length;
             const input_ptr = exports.alloc_u8(input_len)
+            console.log(input_ptr, input_len);
             const input_mem = new Uint8Array(memory.buffer, input_ptr, input_len);
             input_mem.set(input_bytes); // memcpy.
-);
+
+            const handle = exports.parse(input_ptr, input_len, 1); 
+            console.log(handle);
+            const handle_ptr = Number(handle >> 32n);
+            const handle_len = Number(handle & 0xffffffffn);
             console.log(handle_ptr, handle_len);
             
             const res_slice = new Uint8Array(memory.buffer, handle_ptr, handle_len);
