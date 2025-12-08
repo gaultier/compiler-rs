@@ -45,8 +45,8 @@ pub enum Operand {
 
 #[derive(Serialize, Debug)]
 pub struct Lifetime {
-    start: u32,
-    end: u32, // Inclusive.
+    pub(crate) start: u32,
+    pub(crate) end: u32, // Inclusive.
 }
 
 pub type Lifetimes = BTreeMap<VirtualRegister, Lifetime>;

@@ -8,8 +8,8 @@ pub enum ArchKind {
 }
 
 pub struct Abi {
-    arch_kind: ArchKind,
-    gprs: Vec<Register>,
+    pub arch_kind: ArchKind,
+    pub gprs: Vec<Register>,
 }
 
 #[derive(Serialize, Debug)]
