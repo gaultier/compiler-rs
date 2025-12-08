@@ -110,20 +110,15 @@ pub mod amd64 {
             self.instructions.reserve(irs.len());
 
             for ir in irs {
+                let lhs = ir_operand_to_asm(&ir.lhs, regalloc);
+                let rhs = ir_operand_to_asm(&ir.lhs, regalloc);
+
                 match ir.kind {
                     ir::InstructionKind::Add => {
-                        let lhs = regalloc.get(ir.lhs.as_ref().unwrap());
-
                         let ins = Instruction {
                             kind: InstructionKind::Add,
-                            lhs: Some(Operand {
-                                operand_size: OperandSize::Eight,
-                                kind: OperandKind::Register(Register::Rax), // FIXME
-                            }),
-                            rhs: Some(Operand {
-                                operand_size: OperandSize::Eight,
-                                kind: OperandKind::Register(Register::R8), // FIXME
-                            }),
+                            lhs,
+                            rhs,
                             origin: ir.origin,
                         };
                         self.instructions.push(ins);
@@ -131,14 +126,8 @@ pub mod amd64 {
                     ir::InstructionKind::Set => {
                         let ins = Instruction {
                             kind: InstructionKind::Mov,
-                            lhs: Some(Operand {
-                                operand_size: OperandSize::Eight,
-                                kind: OperandKind::Register(Register::Rax), // FIXME
-                            }),
-                            rhs: Some(Operand {
-                                operand_size: OperandSize::Eight,
-                                kind: OperandKind::Immediate(69), // FIXME
-                            }),
+                            lhs,
+                            rhs,
                             origin: ir.origin,
                         };
                         self.instructions.push(ins);
