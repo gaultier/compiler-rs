@@ -11,11 +11,13 @@ pub mod register_alloc;
 use serde::Serialize;
 
 use crate::{
+    asm::amd64,
     ast::{Node, Parser},
     error::Error,
     ir::{Instruction, Lifetimes},
     lex::{Lexer, Token},
     origin::FileId,
+    register_alloc::RegAlloc,
 };
 
 #[cfg(target_arch = "wasm32")]
@@ -115,6 +117,9 @@ pub struct CompileResult<'a> {
     pub ir_instructions: &'a [Instruction],
     pub ir_text: String,
     pub ir_lifetimes: &'a Lifetimes,
+    pub regalloc: &'a RegAlloc,
+    pub amd64_instructions: &'a [amd64::Instruction],
+    pub asm_text: String,
 }
 
 #[unsafe(no_mangle)]
@@ -140,6 +145,16 @@ pub extern "C" fn compile(in_ptr: *const u8, in_len: usize, file_id: FileId) -> 
         ins.write(&mut ir_text).unwrap();
     }
 
+    let regalloc = register_alloc::regalloc(&ir_emitter.lifetimes, &amd64::abi());
+
+    let mut asm_emitter = asm::amd64::Emitter::new();
+    asm_emitter.emit(&ir_emitter.instructions, &regalloc);
+
+    let mut asm_text = Vec::with_capacity(asm_emitter.instructions.len() * 8);
+    for ins in &asm_emitter.instructions {
+        ins.write(&mut asm_text).unwrap();
+    }
+
     let parser_response = CompileResult {
         lex_tokens: &parser.tokens,
         ast_nodes: &parser.nodes,
@@ -147,6 +162,9 @@ pub extern "C" fn compile(in_ptr: *const u8, in_len: usize, file_id: FileId) -> 
         ir_instructions: &ir_emitter.instructions,
         ir_text: String::from_utf8(ir_text).unwrap(),
         ir_lifetimes: &ir_emitter.lifetimes,
+        regalloc: &regalloc,
+        amd64_instructions: &asm_emitter.instructions,
+        asm_text: String::from_utf8(asm_text).unwrap(),
     };
     let json = serde_json::to_string(&parser_response).unwrap();
 
