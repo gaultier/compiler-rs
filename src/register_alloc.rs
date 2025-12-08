@@ -1,13 +1,16 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use serde::Serialize;
+
 use crate::{
     asm::Abi,
     ir::{Lifetime, Lifetimes, VirtualRegister},
 };
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Serialize, Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Register(pub u8);
 
+#[derive(Serialize, Debug)]
 pub enum MemoryLocation {
     Register(Register),
     Stack(u32), // Stack offset.

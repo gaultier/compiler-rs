@@ -38,7 +38,9 @@ fn main() {
         ins.write(&mut stdout()).unwrap();
     }
 
+    println!("--- RegAlloc ---");
     let regalloc = register_alloc::regalloc(&ir_emitter.lifetimes, &amd64::abi());
+    println!("regalloc: {:#?}", &regalloc);
 
     let mut asm_emitter = asm::amd64::Emitter::new();
     asm_emitter.emit(&ir_emitter.instructions, &regalloc);
