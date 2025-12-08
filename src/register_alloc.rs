@@ -1,6 +1,9 @@
 use std::collections::BTreeMap;
 
-use crate::ir::{Lifetimes, VirtualRegister};
+use crate::{
+    asm::Abi,
+    ir::{Lifetimes, VirtualRegister},
+};
 
 pub struct Register(u8);
 
@@ -11,7 +14,7 @@ pub enum MemoryLocation {
 
 pub type RegAlloc = BTreeMap<VirtualRegister, MemoryLocation>;
 
-pub fn regalloc(lifetimes: &Lifetimes) -> RegAlloc {
+pub fn regalloc(lifetimes: &Lifetimes, abi: &Abi) -> RegAlloc {
     let mut res = RegAlloc::new();
 
     // TODO

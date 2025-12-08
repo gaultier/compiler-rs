@@ -7,9 +7,12 @@ use crate::{
     origin::Origin,
 };
 
-#[repr(transparent)]
 #[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct VirtualRegister(u32);
+
+//pub enum VirtualRegisterConstraint {
+//    Result,
+//}
 
 #[derive(Serialize, Debug)]
 pub struct MemoryLocation {}
@@ -50,11 +53,13 @@ pub struct Lifetime {
 }
 
 pub type Lifetimes = BTreeMap<VirtualRegister, Lifetime>;
+//pub type Constraints = BTreeMap<VirtualRegister, VirtualRegisterConstraint>;
 
 pub struct Emitter {
     pub instructions: Vec<Instruction>,
     vreg: VirtualRegister,
     pub lifetimes: Lifetimes,
+    //pub constraints: Constraints,
 }
 
 impl Emitter {
@@ -63,6 +68,7 @@ impl Emitter {
             instructions: Vec::new(),
             vreg: VirtualRegister(0),
             lifetimes: Lifetimes::new(),
+            //constraints: Constraints::new(),
         }
     }
 
