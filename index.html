@@ -19,6 +19,25 @@
         </div>
     </body>
     <script>
+        const amd64_reg_to_string = {
+            0: "rax",
+            1: "rbx",
+            2: "rcx",
+            3: "rdx",
+            4: "rdi",
+            5: "rsi",
+            6: "r8",
+            7: "r9",
+            8: "r10",
+            9: "r11",
+            10: "r12",
+            11: "r13",
+            12: "r14",
+            13: "r15",
+            14: "rbp",
+            15: "rsp",
+        };
+
         function utf16_to_utf8(str) {
             const encoder = new TextEncoder();
             return encoder.encode(str);
@@ -119,8 +138,7 @@
                 item_dom.classList.add("regalloc_item");
 
                 if (memory_location.Register != null) {
-                    // How to get the target arch register name? Maintain a mapping on the JS side?
-                    item_dom.innerText = `Vreg ${vreg} -> R${memory_location.Register}`;
+                    item_dom.innerText = `Vreg ${vreg} -> ${amd64_reg_to_string[memory_location.Register]}`;
                 } else {
                     item_dom.innerText = `Vreg ${vreg} -> S[${memory_location.Stack}]`;
                 }
