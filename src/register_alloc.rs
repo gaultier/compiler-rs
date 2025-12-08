@@ -5,6 +5,7 @@ use crate::{
     ir::{Lifetimes, VirtualRegister},
 };
 
+#[derive(Copy, Clone)]
 pub struct Register(u8);
 
 pub enum MemoryLocation {

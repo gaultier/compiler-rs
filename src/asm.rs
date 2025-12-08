@@ -23,7 +23,12 @@ pub mod amd64 {
 
     use serde::Serialize;
 
-    use crate::{asm::OperandSize, ir, origin::Origin};
+    use crate::{
+        asm::OperandSize,
+        ir::{self},
+        origin::Origin,
+        register_alloc::{MemoryLocation, RegAlloc},
+    };
 
     #[derive(Serialize, Debug)]
     pub enum Register {
@@ -73,6 +78,27 @@ pub mod amd64 {
         pub instructions: Vec<Instruction>,
     }
 
+    fn ir_operand_to_asm(op: &Option<ir::Operand>, regalloc: &RegAlloc) -> Option<Operand> {
+        match op {
+            Some(ir::Operand::VReg(vreg)) => {
+                let memory_location = regalloc.get(vreg).unwrap();
+                let kind = match memory_location {
+                    MemoryLocation::Register(register) => OperandKind::Register(register),
+                    MemoryLocation::Stack(_) => todo!(),
+                };
+                Some(Operand {
+                    operand_size: OperandSize::Eight, // TODO
+                    kind,
+                })
+            }
+            Some(ir::Operand::Num(num)) => Some(Operand {
+                operand_size: OperandSize::Eight,
+                kind: OperandKind::Immediate(*num),
+            }),
+            None => None,
+        }
+    }
+
     impl Emitter {
         pub fn new() -> Self {
             Self {
@@ -80,12 +106,14 @@ pub mod amd64 {
             }
         }
 
-        pub fn emit(&mut self, irs: &[ir::Instruction]) {
+        pub fn emit(&mut self, irs: &[ir::Instruction], regalloc: &RegAlloc) {
             self.instructions.reserve(irs.len());
 
             for ir in irs {
                 match ir.kind {
                     ir::InstructionKind::Add => {
+                        let lhs = regalloc.get(ir.lhs.as_ref().unwrap());
+
                         let ins = Instruction {
                             kind: InstructionKind::Add,
                             lhs: Some(Operand {

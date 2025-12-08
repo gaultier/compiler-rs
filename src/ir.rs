@@ -15,9 +15,6 @@ pub struct VirtualRegister(u32);
 //}
 
 #[derive(Serialize, Debug)]
-pub struct MemoryLocation {}
-
-#[derive(Serialize, Debug)]
 pub enum InstructionKind {
     Add,
     Set, // Set virtual registers.
