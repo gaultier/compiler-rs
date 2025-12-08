@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{collections::BTreeMap, io::Write};
 
 use serde::Serialize;
 
@@ -8,7 +8,7 @@ use crate::{
 };
 
 #[repr(transparent)]
-#[derive(Serialize, Debug, Clone, Copy)]
+#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct VirtualRegister(u32);
 
 #[derive(Serialize, Debug)]
@@ -44,7 +44,7 @@ pub enum Operand {
 }
 
 #[derive(Serialize, Debug)]
-pub struct VirtualRegisterLifetime {
+pub struct Lifetime {
     start: u32,
     end: u32, // Exclusive.
 }
@@ -52,7 +52,7 @@ pub struct VirtualRegisterLifetime {
 pub struct Emitter {
     pub instructions: Vec<Instruction>,
     vreg: VirtualRegister,
-    pub lifetimes: Vec<VirtualRegisterLifetime>,
+    pub lifetimes: BTreeMap<VirtualRegister, Lifetime>,
 }
 
 impl Emitter {
@@ -60,7 +60,7 @@ impl Emitter {
         Self {
             instructions: Vec::new(),
             vreg: VirtualRegister(0),
-            lifetimes: Vec::new(),
+            lifetimes: BTreeMap::new(),
         }
     }
 
@@ -115,19 +115,33 @@ impl Emitter {
         self.lifetimes = self.compute_lifetimes();
     }
 
-    fn compute_lifetimes(&self) -> Vec<VirtualRegisterLifetime> {
-        let mut res = Vec::with_capacity(self.instructions.len());
+    fn extend_lifetime_on_use(
+        vreg: VirtualRegister,
+        ins_position: u32,
+        lifetimes: &mut BTreeMap<VirtualRegister, Lifetime>,
+    ) {
+        lifetimes.entry(vreg).and_modify(|e| e.end = ins_position);
+    }
+
+    fn compute_lifetimes(&self) -> BTreeMap<VirtualRegister, Lifetime> {
+        let mut res = BTreeMap::new();
 
         for (i, ins) in self.instructions.iter().enumerate() {
             match ins.kind {
                 InstructionKind::Add | InstructionKind::Set => {
                     assert!(ins.res_vreg.0 > 0);
-                    let lifetime = VirtualRegisterLifetime {
+                    let lifetime = Lifetime {
                         start: i as u32,
                         end: i as u32,
                     };
+                    res.insert(ins.res_vreg, lifetime);
 
-                    res.push(lifetime);
+                    if let Some(Operand::VReg(vreg)) = &ins.lhs {
+                        Self::extend_lifetime_on_use(*vreg, i as u32, &mut res);
+                    }
+                    if let Some(Operand::VReg(vreg)) = &ins.rhs {
+                        Self::extend_lifetime_on_use(*vreg, i as u32, &mut res);
+                    }
                 }
             }
         }
