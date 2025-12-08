@@ -102,6 +102,9 @@
                 const node_dom = document.createElement("span");
                 node_dom.classList.add("ast_node");
                 node_dom.innerText = node.kind;
+                if (node.data && node.data.Num) {
+                    node_dom.innerText += `(${node.data.Num})`;
+                }
                 parse_dom.appendChild(node_dom);
             }
 
