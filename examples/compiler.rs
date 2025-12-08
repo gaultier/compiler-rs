@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, io::stdout};
 
 use compiler_rs_lib::{ast::Parser, ir, lex::Lexer};
 
@@ -26,6 +26,9 @@ fn main() {
     ir_emitter.emit(&parser.nodes);
     println!("--- IR ---");
     println!("instructions: {:#?}", &ir_emitter.instructions);
+    for ins in &ir_emitter.instructions {
+        ins.write(&mut stdout()).unwrap();
+    }
 
     std::process::exit(if parser.errors.is_empty() { 0 } else { 1 });
 }

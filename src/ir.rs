@@ -122,20 +122,27 @@ impl Instruction {
         match self.kind {
             InstructionKind::Add => {
                 write!(w, "add ")?;
+                write!(w, "(vreg {}) ", self.res_vreg.0)?;
+
                 if let Some(lhs) = &self.lhs {
                     lhs.write(w)?;
                 }
                 write!(w, " ")?;
+
                 if let Some(rhs) = &self.rhs {
                     rhs.write(w)?;
                 }
             }
             InstructionKind::Set => {
                 write!(w, "set ")?;
+                write!(w, "(vreg {}) ", self.res_vreg.0)?;
+
                 if let Some(lhs) = &self.lhs {
                     lhs.write(w)?;
                 }
+
                 write!(w, " ")?;
+
                 if let Some(rhs) = &self.rhs {
                     rhs.write(w)?;
                 }
