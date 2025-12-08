@@ -111,6 +111,7 @@ pub struct CompileResult<'a> {
     pub lex_tokens: &'a [Token],
     pub ast_nodes: &'a [Node],
     pub ir_instructions: &'a [Instruction],
+    pub ir_text: String,
 }
 
 #[unsafe(no_mangle)]
@@ -131,11 +132,17 @@ pub extern "C" fn compile(in_ptr: *const u8, in_len: usize, file_id: FileId) -> 
     let mut ir_emitter = ir::Emitter::new();
     ir_emitter.emit(&parser.nodes);
 
+    let mut ir_text = Vec::with_capacity(in_len);
+    for ins in &ir_emitter.instructions {
+        ins.write(&mut ir_text).unwrap();
+    }
+
     let parser_response = CompileResult {
         lex_tokens: &parser.tokens,
         ast_nodes: &parser.nodes,
         errors: &parser.errors,
         ir_instructions: &ir_emitter.instructions,
+        ir_text: String::from_utf8(ir_text).unwrap(),
     };
     let json = serde_json::to_string(&parser_response).unwrap();
 

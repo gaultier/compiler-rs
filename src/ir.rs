@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use serde::Serialize;
 
 use crate::{
@@ -98,5 +100,37 @@ impl Emitter {
                 }
             }
         }
+    }
+}
+
+impl Operand {
+    pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+        match self {
+            Operand::Num(n) => {
+                write!(w, "(u64.const {})", n)
+            }
+            Operand::VReg(r) => write!(w, "(vreg {})", r),
+        }
+    }
+}
+
+impl Instruction {
+    pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+        match self.kind {
+            InstructionKind::Add => {
+                write!(w, "add ")?;
+                self.lhs.write(w)?;
+                write!(w, " ")?;
+                self.rhs.write(w)?;
+            }
+            InstructionKind::Set => {
+                write!(w, "set ")?;
+                self.lhs.write(w)?;
+                write!(w, " ")?;
+                self.rhs.write(w)?;
+            }
+        };
+
+        write!(w, "\n")
     }
 }
