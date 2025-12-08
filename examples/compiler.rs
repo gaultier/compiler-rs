@@ -26,6 +26,7 @@ fn main() {
     ir_emitter.emit(&parser.nodes);
     println!("--- IR ---");
     println!("instructions: {:#?}", &ir_emitter.instructions);
+    println!("lifetimes: {:#?}", &ir_emitter.lifetimes);
     for (i, ins) in ir_emitter.instructions.iter().enumerate() {
         print!("{}: ", i);
         ins.write(&mut stdout()).unwrap();

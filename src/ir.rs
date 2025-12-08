@@ -43,9 +43,16 @@ pub enum Operand {
     VReg(VirtualRegister),
 }
 
+#[derive(Serialize, Debug)]
+pub struct VirtualRegisterLifetime {
+    start: u32,
+    end: u32, // Exclusive.
+}
+
 pub struct Emitter {
     pub instructions: Vec<Instruction>,
     vreg: VirtualRegister,
+    pub lifetimes: Vec<VirtualRegisterLifetime>,
 }
 
 impl Emitter {
@@ -53,6 +60,7 @@ impl Emitter {
         Self {
             instructions: Vec::new(),
             vreg: VirtualRegister(0),
+            lifetimes: Vec::new(),
         }
     }
 
@@ -103,6 +111,28 @@ impl Emitter {
                 }
             }
         }
+
+        self.lifetimes = self.compute_lifetimes();
+    }
+
+    fn compute_lifetimes(&self) -> Vec<VirtualRegisterLifetime> {
+        let mut res = Vec::with_capacity(self.instructions.len());
+
+        for (i, ins) in self.instructions.iter().enumerate() {
+            match ins.kind {
+                InstructionKind::Add | InstructionKind::Set => {
+                    assert!(ins.res_vreg.0 > 0);
+                    let lifetime = VirtualRegisterLifetime {
+                        start: i as u32,
+                        end: i as u32,
+                    };
+
+                    res.push(lifetime);
+                }
+            }
+        }
+
+        res
     }
 }
 
