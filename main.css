@@ -33,7 +33,7 @@ body, html {
     width: 100%;
 }
 
-.token {
+.token, .ast_node, .ir_instruction {
     margin: .2rem;
     padding: .2rem;
     border: 1px solid black;

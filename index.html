@@ -10,7 +10,10 @@
         <div class="container">
         <textarea id="input" default="123 + 456"></textarea>
         <div id="errors"></div>
-        <div id="compiled"></div>
+        <div id="lex"></div>
+        <div id="parse"></div>
+        <div id="ir"></div>
+
         </div>
     </body>
     <script>
@@ -70,8 +73,8 @@
                 errors_dom.appendChild(err_dom);
             }
 
-            const compiled_dom = document.getElementById("compiled");
-            compiled_dom.innerHTML ="";
+            const lex_dom = document.getElementById("lex");
+            lex_dom.innerHTML ="";
             for (const token of res.lex_tokens) {
                 const span_bytes = input_bytes.subarray(token.origin.offset, token.origin.offset + token.origin.len);
                 // TODO: Should we just maintain a mapping in JS of utf8 offset -> utf16 offset? 
@@ -90,9 +93,17 @@
                 //    token_dom.removeChild(token_dom.lastChild);
                 //});
 
-                compiled_dom.appendChild(token_dom);
+                lex_dom.appendChild(token_dom);
             }
 
+            const parse_dom = document.getElementById("parse");
+            parse_dom.innerHTML ="";
+            for (const node of res.ast_nodes) {
+                const node_dom = document.createElement("span");
+                node_dom.classList.add("ast_node");
+                node_dom.innerText = node.kind;
+                parse_dom.appendChild(node_dom);
+            }
 
         }
 
