@@ -13,6 +13,7 @@
         <div id="lex"></div>
         <div id="parse"></div>
         <div id="ir"></div>
+        <div id="asm"></div>
 
         </div>
     </body>
@@ -109,8 +110,10 @@
             }
 
             const ir_dom = document.getElementById("ir");
-            ir_dom.innerText =res.ir_text;
+            ir_dom.innerText = res.ir_text;
 
+            const asm_dom = document.getElementById("asm");
+            asm_dom.innerText = res.asm_text;
         }
 
         async function loadWasm() {
