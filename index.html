@@ -108,6 +108,18 @@
                 parse_dom.appendChild(node_dom);
             }
 
+            const ir_dom = document.getElementById("ir");
+            ir_dom.innerHTML ="";
+            for (const ir of res.ir_instructions) {
+                const ir_ins_dom = document.createElement("span");
+                ir_ins_dom.classList.add("ir_instruction");
+                ir_ins_dom.innerText = ir.kind;
+                if (ir.data && ir.data.Num) {
+                    ir_ins_dom.innerText += `(${ir.data.Num})`;
+                }
+                ir_dom.appendChild(ir_ins_dom);
+            }
+
         }
 
         async function loadWasm() {
