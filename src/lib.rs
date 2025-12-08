@@ -132,7 +132,7 @@ pub extern "C" fn compile(in_ptr: *const u8, in_len: usize, file_id: FileId) -> 
     let mut ir_emitter = ir::Emitter::new();
     ir_emitter.emit(&parser.nodes);
 
-    let mut ir_text = Vec::with_capacity(in_len);
+    let mut ir_text = Vec::with_capacity(in_len * 3);
     for ins in &ir_emitter.instructions {
         ins.write(&mut ir_text).unwrap();
     }
