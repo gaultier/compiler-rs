@@ -14,10 +14,11 @@ pub enum MemoryLocation {
 
 pub type RegAlloc = BTreeMap<VirtualRegister, MemoryLocation>;
 
+// TODO: Constraints.
 pub fn regalloc(lifetimes: &Lifetimes, abi: &Abi) -> RegAlloc {
     let mut res = RegAlloc::new();
 
-    // TODO
+    // TODO: Linear register allocator.
 
     res
 }
