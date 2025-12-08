@@ -31,6 +31,7 @@ pub mod amd64 {
     };
 
     #[derive(Serialize, Debug)]
+    #[repr(u8)]
     pub enum Register {
         Rax,
         Rbx,
@@ -47,6 +48,23 @@ pub mod amd64 {
         R14,
         R15,
     }
+
+    pub(crate) const GPRS: [Register; 14] = [
+        Register::Rax,
+        Register::Rbx,
+        Register::Rcx,
+        Register::Rdx,
+        Register::Rdi,
+        Register::Rsi,
+        Register::R8,
+        Register::R9,
+        Register::R10,
+        Register::R11,
+        Register::R12,
+        Register::R13,
+        Register::R14,
+        Register::R15,
+    ];
 
     #[derive(Serialize, Debug)]
     pub enum InstructionKind {
@@ -83,7 +101,7 @@ pub mod amd64 {
             Some(ir::Operand::VReg(vreg)) => {
                 let memory_location = regalloc.get(vreg).unwrap();
                 let kind = match memory_location {
-                    MemoryLocation::Register(register) => OperandKind::Register(register),
+                    MemoryLocation::Register(register) => todo!(),
                     MemoryLocation::Stack(_) => todo!(),
                 };
                 Some(Operand {
