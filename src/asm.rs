@@ -12,7 +12,7 @@ pub struct Abi {
     pub gprs: Vec<Register>,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone, Copy)]
 enum OperandSize {
     One = 1,
     Two = 2,
@@ -108,13 +108,13 @@ pub mod amd64 {
         Add,
     }
 
-    #[derive(Serialize, Debug)]
+    #[derive(Serialize, Debug, Clone, Copy)]
     pub enum OperandKind {
         Register(Register),
         Immediate(u64),
     }
 
-    #[derive(Serialize, Debug)]
+    #[derive(Serialize, Debug, Clone, Copy)]
     pub struct Operand {
         operand_size: OperandSize,
         kind: OperandKind,
@@ -132,12 +132,21 @@ pub mod amd64 {
         pub instructions: Vec<Instruction>,
     }
 
+    impl OperandKind {
+        pub fn is_immediate(&self) -> bool {
+            match self {
+                OperandKind::Immediate(_) => true,
+                _ => false,
+            }
+        }
+    }
+
     fn ir_operand_to_asm(op: &Option<ir::Operand>, regalloc: &RegAlloc) -> Option<Operand> {
         match op {
             Some(ir::Operand::VReg(vreg)) => {
                 let memory_location = regalloc.get(vreg).unwrap();
                 let kind = match memory_location {
-                    MemoryLocation::Register(register) => todo!(),
+                    MemoryLocation::Register(register) => OperandKind::Register(register.into()),
                     MemoryLocation::Stack(_) => todo!(),
                 };
                 Some(Operand {
@@ -153,6 +162,16 @@ pub mod amd64 {
         }
     }
 
+    fn memory_location_to_asm_operand(location: &MemoryLocation) -> Operand {
+        match location {
+            MemoryLocation::Register(register) => Operand {
+                operand_size: OperandSize::Eight,
+                kind: OperandKind::Register(register.into()),
+            },
+            MemoryLocation::Stack(_) => todo!(),
+        }
+    }
+
     impl Emitter {
         pub fn new() -> Self {
             Self {
@@ -164,23 +183,37 @@ pub mod amd64 {
             self.instructions.reserve(irs.len());
 
             for ir in irs {
-                let lhs = ir_operand_to_asm(&ir.lhs, regalloc);
-                let rhs = ir_operand_to_asm(&ir.lhs, regalloc);
-
                 match ir.kind {
                     ir::InstructionKind::Add => {
-                        let ins = Instruction {
-                            kind: InstructionKind::Add,
-                            lhs,
-                            rhs,
+                        let res_location = regalloc.get(&ir.res_vreg).unwrap();
+                        let res_operand = memory_location_to_asm_operand(res_location);
+                        let rhs_mov = ir_operand_to_asm(&ir.lhs, regalloc);
+
+                        let ins_mov = Instruction {
+                            kind: InstructionKind::Mov,
+                            lhs: Some(res_operand.clone()),
+                            rhs: rhs_mov,
                             origin: ir.origin,
                         };
-                        self.instructions.push(ins);
+                        self.instructions.push(ins_mov);
+
+                        let rhs_add = ir_operand_to_asm(&ir.rhs, regalloc);
+
+                        let ins_add = Instruction {
+                            kind: InstructionKind::Add,
+                            lhs: Some(res_operand),
+                            rhs: rhs_add,
+                            origin: ir.origin,
+                        };
+                        self.instructions.push(ins_add);
                     }
                     ir::InstructionKind::Set => {
+                        let res_location = regalloc.get(&ir.res_vreg).unwrap();
+                        let res_operand = memory_location_to_asm_operand(res_location);
+                        let rhs = ir_operand_to_asm(&ir.rhs, regalloc);
                         let ins = Instruction {
                             kind: InstructionKind::Mov,
-                            lhs,
+                            lhs: Some(res_operand),
                             rhs,
                             origin: ir.origin,
                         };
