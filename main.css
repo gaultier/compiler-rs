@@ -38,12 +38,12 @@ body, html {
     padding: .2rem;
 }
 
-.token, .ast_node{
+.token, .ast_node {
     border: 1px solid black;
     border-radius: .3rem;
 }
 
-#parse, #ir {
+#parse, #ir, #regalloc {
     display: flex;
     flex-direction: column;
     align-items: flex-start;

@@ -13,6 +13,7 @@
         <div id="lex"></div>
         <div id="parse"></div>
         <div id="ir"></div>
+        <div id="regalloc"></div>
         <div id="asm"></div>
 
         </div>
@@ -111,6 +112,21 @@
 
             const ir_dom = document.getElementById("ir");
             ir_dom.innerText = res.ir_text;
+
+            const regalloc_dom = document.getElementById("regalloc");
+            for (const [vreg, memory_location] of Object.entries(res.regalloc)) {
+                const item_dom = document.createElement("span");
+                item_dom.classList.add("regalloc_item");
+
+                if (memory_location.Register != null) {
+                    // How to get the target arch register name? Maintain a mapping on the JS side?
+                    item_dom.innerText = `Vreg ${vreg} -> R${memory_location.Register}`;
+                } else {
+                    item_dom.innerText = `Vreg ${vreg} -> S[${memory_location.Stack}]`;
+                }
+
+                regalloc_dom.appendChild(item_dom);
+            }
 
             const asm_dom = document.getElementById("asm");
             asm_dom.innerText = res.asm_text;
