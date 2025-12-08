@@ -5,8 +5,6 @@ pub enum ArchKind {
     // TODO
 }
 
-//pub struct Register(u8);
-
 pub struct Abi {
     arch_kind: ArchKind,
     // TODO

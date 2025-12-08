@@ -6,6 +6,7 @@ pub mod error;
 pub mod ir;
 pub mod lex;
 mod origin;
+pub mod register_alloc;
 
 use serde::Serialize;
 
