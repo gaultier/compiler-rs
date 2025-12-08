@@ -210,7 +210,7 @@ pub mod amd64 {
                     ir::InstructionKind::Set => {
                         let res_location = regalloc.get(&ir.res_vreg).unwrap();
                         let res_operand = memory_location_to_asm_operand(res_location);
-                        let rhs = ir_operand_to_asm(&ir.rhs, regalloc);
+                        let rhs = ir_operand_to_asm(&ir.lhs, regalloc);
                         let ins = Instruction {
                             kind: InstructionKind::Mov,
                             lhs: Some(res_operand),
