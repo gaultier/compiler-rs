@@ -1,6 +1,6 @@
 use std::{collections::HashMap, io::stdout};
 
-use compiler_rs_lib::{ast::Parser, ir, lex::Lexer};
+use compiler_rs_lib::{asm, ast::Parser, ir, lex::Lexer};
 
 fn main() {
     let file_name = std::env::args().skip(1).next().unwrap();
@@ -31,6 +31,11 @@ fn main() {
         print!("{}: ", i);
         ins.write(&mut stdout()).unwrap();
     }
+
+    let mut asm_emitter = asm::amd64::Emitter::new();
+    asm_emitter.emit(&ir_emitter.instructions);
+    println!("--- ASM ---");
+    println!("instructions: {:#?}", &asm_emitter.instructions);
 
     std::process::exit(if parser.errors.is_empty() { 0 } else { 1 });
 }
