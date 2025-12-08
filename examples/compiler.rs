@@ -36,6 +36,10 @@ fn main() {
     asm_emitter.emit(&ir_emitter.instructions);
     println!("--- ASM ---");
     println!("instructions: {:#?}", &asm_emitter.instructions);
+    for (i, ins) in asm_emitter.instructions.iter().enumerate() {
+        print!("{}: ", i);
+        ins.write(&mut stdout()).unwrap();
+    }
 
     std::process::exit(if parser.errors.is_empty() { 0 } else { 1 });
 }
