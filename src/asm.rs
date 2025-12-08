@@ -1,5 +1,7 @@
 use serde::Serialize;
 
+use crate::register_alloc::Register;
+
 pub enum ArchKind {
     Amd64,
     // TODO
@@ -7,7 +9,7 @@ pub enum ArchKind {
 
 pub struct Abi {
     arch_kind: ArchKind,
-    // TODO
+    gprs: Vec<Register>,
 }
 
 #[derive(Serialize, Debug)]
@@ -24,13 +26,13 @@ pub mod amd64 {
     use serde::Serialize;
 
     use crate::{
-        asm::OperandSize,
+        asm::{Abi, OperandSize},
         ir::{self},
         origin::Origin,
         register_alloc::{MemoryLocation, RegAlloc},
     };
 
-    #[derive(Serialize, Debug)]
+    #[derive(Serialize, Debug, Clone, Copy)]
     #[repr(u8)]
     pub enum Register {
         Rax,
@@ -49,6 +51,33 @@ pub mod amd64 {
         R15,
     }
 
+    impl From<&super::Register> for Register {
+        fn from(value: &super::Register) -> Self {
+            match value.as_u8() {
+                value if value == Register::Rax as u8 => Register::Rax,
+                value if value == Register::Rbx as u8 => Register::Rbx,
+                value if value == Register::Rcx as u8 => Register::Rcx,
+                value if value == Register::Rdx as u8 => Register::Rdx,
+                value if value == Register::Rdi as u8 => Register::Rdi,
+                value if value == Register::Rsi as u8 => Register::Rsi,
+                value if value == Register::R8 as u8 => Register::R8,
+                value if value == Register::R9 as u8 => Register::R9,
+                value if value == Register::R10 as u8 => Register::R10,
+                value if value == Register::R11 as u8 => Register::R11,
+                value if value == Register::R12 as u8 => Register::R12,
+                value if value == Register::R13 as u8 => Register::R13,
+                value if value == Register::R14 as u8 => Register::R14,
+                value if value == Register::R15 as u8 => Register::R15,
+                _ => panic!("value out of range"),
+            }
+        }
+    }
+    impl From<&Register> for super::Register {
+        fn from(value: &Register) -> Self {
+            super::Register(*value as u8)
+        }
+    }
+
     pub(crate) const GPRS: [Register; 14] = [
         Register::Rax,
         Register::Rbx,
@@ -65,6 +94,13 @@ pub mod amd64 {
         Register::R14,
         Register::R15,
     ];
+
+    pub fn abi() -> Abi {
+        Abi {
+            arch_kind: super::ArchKind::Amd64,
+            gprs: GPRS.iter().map(|r| r.into()).collect(),
+        }
+    }
 
     #[derive(Serialize, Debug)]
     pub enum InstructionKind {

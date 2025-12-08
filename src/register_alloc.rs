@@ -6,7 +6,7 @@ use crate::{
 };
 
 #[derive(Copy, Clone)]
-pub struct Register(u8);
+pub struct Register(pub u8);
 
 pub enum MemoryLocation {
     Register(Register),
@@ -14,6 +14,12 @@ pub enum MemoryLocation {
 }
 
 pub type RegAlloc = BTreeMap<VirtualRegister, MemoryLocation>;
+
+impl Register {
+    pub fn as_u8(&self) -> u8 {
+        self.0
+    }
+}
 
 // TODO: Constraints.
 pub fn regalloc(lifetimes: &Lifetimes, abi: &Abi) -> RegAlloc {
