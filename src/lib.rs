@@ -11,7 +11,7 @@ use serde::Serialize;
 use crate::{
     ast::{Node, Parser},
     error::Error,
-    ir::Instruction,
+    ir::{Instruction, Lifetimes},
     lex::{Lexer, Token},
     origin::FileId,
 };
@@ -112,6 +112,7 @@ pub struct CompileResult<'a> {
     pub ast_nodes: &'a [Node],
     pub ir_instructions: &'a [Instruction],
     pub ir_text: String,
+    pub ir_lifetimes: &'a Lifetimes,
 }
 
 #[unsafe(no_mangle)]
@@ -143,6 +144,7 @@ pub extern "C" fn compile(in_ptr: *const u8, in_len: usize, file_id: FileId) -> 
         errors: &parser.errors,
         ir_instructions: &ir_emitter.instructions,
         ir_text: String::from_utf8(ir_text).unwrap(),
+        ir_lifetimes: &ir_emitter.lifetimes,
     };
     let json = serde_json::to_string(&parser_response).unwrap();
 

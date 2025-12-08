@@ -46,13 +46,15 @@ pub enum Operand {
 #[derive(Serialize, Debug)]
 pub struct Lifetime {
     start: u32,
-    end: u32, // Exclusive.
+    end: u32, // Inclusive.
 }
+
+pub type Lifetimes = BTreeMap<VirtualRegister, Lifetime>;
 
 pub struct Emitter {
     pub instructions: Vec<Instruction>,
     vreg: VirtualRegister,
-    pub lifetimes: BTreeMap<VirtualRegister, Lifetime>,
+    pub lifetimes: Lifetimes,
 }
 
 impl Emitter {
@@ -60,7 +62,7 @@ impl Emitter {
         Self {
             instructions: Vec::new(),
             vreg: VirtualRegister(0),
-            lifetimes: BTreeMap::new(),
+            lifetimes: Lifetimes::new(),
         }
     }
 
@@ -115,16 +117,12 @@ impl Emitter {
         self.lifetimes = self.compute_lifetimes();
     }
 
-    fn extend_lifetime_on_use(
-        vreg: VirtualRegister,
-        ins_position: u32,
-        lifetimes: &mut BTreeMap<VirtualRegister, Lifetime>,
-    ) {
+    fn extend_lifetime_on_use(vreg: VirtualRegister, ins_position: u32, lifetimes: &mut Lifetimes) {
         lifetimes.entry(vreg).and_modify(|e| e.end = ins_position);
     }
 
-    fn compute_lifetimes(&self) -> BTreeMap<VirtualRegister, Lifetime> {
-        let mut res = BTreeMap::new();
+    fn compute_lifetimes(&self) -> Lifetimes {
+        let mut res = Lifetimes::new();
 
         for (i, ins) in self.instructions.iter().enumerate() {
             match ins.kind {
