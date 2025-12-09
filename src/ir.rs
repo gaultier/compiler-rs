@@ -17,7 +17,8 @@ pub struct VirtualRegister(u32);
 #[derive(Serialize, Debug)]
 pub enum InstructionKind {
     Add,
-    Set, // Set virtual registers.
+    Multiply,
+    Set, // Set virtual register.
 }
 
 #[derive(Serialize, Debug)]
@@ -114,6 +115,24 @@ impl Emitter {
                     self.instructions.push(ins);
                     stack.push(res_vreg);
                 }
+                crate::ast::NodeKind::Multiply => {
+                    // TODO: Checks.
+                    let rhs = stack.pop().unwrap();
+                    let lhs = stack.pop().unwrap();
+
+                    let res_vreg = self.make_vreg();
+
+                    let ins = Instruction {
+                        kind: InstructionKind::Multiply,
+                        args_count: 2,
+                        lhs: Some(Operand::VirtualRegister(lhs)),
+                        rhs: Some(Operand::VirtualRegister(rhs)),
+                        origin: node.origin,
+                        res_vreg: Some(res_vreg),
+                    };
+                    self.instructions.push(ins);
+                    stack.push(res_vreg);
+                }
             }
         }
 
@@ -129,7 +148,7 @@ impl Emitter {
 
         for (i, ins) in self.instructions.iter().enumerate() {
             match ins.kind {
-                InstructionKind::Add | InstructionKind::Set => {
+                InstructionKind::Add | InstructionKind::Multiply | InstructionKind::Set => {
                     let res_vreg = ins.res_vreg.unwrap();
                     assert!(res_vreg.0 > 0);
 
@@ -172,31 +191,25 @@ impl Instruction {
 
         match self.kind {
             InstructionKind::Add => {
-                write!(w, "add ")?;
-
-                if let Some(lhs) = &self.lhs {
-                    lhs.write(w)?;
-                }
-                write!(w, " ")?;
-
-                if let Some(rhs) = &self.rhs {
-                    rhs.write(w)?;
-                }
+                write!(w, "add")?;
+            }
+            InstructionKind::Multiply => {
+                write!(w, "mul")?;
             }
             InstructionKind::Set => {
-                write!(w, "set ")?;
-
-                if let Some(lhs) = &self.lhs {
-                    lhs.write(w)?;
-                }
-
-                write!(w, " ")?;
-
-                if let Some(rhs) = &self.rhs {
-                    rhs.write(w)?;
-                }
+                write!(w, "set")?;
             }
         };
+        write!(w, " ")?;
+
+        if let Some(lhs) = &self.lhs {
+            lhs.write(w)?;
+        }
+        write!(w, " ")?;
+
+        if let Some(rhs) = &self.rhs {
+            rhs.write(w)?;
+        }
 
         writeln!(w)
     }
@@ -228,6 +241,21 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                     //_ => panic!("unexpected values, not numerical"),
                 };
                 res.insert(ir.res_vreg.unwrap(), sum);
+            }
+            InstructionKind::Multiply => {
+                let lhs = match ir.lhs.as_ref().unwrap() {
+                    Operand::Num(num) => Value::Num(*num),
+                    Operand::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
+                };
+                let rhs = match ir.rhs.as_ref().unwrap() {
+                    Operand::Num(num) => Value::Num(*num),
+                    Operand::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
+                };
+                let mul = match (lhs, rhs) {
+                    (Value::Num(lhs), Value::Num(rhs)) => Value::Num(lhs * rhs),
+                    //_ => panic!("unexpected values, not numerical"),
+                };
+                res.insert(ir.res_vreg.unwrap(), mul);
             }
             InstructionKind::Set => {
                 let value = match ir.lhs.as_ref().unwrap() {

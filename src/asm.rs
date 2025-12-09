@@ -106,6 +106,7 @@ pub mod amd64 {
     pub enum InstructionKind {
         Mov,
         Add,
+        IMul,
     }
 
     #[derive(Serialize, Debug, Clone, Copy)]
@@ -184,6 +185,29 @@ pub mod amd64 {
 
             for ir in irs {
                 match ir.kind {
+                    ir::InstructionKind::Multiply => {
+                        let res_location = regalloc.get(&ir.res_vreg.unwrap()).unwrap();
+                        let res_operand = memory_location_to_asm_operand(res_location);
+                        let rhs_mov = ir_operand_to_asm(&ir.lhs, regalloc);
+
+                        let ins_mov = Instruction {
+                            kind: InstructionKind::Mov,
+                            lhs: Some(res_operand.clone()),
+                            rhs: rhs_mov,
+                            origin: ir.origin,
+                        };
+                        self.instructions.push(ins_mov);
+
+                        let rhs_add = ir_operand_to_asm(&ir.rhs, regalloc);
+
+                        let ins_add = Instruction {
+                            kind: InstructionKind::IMul,
+                            lhs: Some(res_operand),
+                            rhs: rhs_add,
+                            origin: ir.origin,
+                        };
+                        self.instructions.push(ins_add);
+                    }
                     ir::InstructionKind::Add => {
                         let res_location = regalloc.get(&ir.res_vreg.unwrap()).unwrap();
                         let res_operand = memory_location_to_asm_operand(res_location);
@@ -259,28 +283,22 @@ pub mod amd64 {
             match self.kind {
                 InstructionKind::Mov => {
                     write!(w, "mov ")?;
-
-                    if let Some(lhs) = &self.lhs {
-                        lhs.write(w)?;
-                    }
-                    write!(w, ", ")?;
-
-                    if let Some(rhs) = &self.rhs {
-                        rhs.write(w)?;
-                    }
                 }
                 InstructionKind::Add => {
                     write!(w, "add ")?;
-
-                    if let Some(lhs) = &self.lhs {
-                        lhs.write(w)?;
-                    }
-                    write!(w, ", ")?;
-
-                    if let Some(rhs) = &self.rhs {
-                        rhs.write(w)?;
-                    }
                 }
+                InstructionKind::IMul => {
+                    write!(w, "imul ")?;
+                }
+            };
+
+            if let Some(lhs) = &self.lhs {
+                lhs.write(w)?;
+            }
+            write!(w, ", ")?;
+
+            if let Some(rhs) = &self.rhs {
+                rhs.write(w)?;
             }
 
             writeln!(w)

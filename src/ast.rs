@@ -11,6 +11,7 @@ use serde::Serialize;
 pub enum NodeKind {
     Number,
     Add,
+    Multiply,
 }
 
 #[derive(Serialize, Copy, Clone, Debug)]
@@ -211,9 +212,9 @@ impl<'a> Parser<'a> {
             if !self.parse_factor() {
                 let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
                 self.add_error_with_explanation(
-                    ErrorKind::ParseFactorMissingRhs,
+                    ErrorKind::ParseTermMissingRhs,
                     self.current_or_last_token_origin().unwrap_or(token.origin),
-                    format!("expected expression for the right-hand side of a +/- expression but found: {:?}",found),
+                    format!("expected expression for the right-hand side of a + or - expression but found: {:?}",found),
                 );
                 return false;
             }
@@ -231,7 +232,33 @@ impl<'a> Parser<'a> {
         if self.error_mode {
             return false;
         }
-        self.parse_unary()
+        if !self.parse_unary() {
+            return false;
+        }
+
+        loop {
+            let token = match self.match_kind(TokenKind::Star) {
+                None => return true,
+                Some(t) => t,
+            };
+
+            if !self.parse_unary() {
+                let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
+                self.add_error_with_explanation(
+                    ErrorKind::ParseFactorMissingRhs,
+                    self.current_or_last_token_origin().unwrap_or(token.origin),
+                    format!("expected expression for the right-hand side of a * or / expression but found: {:?}",found),
+                );
+                return false;
+            }
+
+            let node = Node {
+                kind: NodeKind::Multiply,
+                data: None,
+                origin: token.origin,
+            };
+            self.nodes.push(node);
+        }
     }
 
     fn parse_unary(&mut self) -> bool {

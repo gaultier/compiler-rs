@@ -10,6 +10,7 @@ pub enum ErrorKind {
     InvalidLiteralNumber,
     ParseStatement,
     MissingNewline,
+    ParseTermMissingRhs,
     ParseFactorMissingRhs,
 }
 
@@ -45,7 +46,10 @@ impl Error {
             ErrorKind::ParseStatement => w.write_all(b"invalid parse statement")?,
             ErrorKind::MissingNewline => w.write_all(b"missing newline")?,
             ErrorKind::ParseFactorMissingRhs => {
-                w.write_all(b"missing right operand in +/- operation")?
+                w.write_all(b"missing right operand in + or - operation")?
+            }
+            ErrorKind::ParseTermMissingRhs => {
+                w.write_all(b"missing right operand in * or / operation")?
             }
         };
 

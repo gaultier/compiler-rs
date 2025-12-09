@@ -18,6 +18,7 @@ pub enum TokenKind {
     Whitespace,
     LiteralNumber,
     Plus,
+    Star,
     Newline,
     Eof,
     Unknown,
@@ -117,6 +118,19 @@ impl Lexer {
                     };
                     self.tokens.push(Token {
                         kind: TokenKind::Plus,
+                        origin,
+                    });
+                    self.origin.offset += 1;
+                    self.origin.column += 1;
+                    it.next();
+                }
+                '*' => {
+                    let origin = Origin {
+                        len: 1,
+                        ..self.origin
+                    };
+                    self.tokens.push(Token {
+                        kind: TokenKind::Star,
                         origin,
                     });
                     self.origin.offset += 1;
