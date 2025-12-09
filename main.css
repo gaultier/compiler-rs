@@ -7,10 +7,10 @@ body, html {
 }
 
 .container > * {
-    flex: 1;
+    display: flex ;
+    flex: 1 1 auto;
     border: 1px dashed grey;
-    margin: 0;
-    padding: .5rem;
+    padding: .2rem;
 }
 
 #errors:empty {
@@ -19,14 +19,14 @@ body, html {
 
 #errors {
     display: flex;
+    flex: 1 1 auto;
     flex-wrap: wrap;
 }
 
 .error {
     display: flex;
     flex-wrap: wrap;
-    width: 100%;
-    margin: .5rem 0;
+    margin: .2rem 0;
 }
 
 .error > span {
@@ -44,7 +44,12 @@ body, html {
 }
 
 #parse, #ir, #regalloc {
-    display: flex;
+    display: flex ;
     flex-direction: column;
     align-items: flex-start;
 }
+
+#lex {
+    align-items: flex-start;
+}
+
