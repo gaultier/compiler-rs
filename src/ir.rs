@@ -27,7 +27,7 @@ pub struct Instruction {
     pub lhs: Option<Operand>,
     pub rhs: Option<Operand>,
     pub origin: Origin,
-    pub res_vreg: VirtualRegister,
+    pub res_vreg: Option<VirtualRegister>,
     // TODO: type, lifetime.
 }
 
@@ -40,7 +40,7 @@ pub enum OperandKind {
 #[derive(Serialize, Debug)]
 pub enum Operand {
     Num(u64),
-    VReg(VirtualRegister),
+    VirtualRegister(VirtualRegister),
 }
 
 #[derive(Serialize, Debug)]
@@ -91,7 +91,7 @@ impl Emitter {
                         lhs: Some(Operand::Num(num)),
                         rhs: None,
                         origin: node.origin,
-                        res_vreg,
+                        res_vreg: Some(res_vreg),
                     };
                     self.instructions.push(ins);
                     stack.push(res_vreg);
@@ -106,10 +106,10 @@ impl Emitter {
                     let ins = Instruction {
                         kind: InstructionKind::Add,
                         args_count: 2,
-                        lhs: Some(Operand::VReg(lhs)),
-                        rhs: Some(Operand::VReg(rhs)),
+                        lhs: Some(Operand::VirtualRegister(lhs)),
+                        rhs: Some(Operand::VirtualRegister(rhs)),
                         origin: node.origin,
-                        res_vreg,
+                        res_vreg: Some(res_vreg),
                     };
                     self.instructions.push(ins);
                     stack.push(res_vreg);
@@ -130,17 +130,19 @@ impl Emitter {
         for (i, ins) in self.instructions.iter().enumerate() {
             match ins.kind {
                 InstructionKind::Add | InstructionKind::Set => {
-                    assert!(ins.res_vreg.0 > 0);
+                    let res_vreg = ins.res_vreg.unwrap();
+                    assert!(res_vreg.0 > 0);
+
                     let lifetime = Lifetime {
                         start: i as u32,
                         end: i as u32,
                     };
-                    res.insert(ins.res_vreg, lifetime);
+                    res.insert(res_vreg, lifetime);
 
-                    if let Some(Operand::VReg(vreg)) = &ins.lhs {
+                    if let Some(Operand::VirtualRegister(vreg)) = &ins.lhs {
                         Self::extend_lifetime_on_use(*vreg, i as u32, &mut res);
                     }
-                    if let Some(Operand::VReg(vreg)) = &ins.rhs {
+                    if let Some(Operand::VirtualRegister(vreg)) = &ins.rhs {
                         Self::extend_lifetime_on_use(*vreg, i as u32, &mut res);
                     }
                 }
@@ -157,17 +159,20 @@ impl Operand {
             Operand::Num(n) => {
                 write!(w, "(u64.const {})", n)
             }
-            Operand::VReg(r) => write!(w, "(vreg {})", r.0),
+            Operand::VirtualRegister(r) => write!(w, "(vreg {})", r.0),
         }
     }
 }
 
 impl Instruction {
     pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+        if let Some(vreg) = self.res_vreg {
+            write!(w, "v{} := ", vreg.0)?;
+        }
+
         match self.kind {
             InstructionKind::Add => {
                 write!(w, "add ")?;
-                write!(w, "(vreg {}) ", self.res_vreg.0)?;
 
                 if let Some(lhs) = &self.lhs {
                     lhs.write(w)?;
@@ -180,7 +185,6 @@ impl Instruction {
             }
             InstructionKind::Set => {
                 write!(w, "set ")?;
-                write!(w, "(vreg {}) ", self.res_vreg.0)?;
 
                 if let Some(lhs) = &self.lhs {
                     lhs.write(w)?;
@@ -196,4 +200,44 @@ impl Instruction {
 
         writeln!(w)
     }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum Value {
+    Num(u64),
+}
+
+pub fn interpret(irs: &[Instruction]) -> BTreeMap<VirtualRegister, Value> {
+    let mut res: BTreeMap<VirtualRegister, Value> = BTreeMap::new();
+
+    for ir in irs {
+        match ir.kind {
+            InstructionKind::Add => {
+                let lhs = match ir.lhs.as_ref().unwrap() {
+                    Operand::Num(num) => Value::Num(*num),
+                    Operand::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
+                };
+                let rhs = match ir.rhs.as_ref().unwrap() {
+                    Operand::Num(num) => Value::Num(*num),
+                    Operand::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
+                };
+                let sum = match (lhs, rhs) {
+                    (Value::Num(lhs), Value::Num(rhs)) => Value::Num(lhs + rhs),
+                    //_ => panic!("unexpected values, not numerical"),
+                };
+                res.insert(ir.res_vreg.unwrap(), sum);
+            }
+            InstructionKind::Set => {
+                let value = match ir.lhs.as_ref().unwrap() {
+                    Operand::Num(num) => Value::Num(*num),
+                    Operand::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
+                };
+                assert!(ir.rhs.is_none());
+
+                res.insert(ir.res_vreg.unwrap(), value);
+            }
+        }
+    }
+
+    res
 }

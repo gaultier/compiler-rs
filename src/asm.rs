@@ -143,7 +143,7 @@ pub mod amd64 {
 
     fn ir_operand_to_asm(op: &Option<ir::Operand>, regalloc: &RegAlloc) -> Option<Operand> {
         match op {
-            Some(ir::Operand::VReg(vreg)) => {
+            Some(ir::Operand::VirtualRegister(vreg)) => {
                 let memory_location = regalloc.get(vreg).unwrap();
                 let kind = match memory_location {
                     MemoryLocation::Register(register) => OperandKind::Register(register.into()),
@@ -185,7 +185,7 @@ pub mod amd64 {
             for ir in irs {
                 match ir.kind {
                     ir::InstructionKind::Add => {
-                        let res_location = regalloc.get(&ir.res_vreg).unwrap();
+                        let res_location = regalloc.get(&ir.res_vreg.unwrap()).unwrap();
                         let res_operand = memory_location_to_asm_operand(res_location);
                         let rhs_mov = ir_operand_to_asm(&ir.lhs, regalloc);
 
@@ -208,7 +208,7 @@ pub mod amd64 {
                         self.instructions.push(ins_add);
                     }
                     ir::InstructionKind::Set => {
-                        let res_location = regalloc.get(&ir.res_vreg).unwrap();
+                        let res_location = regalloc.get(&ir.res_vreg.unwrap()).unwrap();
                         let res_operand = memory_location_to_asm_operand(res_location);
                         let rhs = ir_operand_to_asm(&ir.lhs, regalloc);
                         let ins = Instruction {

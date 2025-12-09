@@ -37,6 +37,8 @@ fn main() {
         print!("{}: ", i);
         ins.write(&mut stdout()).unwrap();
     }
+    let interpreted = ir::interpret(&ir_emitter.instructions);
+    println!("interpreted: {:#?}", &interpreted);
 
     println!("--- RegAlloc ---");
     let regalloc = register_alloc::regalloc(&ir_emitter.lifetimes, &amd64::abi());
