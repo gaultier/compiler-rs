@@ -202,13 +202,15 @@ impl Instruction {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Serialize, Copy, Clone, Debug)]
 pub enum Value {
     Num(u64),
 }
 
-pub fn interpret(irs: &[Instruction]) -> BTreeMap<VirtualRegister, Value> {
-    let mut res: BTreeMap<VirtualRegister, Value> = BTreeMap::new();
+pub type EvalResult = BTreeMap<VirtualRegister, Value>;
+
+pub fn eval(irs: &[Instruction]) -> EvalResult {
+    let mut res = EvalResult::new();
 
     for ir in irs {
         match ir.kind {

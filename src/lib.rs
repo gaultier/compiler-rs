@@ -117,6 +117,7 @@ pub struct CompileResult<'a> {
     pub ir_instructions: &'a [Instruction],
     pub ir_text: String,
     pub ir_lifetimes: &'a Lifetimes,
+    pub ir_eval: &'a ir::EvalResult,
     pub regalloc: &'a RegAlloc,
     pub amd64_instructions: &'a [amd64::Instruction],
     pub asm_text: String,
@@ -144,6 +145,7 @@ pub extern "C" fn compile(in_ptr: *const u8, in_len: usize, file_id: FileId) -> 
     for ins in &ir_emitter.instructions {
         ins.write(&mut ir_text).unwrap();
     }
+    let eval = ir::eval(&ir_emitter.instructions);
 
     let regalloc = register_alloc::regalloc(&ir_emitter.lifetimes, &amd64::abi());
 
@@ -162,6 +164,7 @@ pub extern "C" fn compile(in_ptr: *const u8, in_len: usize, file_id: FileId) -> 
         ir_instructions: &ir_emitter.instructions,
         ir_text: String::from_utf8(ir_text).unwrap(),
         ir_lifetimes: &ir_emitter.lifetimes,
+        ir_eval: &eval,
         regalloc: &regalloc,
         amd64_instructions: &asm_emitter.instructions,
         asm_text: String::from_utf8(asm_text).unwrap(),

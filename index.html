@@ -13,6 +13,7 @@
         <div id="lex"></div>
         <div id="parse"></div>
         <div id="ir"></div>
+        <div id="ir_eval"></div>
         <div id="regalloc"></div>
         <div id="asm"></div>
 
@@ -104,15 +105,6 @@
                 const token_dom = document.createElement("span");
                 token_dom.classList.add("token");
                 token_dom.innerText = span_js_string;
-                //token_dom.addEventListener('mouseenter', function(event) {
-                //    const token_metadata_dom = document.createElement("span");
-                //    token_metadata_dom.innerHTML = `<span>kind: ${token.kind}</span>`;
-                //    token_dom.appendChild(token_metadata_dom);
-
-                //});
-                //token_dom.addEventListener('mouseleave', function(event) {
-                //    token_dom.removeChild(token_dom.lastChild);
-                //});
 
                 lex_dom.appendChild(token_dom);
             }
@@ -131,6 +123,9 @@
 
             const ir_dom = document.getElementById("ir");
             ir_dom.innerText = res.ir_text;
+
+            const ir_eval_dom = document.getElementById("ir_eval");
+            ir_eval_dom.innerText = JSON.stringify(res.ir_eval, null, 2);
 
             const regalloc_dom = document.getElementById("regalloc");
             for (const [vreg, memory_location] of Object.entries(res.regalloc)) {
