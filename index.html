@@ -125,7 +125,13 @@
             ir_dom.innerText = res.ir_text;
 
             const ir_eval_dom = document.getElementById("ir_eval");
-            ir_eval_dom.innerText = JSON.stringify(res.ir_eval, null, 2);
+            ir_eval_dom.innerText = '';
+            for (const [vreg, val] of Object.entries(res.ir_eval)) {
+                const item = document.createElement("span");
+                item.innerText = `v${vreg}: ${val.Num}`;
+
+                ir_eval_dom.appendChild(item);
+            }
 
             const regalloc_dom = document.getElementById("regalloc");
             regalloc_dom.innerHTML = '';
@@ -134,9 +140,9 @@
                 item_dom.classList.add("regalloc_item");
 
                 if (memory_location.Register != null) {
-                    item_dom.innerText = `Vreg ${vreg} -> ${amd64_reg_to_string[memory_location.Register]}`;
+                    item_dom.innerText = `v${vreg} -> ${amd64_reg_to_string[memory_location.Register]}`;
                 } else {
-                    item_dom.innerText = `Vreg ${vreg} -> S[${memory_location.Stack}]`;
+                    item_dom.innerText = `v${vreg} -> S[${memory_location.Stack}]`;
                 }
 
                 regalloc_dom.appendChild(item_dom);
