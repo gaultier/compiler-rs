@@ -162,10 +162,7 @@ impl InstructionKind {
 
 impl OperandKind {
     pub fn is_immediate(&self) -> bool {
-        match self {
-            OperandKind::Immediate(_) => true,
-            _ => false,
-        }
+        matches!(self, OperandKind::Immediate(_))
     }
 }
 
