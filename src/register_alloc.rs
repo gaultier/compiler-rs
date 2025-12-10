@@ -39,43 +39,36 @@ pub(crate) fn regalloc(
         }
 
         let dst = match vins.dst {
-            Some(ir::Operand::VirtualRegister(_vreg)) => Some(Operand {
-                operand_size: asm::OperandSize::Eight,
-                kind: asm::OperandKind::Register(Register::Amd64(amd64::Register::R15)),
-            }),
+            Some(ir::Operand::VirtualRegister(_vreg)) => {
+                //let reg = if in_out.registers_written.iter().find(|r|
+                Some(Operand {
+                    operand_size: asm::OperandSize::Eight,
+                    kind: asm::OperandKind::Register(Register::Amd64(amd64::Register::R15)),
+                })
+            }
             Some(ir::Operand::Num(_)) => panic!("invalid number as instruction destination"),
             None => None,
         };
 
-        let lhs = match vins.lhs {
-            Some(ir::Operand::VirtualRegister(_vreg)) => Some(Operand {
-                operand_size: asm::OperandSize::Eight,
-                kind: asm::OperandKind::Register(Register::Amd64(amd64::Register::R15)),
-            }),
-            Some(ir::Operand::Num(num)) => Some(Operand {
-                operand_size: asm::OperandSize::Eight,
-                kind: asm::OperandKind::Immediate(num),
-            }),
-            None => None,
-        };
-
-        let rhs = match vins.rhs {
-            Some(ir::Operand::VirtualRegister(_vreg)) => Some(Operand {
-                operand_size: asm::OperandSize::Eight,
-                kind: asm::OperandKind::Register(Register::Amd64(amd64::Register::R14)),
-            }),
-            Some(ir::Operand::Num(num)) => Some(Operand {
-                operand_size: asm::OperandSize::Eight,
-                kind: asm::OperandKind::Immediate(num),
-            }),
-            None => None,
-        };
+        let operands = vins
+            .operands
+            .iter()
+            .map(|op| match op {
+                ir::Operand::VirtualRegister(_vreg) => Operand {
+                    operand_size: asm::OperandSize::Eight,
+                    kind: asm::OperandKind::Register(Register::Amd64(amd64::Register::R15)),
+                },
+                ir::Operand::Num(num) => Operand {
+                    operand_size: asm::OperandSize::Eight,
+                    kind: asm::OperandKind::Immediate(*num),
+                },
+            })
+            .collect::<Vec<Operand>>();
 
         let ins = asm::Instruction {
             kind: vins.kind,
             dst,
-            lhs,
-            rhs,
+            operands,
             origin: vins.origin,
         };
         res.push(ins);

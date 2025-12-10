@@ -40,8 +40,7 @@ pub enum Register {
 pub struct VInstruction {
     pub kind: InstructionKind,
     pub dst: Option<ir::Operand>,
-    pub lhs: Option<ir::Operand>,
-    pub rhs: Option<ir::Operand>,
+    pub operands: Vec<ir::Operand>,
     pub origin: Origin,
 }
 
@@ -74,8 +73,7 @@ pub enum OperandKind {
 pub struct Instruction {
     pub kind: InstructionKind,
     pub dst: Option<Operand>,
-    pub lhs: Option<Operand>,
-    pub rhs: Option<Operand>,
+    pub operands: Vec<Operand>,
     pub origin: Origin,
 }
 
@@ -84,6 +82,18 @@ impl InstructionKind {
         match self {
             InstructionKind::Amd64(instruction_kind) => instruction_kind.get_in_out(),
         }
+    }
+}
+
+impl InstructionInOut {
+    pub(crate) fn get_output_reg(&self) -> Option<Register> {
+        for reg in &self.registers_written {
+            match reg {
+                InstructionInOutOperand::FixedRegister(reg) => return Some(*reg),
+                InstructionInOutOperand::RegisterPosition(pos) => todo!(),
+            }
+        }
+        None
     }
 }
 
@@ -117,14 +127,9 @@ impl Instruction {
             dst.write(w)?;
         }
 
-        if let Some(lhs) = &self.lhs {
+        for op in &self.operands {
             write!(w, ", ")?;
-            lhs.write(w)?;
-        }
-
-        if let Some(rhs) = &self.rhs {
-            write!(w, ", ")?;
-            rhs.write(w)?;
+            op.write(w)?;
         }
 
         writeln!(w)
@@ -165,14 +170,9 @@ impl VInstruction {
             dst.write(w)?;
         }
 
-        if let Some(lhs) = &self.lhs {
+        for op in &self.operands {
             write!(w, ", ")?;
-            lhs.write(w)?;
-        }
-
-        if let Some(rhs) = &self.rhs {
-            write!(w, ", ")?;
-            rhs.write(w)?;
+            op.write(w)?;
         }
 
         writeln!(w)
