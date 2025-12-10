@@ -153,18 +153,19 @@ impl Register {
 impl VInstruction {
     pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
         w.write_all(self.kind.to_str().as_bytes())?;
-        w.write_all(" ".as_bytes())?;
 
         if let Some(vreg) = self.res_vreg {
-            write!(w, "v{}, ", vreg.0)?;
+            w.write_all(" ".as_bytes())?;
+            write!(w, "v{}", vreg.0)?;
         }
 
         if let Some(lhs) = &self.lhs {
-            lhs.write(w)?;
             write!(w, ", ")?;
+            lhs.write(w)?;
         }
 
         if let Some(rhs) = &self.rhs {
+            write!(w, ", ")?;
             rhs.write(w)?;
         }
 

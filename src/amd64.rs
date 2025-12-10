@@ -4,8 +4,7 @@ use serde::Serialize;
 
 use crate::{
     asm::{
-        self, Abi, Instruction, InstructionInOut, InstructionInOutOperand, Operand, OperandKind,
-        VInstruction,
+        self, Abi, InstructionInOut, InstructionInOutOperand, Operand, OperandKind, VInstruction,
     },
     ir::{self},
     register_alloc::{MemoryLocation, RegAlloc},

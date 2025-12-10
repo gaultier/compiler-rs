@@ -31,14 +31,23 @@ pub(crate) fn regalloc(
 
     for vins in vcode {
         let in_out = vins.kind.get_in_out();
-        for operand in in_out.registers_written {
+        for _operand in in_out.registers_written {
             //match operand {
             //    asm::InstructionInOutOperand::FixedRegister(_fixed) => todo!(),
             //    asm::InstructionInOutOperand::RegisterPosition(_) => todo!(),
             //}
         }
 
-        let lhs = match vins.lhs {
+        let lhs = if let Some(_vreg) = vins.res_vreg {
+            Some(Operand {
+                operand_size: asm::OperandSize::Eight,
+                kind: asm::OperandKind::Register(Register::Amd64(amd64::Register::R10)),
+            })
+        } else {
+            None
+        };
+
+        let rhs = match vins.lhs {
             Some(ir::Operand::VirtualRegister(_vreg)) => Some(Operand {
                 operand_size: asm::OperandSize::Eight,
                 kind: asm::OperandKind::Register(Register::Amd64(amd64::Register::R15)),
@@ -49,17 +58,21 @@ pub(crate) fn regalloc(
             }),
             None => None,
         };
-        let rhs = match vins.rhs {
-            Some(ir::Operand::VirtualRegister(_vreg)) => Some(Operand {
-                operand_size: asm::OperandSize::Eight,
-                kind: asm::OperandKind::Register(Register::Amd64(amd64::Register::R14)),
-            }),
-            Some(ir::Operand::Num(num)) => Some(Operand {
-                operand_size: asm::OperandSize::Eight,
-                kind: asm::OperandKind::Immediate(num),
-            }),
-            None => None,
-        };
+
+        if vins.rhs.is_some() {
+            //todo!();
+        }
+        //let rhs = match vins.rhs {
+        //    Some(ir::Operand::VirtualRegister(_vreg)) => Some(Operand {
+        //        operand_size: asm::OperandSize::Eight,
+        //        kind: asm::OperandKind::Register(Register::Amd64(amd64::Register::R14)),
+        //    }),
+        //    Some(ir::Operand::Num(num)) => Some(Operand {
+        //        operand_size: asm::OperandSize::Eight,
+        //        kind: asm::OperandKind::Immediate(num),
+        //    }),
+        //    None => None,
+        //};
 
         let ins = asm::Instruction {
             kind: vins.kind,
