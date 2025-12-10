@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{collections::HashMap, io::Write};
 
 use serde::Serialize;
 
@@ -6,6 +6,7 @@ use crate::{
     amd64,
     ir::{self},
     origin::Origin,
+    register_alloc::MemoryLocation,
 };
 
 #[repr(u8)]
@@ -31,7 +32,7 @@ pub enum InstructionKind {
     Amd64(amd64::InstructionKind),
 }
 
-#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Register {
     Amd64(amd64::Register),
 }
@@ -75,6 +76,15 @@ pub struct Instruction {
     pub dst: Option<Operand>,
     pub operands: Vec<Operand>,
     pub origin: Origin,
+}
+
+pub type EvalResult = HashMap<MemoryLocation, ir::Value>;
+
+pub fn eval(instructions: &[Instruction]) -> EvalResult {
+    match instructions.get(0).map(|ins| ins.kind) {
+        Some(InstructionKind::Amd64(_)) => amd64::eval(instructions),
+        _ => EvalResult::new(),
+    }
 }
 
 impl InstructionKind {

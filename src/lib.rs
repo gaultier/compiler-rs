@@ -123,6 +123,7 @@ pub struct CompileResult {
     pub vreg_to_memory_location: RegisterMapping,
     pub asm_instructions: Vec<asm::Instruction>,
     pub asm_text: String,
+    pub asm_eval: asm::EvalResult,
 }
 
 pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileResult {
@@ -151,6 +152,8 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
         ins.write(&mut asm_text).unwrap();
     }
 
+    let asm_eval = asm::eval(&asm_instructions);
+
     CompileResult {
         lex_tokens: parser.tokens,
         ast_nodes: parser.nodes,
@@ -163,6 +166,7 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
         vreg_to_memory_location,
         asm_instructions,
         asm_text: String::from_utf8(asm_text).unwrap(),
+        asm_eval,
     }
 }
 

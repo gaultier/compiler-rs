@@ -222,6 +222,14 @@ pub enum Value {
 
 pub type EvalResult = BTreeMap<VirtualRegister, Value>;
 
+impl Value {
+    pub(crate) fn as_num(&self) -> u64 {
+        match self {
+            Value::Num(num) => *num,
+        }
+    }
+}
+
 pub fn eval(irs: &[Instruction]) -> EvalResult {
     let mut res = EvalResult::new();
 
@@ -236,10 +244,7 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                     Operand::Num(num) => Value::Num(*num),
                     Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
                 };
-                let sum = match (lhs, rhs) {
-                    (Value::Num(lhs), Value::Num(rhs)) => Value::Num(lhs + rhs),
-                    //_ => panic!("unexpected values, not numerical"),
-                };
+                let sum = Value::Num(lhs.as_num() + rhs.as_num());
                 res.insert(ir.res_vreg.unwrap(), sum);
             }
             InstructionKind::Multiply => {

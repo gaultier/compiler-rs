@@ -46,5 +46,7 @@ fn main() {
         ins.write(&mut stdout()).unwrap();
     }
 
+    println!("eval: {:#?}", &compiled.asm_eval);
+
     std::process::exit(if compiled.errors.is_empty() { 0 } else { 1 });
 }
