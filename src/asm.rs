@@ -8,14 +8,14 @@ use crate::{
     origin::Origin,
 };
 
+#[repr(u8)]
 pub enum ArchKind {
     Amd64,
     // TODO
 }
 
-pub struct Abi {
-    pub arch_kind: ArchKind,
-    pub gprs: Vec<Register>,
+pub(crate) struct Abi {
+    pub(crate) gprs: Vec<Register>,
 }
 
 #[derive(Serialize, Debug, Clone, Copy)]
@@ -91,7 +91,7 @@ pub(crate) fn ir_to_vcode(irs: &[ir::Instruction], target_arch: &ArchKind) -> Ve
     }
 }
 
-pub fn abi(target_arch: &ArchKind) -> Abi {
+pub(crate) fn abi(target_arch: &ArchKind) -> Abi {
     match target_arch {
         ArchKind::Amd64 => amd64::abi(),
     }

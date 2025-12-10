@@ -1,6 +1,6 @@
 use std::{collections::HashMap, io::stdout};
 
-use compiler_rs_lib::compile;
+use compiler_rs_lib::{asm, compile};
 
 fn main() {
     let file_name = std::env::args().skip(1).next().unwrap();
@@ -8,7 +8,7 @@ fn main() {
     let mut file_id_to_names = HashMap::new();
     file_id_to_names.insert(1, file_name.clone());
 
-    let compiled = compile(&file_content, 1);
+    let compiled = compile(&file_content, 1, asm::ArchKind::Amd64);
 
     println!("--- Lex ---");
     println!("tokens: {:#?}", &compiled.lex_tokens);
@@ -29,7 +29,6 @@ fn main() {
     }
     println!("eval: {:#?}", &compiled.ir_eval);
 
-    let target_arch = asm::ArchKind::Amd64;
     println!("--- VCode ---");
     println!("vcode: {:#?}", &compiled.vcode);
 

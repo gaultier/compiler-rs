@@ -73,9 +73,8 @@ pub(crate) const GPRS: [Register; 14] = [
     Register::R15,
 ];
 
-pub fn abi() -> Abi {
+pub(crate) fn abi() -> Abi {
     Abi {
-        arch_kind: asm::ArchKind::Amd64,
         gprs: GPRS.iter().map(|r| r.into()).collect(),
     }
 }

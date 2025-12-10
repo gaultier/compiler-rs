@@ -12,6 +12,7 @@ pub mod register_alloc;
 use serde::Serialize;
 
 use crate::{
+    asm::ArchKind,
     ast::{Node, Parser},
     error::Error,
     ir::{Instruction, Lifetimes},
@@ -124,7 +125,7 @@ pub struct CompileResult {
     pub asm_text: String,
 }
 
-pub fn compile(input: &str, file_id: FileId) -> CompileResult {
+pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileResult {
     let mut lexer = Lexer::new(file_id);
     lexer.lex(input);
 
@@ -140,7 +141,6 @@ pub fn compile(input: &str, file_id: FileId) -> CompileResult {
     }
     let eval = ir::eval(&ir_emitter.instructions);
 
-    let target_arch = asm::ArchKind::Amd64;
     let vcode = asm::ir_to_vcode(&ir_emitter.instructions, &target_arch);
 
     let regalloc = register_alloc::regalloc(&vcode, &ir_emitter.lifetimes, &asm::abi(&target_arch));
@@ -169,7 +169,12 @@ pub fn compile(input: &str, file_id: FileId) -> CompileResult {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn wasm_compile(in_ptr: *const u8, in_len: usize, file_id: FileId) -> AllocHandle {
+pub extern "C" fn wasm_compile(
+    in_ptr: *const u8,
+    in_len: usize,
+    file_id: FileId,
+    target_arch: ArchKind,
+) -> AllocHandle {
     let input_bytes = unsafe {
         std::ptr::slice_from_raw_parts(in_ptr, in_len)
             .as_ref()
@@ -177,7 +182,7 @@ pub extern "C" fn wasm_compile(in_ptr: *const u8, in_len: usize, file_id: FileId
     };
     let input_str = std::str::from_utf8(input_bytes).unwrap();
 
-    let parser_response = compile(input_str, file_id);
+    let parser_response = compile(input_str, file_id, target_arch);
 
     let json = serde_json::to_string(&parser_response).unwrap();
 
