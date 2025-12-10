@@ -98,19 +98,6 @@ impl InstructionInOut {
         }
         None
     }
-
-    pub(crate) fn get_fixed_input_reg(&self) -> Option<Register> {
-        for reg in &self.registers_read {
-            match reg {
-                InstructionInOutOperand::FixedRegister(reg) => return Some(*reg),
-                InstructionInOutOperand::RegisterPosition(_pos) => {
-
-                    // return Some(registers_written[*pos as usize]);
-                }
-            }
-        }
-        None
-    }
 }
 
 pub(crate) fn ir_to_vcode(irs: &[ir::Instruction], target_arch: &ArchKind) -> Vec<VInstruction> {

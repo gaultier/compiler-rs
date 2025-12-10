@@ -34,11 +34,17 @@ pub(crate) fn regalloc(
 
         let dst = match vins.dst {
             Some(ir::Operand::VirtualRegister(vreg)) => {
-                let preg = in_out.get_fixed_output_reg().unwrap_or_else(|| {
+                let preg = if let Some(MemoryLocation::Register(preg)) =
+                    vreg_to_memory_location.get(&vreg)
+                {
+                    *preg
+                } else if let Some(preg) = in_out.get_fixed_output_reg() {
+                    preg
+                } else {
                     free_registers
                         .pop_first()
                         .expect("need to spill - not yet implemented")
-                });
+                };
                 vreg_to_memory_location.insert(vreg, MemoryLocation::Register(preg));
 
                 Some(Operand {
@@ -55,11 +61,13 @@ pub(crate) fn regalloc(
             .iter()
             .map(|op| match op {
                 ir::Operand::VirtualRegister(vreg) => {
-                    let preg = in_out.get_fixed_input_reg().unwrap_or_else(|| {
-                        free_registers
-                            .pop_first()
-                            .expect("need to spill - not yet implemented")
-                    });
+                    let preg = if let Some(MemoryLocation::Register(preg)) =
+                        vreg_to_memory_location.get(&vreg)
+                    {
+                        *preg
+                    } else {
+                        todo!();
+                    };
                     vreg_to_memory_location.insert(*vreg, MemoryLocation::Register(preg));
 
                     Operand {
