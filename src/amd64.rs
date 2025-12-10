@@ -7,7 +7,7 @@ use crate::{
         self, Abi, InstructionInOut, InstructionInOutOperand, Operand, OperandKind, VInstruction,
     },
     ir::{self},
-    register_alloc::{MemoryLocation, RegAlloc},
+    register_alloc::{MemoryLocation, RegisterMapping},
 };
 
 #[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -199,7 +199,7 @@ impl InstructionKind {
     }
 }
 
-fn ir_operand_to_asm(op: &Option<ir::Operand>, regalloc: &RegAlloc) -> Option<Operand> {
+fn ir_operand_to_asm(op: &Option<ir::Operand>, regalloc: &RegisterMapping) -> Option<Operand> {
     match op {
         Some(ir::Operand::VirtualRegister(vreg)) => {
             let memory_location = regalloc.get(vreg).unwrap();
@@ -237,7 +237,7 @@ impl Emitter {
         }
     }
 
-    pub fn emit(&mut self, vcode: &[VInstruction], _regalloc: &RegAlloc) {
+    pub fn emit(&mut self, vcode: &[VInstruction], _regalloc: &RegisterMapping) {
         self.instructions.reserve(vcode.len());
 
         //for v in vcode {

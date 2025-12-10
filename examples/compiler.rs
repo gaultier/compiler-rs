@@ -36,7 +36,8 @@ fn main() {
         ins.write(&mut stdout()).unwrap();
     }
 
-    //println!("--- RegAlloc ---");
+    println!("--- RegAlloc ---");
+    println!("vreg_to_preg: {:#?}", &compiled.vreg_to_preg);
 
     println!("--- ASM ---");
     println!("instructions: {:#?}", &compiled.asm_instructions);

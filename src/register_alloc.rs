@@ -3,7 +3,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Serialize;
 
 use crate::{
-    amd64,
     asm::{self, Abi, Operand, Register},
     ir::{self, Lifetimes, VirtualRegister},
 };
@@ -14,15 +13,16 @@ pub enum MemoryLocation {
     Stack(u32), // Stack offset.
 }
 
-pub type RegAlloc = BTreeMap<VirtualRegister, MemoryLocation>;
+pub type RegisterMapping = BTreeMap<VirtualRegister, MemoryLocation>;
 
 // TODO: Constraints.
 pub(crate) fn regalloc(
     vcode: &[asm::VInstruction],
     _lifetimes: &Lifetimes,
     abi: &Abi,
-) -> Vec<asm::Instruction> {
-    let mut res = Vec::with_capacity(vcode.len());
+) -> (Vec<asm::Instruction>, RegisterMapping) {
+    let mut vreg_to_preg = RegisterMapping::new();
+    let mut instructions = Vec::with_capacity(vcode.len());
 
     let mut free_registers = BTreeSet::<Register>::new();
     for register in &abi.gprs {
@@ -31,19 +31,19 @@ pub(crate) fn regalloc(
 
     for vins in vcode {
         let in_out = vins.kind.get_in_out();
-        for _operand in in_out.registers_written {
-            //match operand {
-            //    asm::InstructionInOutOperand::FixedRegister(_fixed) => todo!(),
-            //    asm::InstructionInOutOperand::RegisterPosition(_) => todo!(),
-            //}
-        }
 
         let dst = match vins.dst {
-            Some(ir::Operand::VirtualRegister(_vreg)) => {
-                //let reg = if in_out.registers_written.iter().find(|r|
+            Some(ir::Operand::VirtualRegister(vreg)) => {
+                let preg = in_out.get_fixed_output_reg().unwrap_or_else(|| {
+                    free_registers
+                        .pop_first()
+                        .expect("need to spill - not yet implemented")
+                });
+                vreg_to_preg.insert(vreg, MemoryLocation::Register(preg));
+
                 Some(Operand {
                     operand_size: asm::OperandSize::Eight,
-                    kind: asm::OperandKind::Register(Register::Amd64(amd64::Register::R15)),
+                    kind: asm::OperandKind::Register(preg),
                 })
             }
             Some(ir::Operand::Num(_)) => panic!("invalid number as instruction destination"),
@@ -54,10 +54,19 @@ pub(crate) fn regalloc(
             .operands
             .iter()
             .map(|op| match op {
-                ir::Operand::VirtualRegister(_vreg) => Operand {
-                    operand_size: asm::OperandSize::Eight,
-                    kind: asm::OperandKind::Register(Register::Amd64(amd64::Register::R15)),
-                },
+                ir::Operand::VirtualRegister(vreg) => {
+                    let preg = in_out.get_fixed_input_reg().unwrap_or_else(|| {
+                        free_registers
+                            .pop_first()
+                            .expect("need to spill - not yet implemented")
+                    });
+                    vreg_to_preg.insert(*vreg, MemoryLocation::Register(preg));
+
+                    Operand {
+                        operand_size: asm::OperandSize::Eight,
+                        kind: asm::OperandKind::Register(preg),
+                    }
+                }
                 ir::Operand::Num(num) => Operand {
                     operand_size: asm::OperandSize::Eight,
                     kind: asm::OperandKind::Immediate(*num),
@@ -71,7 +80,7 @@ pub(crate) fn regalloc(
             operands,
             origin: vins.origin,
         };
-        res.push(ins);
+        instructions.push(ins);
     }
 
     //let mut active = BTreeSet::<usize>::new();
@@ -100,7 +109,7 @@ pub(crate) fn regalloc(
     //    }
     //}
 
-    res
+    (instructions, vreg_to_preg)
 }
 
 //fn expire_old_intervals(

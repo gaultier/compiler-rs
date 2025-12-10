@@ -86,11 +86,27 @@ impl InstructionKind {
 }
 
 impl InstructionInOut {
-    pub(crate) fn get_output_reg(&self) -> Option<Register> {
+    pub(crate) fn get_fixed_output_reg(&self) -> Option<Register> {
         for reg in &self.registers_written {
             match reg {
                 InstructionInOutOperand::FixedRegister(reg) => return Some(*reg),
-                InstructionInOutOperand::RegisterPosition(pos) => todo!(),
+                InstructionInOutOperand::RegisterPosition(_pos) => {
+
+                    // return Some(registers_written[*pos as usize]);
+                }
+            }
+        }
+        None
+    }
+
+    pub(crate) fn get_fixed_input_reg(&self) -> Option<Register> {
+        for reg in &self.registers_read {
+            match reg {
+                InstructionInOutOperand::FixedRegister(reg) => return Some(*reg),
+                InstructionInOutOperand::RegisterPosition(_pos) => {
+
+                    // return Some(registers_written[*pos as usize]);
+                }
             }
         }
         None

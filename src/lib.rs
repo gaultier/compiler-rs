@@ -18,6 +18,7 @@ use crate::{
     ir::{Instruction, Lifetimes},
     lex::{Lexer, Token},
     origin::FileId,
+    register_alloc::RegisterMapping,
 };
 
 #[cfg(target_arch = "wasm32")]
@@ -119,7 +120,7 @@ pub struct CompileResult {
     pub ir_lifetimes: Lifetimes,
     pub ir_eval: ir::EvalResult,
     pub vcode: Vec<asm::VInstruction>,
-    //pub regalloc: RegAlloc,
+    pub vreg_to_preg: RegisterMapping,
     pub asm_instructions: Vec<asm::Instruction>,
     pub asm_text: String,
 }
@@ -142,11 +143,11 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
 
     let vcode = asm::ir_to_vcode(&ir_emitter.instructions, &target_arch);
 
-    let asm_instructions =
+    let (asm_instructions, vreg_to_preg) =
         register_alloc::regalloc(&vcode, &ir_emitter.lifetimes, &asm::abi(&target_arch));
 
     //let mut asm_emitter = amd64::Emitter::new();
-    //asm_emitter.emit(&vcode, &regalloc);
+    //asm_emitter.emit(&vcode, &vreg_to_preg);
     //
     let mut asm_text = Vec::with_capacity(asm_instructions.len() * 8);
     for ins in &asm_instructions {
@@ -162,7 +163,7 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
         ir_lifetimes: ir_emitter.lifetimes,
         ir_eval: eval,
         vcode,
-        //regalloc: regalloc,
+        vreg_to_preg: vreg_to_preg,
         asm_instructions,
         asm_text: String::from(""), // String::from_utf8(asm_text).unwrap(),
     }
