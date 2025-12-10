@@ -38,6 +38,15 @@ pub(crate) fn regalloc(
             //}
         }
 
+        let dst = match vins.dst {
+            Some(ir::Operand::VirtualRegister(_vreg)) => Some(Operand {
+                operand_size: asm::OperandSize::Eight,
+                kind: asm::OperandKind::Register(Register::Amd64(amd64::Register::R15)),
+            }),
+            Some(ir::Operand::Num(_)) => panic!("invalid number as instruction destination"),
+            None => None,
+        };
+
         let lhs = match vins.lhs {
             Some(ir::Operand::VirtualRegister(_vreg)) => Some(Operand {
                 operand_size: asm::OperandSize::Eight,
@@ -64,6 +73,7 @@ pub(crate) fn regalloc(
 
         let ins = asm::Instruction {
             kind: vins.kind,
+            dst,
             lhs,
             rhs,
             origin: vins.origin,

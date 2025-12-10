@@ -39,6 +39,7 @@ pub enum Register {
 #[derive(Serialize, Debug)]
 pub struct VInstruction {
     pub kind: InstructionKind,
+    pub dst: Option<ir::Operand>,
     pub lhs: Option<ir::Operand>,
     pub rhs: Option<ir::Operand>,
     pub origin: Origin,
@@ -72,6 +73,7 @@ pub enum OperandKind {
 #[derive(Serialize, Debug)]
 pub struct Instruction {
     pub kind: InstructionKind,
+    pub dst: Option<Operand>,
     pub lhs: Option<Operand>,
     pub rhs: Option<Operand>,
     pub origin: Origin,
@@ -110,8 +112,13 @@ impl Instruction {
     pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
         w.write_all(self.kind.to_str().as_bytes())?;
 
-        if let Some(lhs) = &self.lhs {
+        if let Some(dst) = &self.dst {
             write!(w, " ")?;
+            dst.write(w)?;
+        }
+
+        if let Some(lhs) = &self.lhs {
+            write!(w, ", ")?;
             lhs.write(w)?;
         }
 
@@ -153,8 +160,13 @@ impl VInstruction {
     pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
         w.write_all(self.kind.to_str().as_bytes())?;
 
-        if let Some(lhs) = &self.lhs {
+        if let Some(dst) = &self.dst {
             write!(w, " ")?;
+            dst.write(w)?;
+        }
+
+        if let Some(lhs) = &self.lhs {
+            write!(w, ", ")?;
             lhs.write(w)?;
         }
 
