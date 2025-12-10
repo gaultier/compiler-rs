@@ -32,12 +32,6 @@ pub struct Instruction {
     // TODO: type, lifetime.
 }
 
-#[derive(Serialize)]
-pub enum OperandKind {
-    VReg,
-    Num,
-}
-
 #[derive(Serialize, Debug)]
 pub enum Operand {
     Num(u64),

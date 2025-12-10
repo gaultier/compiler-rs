@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{io::Write, panic};
 
 use serde::Serialize;
 
@@ -83,6 +83,7 @@ pub fn abi() -> Abi {
 #[allow(non_camel_case_types)]
 pub enum InstructionKind {
     Mov_R_RM,
+    Mov_R_Imm,
     Add_R_RM,
     IMul_R_RM,
     IDiv,
@@ -121,6 +122,32 @@ pub struct Instruction {
     origin: Origin,
 }
 
+pub fn instruction_selection(ins: ir::Instruction) -> InstructionKind {
+    match (ins.kind, ins.lhs, ins.rhs) {
+        (
+            ir::InstructionKind::Add,
+            Some(ir::Operand::VirtualRegister(_)),
+            Some(ir::Operand::VirtualRegister(_)),
+        ) => InstructionKind::Add_R_RM,
+        (
+            ir::InstructionKind::Multiply,
+            Some(ir::Operand::VirtualRegister(_)),
+            Some(ir::Operand::VirtualRegister(_)),
+        ) => InstructionKind::IMul_R_RM,
+        (
+            ir::InstructionKind::Set,
+            Some(ir::Operand::VirtualRegister(_)),
+            Some(ir::Operand::VirtualRegister(_)),
+        ) => InstructionKind::Mov_R_RM,
+        (
+            ir::InstructionKind::Set,
+            Some(ir::Operand::VirtualRegister(_)),
+            Some(ir::Operand::Num(_)),
+        ) => InstructionKind::Mov_R_Imm,
+        _ => panic!("invalid IR operands"),
+    }
+}
+
 pub struct Emitter {
     pub instructions: Vec<Instruction>,
 }
@@ -130,6 +157,10 @@ impl InstructionKind {
         match self {
             InstructionKind::Mov_R_RM => InstructionInOut {
                 registers_read: vec![InstructionInOutOperand::RegisterPosition(1)],
+                registers_written: vec![InstructionInOutOperand::RegisterPosition(0)],
+            },
+            InstructionKind::Mov_R_Imm => InstructionInOut {
+                registers_read: vec![],
                 registers_written: vec![InstructionInOutOperand::RegisterPosition(0)],
             },
             InstructionKind::Add_R_RM => InstructionInOut {
@@ -308,7 +339,7 @@ impl Operand {
 impl Instruction {
     pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
         match self.kind {
-            InstructionKind::Mov_R_RM => {
+            InstructionKind::Mov_R_RM | InstructionKind::Mov_R_Imm => {
                 write!(w, "mov ")?;
             }
             InstructionKind::Add_R_RM => {
