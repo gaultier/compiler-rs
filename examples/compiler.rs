@@ -1,12 +1,6 @@
 use std::{collections::HashMap, io::stdout};
 
-use compiler_rs_lib::{
-    asm::{self, amd64},
-    ast::Parser,
-    ir,
-    lex::Lexer,
-    register_alloc,
-};
+use compiler_rs_lib::{amd64, ast::Parser, ir, lex::Lexer, register_alloc};
 
 fn main() {
     let file_name = std::env::args().skip(1).next().unwrap();
@@ -44,7 +38,7 @@ fn main() {
     let regalloc = register_alloc::regalloc(&ir_emitter.lifetimes, &amd64::abi());
     println!("regalloc: {:#?}", &regalloc);
 
-    let mut asm_emitter = asm::amd64::Emitter::new();
+    let mut asm_emitter = amd64::Emitter::new();
     asm_emitter.emit(&ir_emitter.instructions, &regalloc);
     println!("--- ASM ---");
     println!("instructions: {:#?}", &asm_emitter.instructions);

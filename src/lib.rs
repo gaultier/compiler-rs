@@ -1,5 +1,6 @@
 use std::alloc::Layout;
 
+pub mod amd64;
 pub mod asm;
 pub mod ast;
 pub mod error;
@@ -11,7 +12,6 @@ pub mod register_alloc;
 use serde::Serialize;
 
 use crate::{
-    asm::amd64,
     ast::{Node, Parser},
     error::Error,
     ir::{Instruction, Lifetimes},
@@ -149,7 +149,7 @@ pub extern "C" fn compile(in_ptr: *const u8, in_len: usize, file_id: FileId) -> 
 
     let regalloc = register_alloc::regalloc(&ir_emitter.lifetimes, &amd64::abi());
 
-    let mut asm_emitter = asm::amd64::Emitter::new();
+    let mut asm_emitter = amd64::Emitter::new();
     asm_emitter.emit(&ir_emitter.instructions, &regalloc);
 
     let mut asm_text = Vec::with_capacity(asm_emitter.instructions.len() * 8);
