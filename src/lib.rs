@@ -145,13 +145,13 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
 
     let regalloc = register_alloc::regalloc(&vcode, &ir_emitter.lifetimes, &asm::abi(&target_arch));
 
-    let mut asm_emitter = amd64::Emitter::new();
-    asm_emitter.emit(&ir_emitter.instructions, &regalloc);
-
-    let mut asm_text = Vec::with_capacity(asm_emitter.instructions.len() * 8);
-    for ins in &asm_emitter.instructions {
-        ins.write(&mut asm_text).unwrap();
-    }
+    //let mut asm_emitter = amd64::Emitter::new();
+    //asm_emitter.emit(&ir_emitter.instructions, &regalloc);
+    //
+    //let mut asm_text = Vec::with_capacity(asm_emitter.instructions.len() * 8);
+    //for ins in &asm_emitter.instructions {
+    //    ins.write(&mut asm_text).unwrap();
+    //}
 
     CompileResult {
         lex_tokens: parser.tokens,
@@ -163,8 +163,8 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
         ir_eval: eval,
         vcode,
         regalloc: regalloc,
-        asm_instructions: asm_emitter.instructions,
-        asm_text: String::from_utf8(asm_text).unwrap(),
+        asm_instructions: vec![],   //asm_emitter.instructions,
+        asm_text: String::from(""), // String::from_utf8(asm_text).unwrap(),
     }
 }
 
@@ -209,7 +209,7 @@ mod tests {
         let input_slice = unsafe { std::slice::from_raw_parts_mut(input_alloc, input.len()) };
         input_slice.copy_from_slice(input.as_bytes());
 
-        let handle = wasm_compile(input_slice.as_ptr(), input_slice.len(), 1);
+        let handle = wasm_compile(input_slice.as_ptr(), input_slice.len(), 1, ArchKind::Amd64);
         let (ptr, len) = handle.unpack();
         println!("handle={} ptr={} len={}", handle.0, ptr, len);
         assert!(ptr > 0);

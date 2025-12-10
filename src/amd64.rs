@@ -108,11 +108,10 @@ fn instruction_selection(ins: &ir::Instruction) -> InstructionKind {
             Some(ir::Operand::VirtualRegister(_)),
             Some(ir::Operand::VirtualRegister(_)),
         ) => InstructionKind::Mov_R_RM,
-        (
-            ir::InstructionKind::Set,
-            Some(ir::Operand::VirtualRegister(_)),
-            Some(ir::Operand::Num(_)),
-        ) => InstructionKind::Mov_R_Imm,
+        (ir::InstructionKind::Set, Some(ir::Operand::Num(_)), None) => InstructionKind::Mov_R_Imm,
+        (ir::InstructionKind::Set, Some(ir::Operand::VirtualRegister(_)), None) => {
+            InstructionKind::Mov_R_RM
+        }
         _ => panic!("invalid IR operands"),
     }
 }
