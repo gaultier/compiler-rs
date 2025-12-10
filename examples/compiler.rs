@@ -1,6 +1,6 @@
 use std::{collections::HashMap, io::stdout};
 
-use compiler_rs_lib::{amd64, ast::Parser, ir, lex::Lexer, register_alloc};
+use compiler_rs_lib::compile;
 
 fn main() {
     let file_name = std::env::args().skip(1).next().unwrap();
@@ -8,44 +8,40 @@ fn main() {
     let mut file_id_to_names = HashMap::new();
     file_id_to_names.insert(1, file_name.clone());
 
+    let compiled = compile(&file_content, 1);
+
     println!("--- Lex ---");
-    let mut lexer = Lexer::new(1);
-    lexer.lex(&file_content);
-    println!("tokens: {:#?}", &lexer.tokens);
+    println!("tokens: {:#?}", &compiled.lex_tokens);
 
     println!("--- Parse ---");
-    let mut parser = Parser::new(&file_content, &lexer);
-    parser.parse();
-    println!("nodes: {:#?}", &parser.nodes);
-    for err in &parser.errors {
+    println!("nodes: {:#?}", &compiled.ast_nodes);
+    for err in &compiled.errors {
         err.write(&mut std::io::stderr(), &file_content, &file_id_to_names)
             .unwrap();
     }
 
-    let mut ir_emitter = ir::Emitter::new();
-    ir_emitter.emit(&parser.nodes);
     println!("--- IR ---");
-    println!("instructions: {:#?}", &ir_emitter.instructions);
-    println!("lifetimes: {:#?}", &ir_emitter.lifetimes);
-    for (i, ins) in ir_emitter.instructions.iter().enumerate() {
+    println!("instructions: {:#?}", &compiled.ir_instructions);
+    println!("lifetimes: {:#?}", &compiled.ir_lifetimes);
+    for (i, ins) in compiled.ir_instructions.iter().enumerate() {
         print!("{}: ", i);
         ins.write(&mut stdout()).unwrap();
     }
-    let eval = ir::eval(&ir_emitter.instructions);
-    println!("eval: {:#?}", &eval);
+    println!("eval: {:#?}", &compiled.ir_eval);
+
+    let target_arch = asm::ArchKind::Amd64;
+    println!("--- VCode ---");
+    println!("vcode: {:#?}", &compiled.vcode);
 
     println!("--- RegAlloc ---");
-    let regalloc = register_alloc::regalloc(&ir_emitter.lifetimes, &amd64::abi());
-    println!("regalloc: {:#?}", &regalloc);
+    println!("regalloc: {:#?}", &compiled.regalloc);
 
-    let mut asm_emitter = amd64::Emitter::new();
-    asm_emitter.emit(&ir_emitter.instructions, &regalloc);
     println!("--- ASM ---");
-    println!("instructions: {:#?}", &asm_emitter.instructions);
-    for (i, ins) in asm_emitter.instructions.iter().enumerate() {
+    println!("instructions: {:#?}", &compiled.asm_instructions);
+    for (i, ins) in compiled.asm_instructions.iter().enumerate() {
         print!("{}: ", i);
         ins.write(&mut stdout()).unwrap();
     }
 
-    std::process::exit(if parser.errors.is_empty() { 0 } else { 1 });
+    std::process::exit(if compiled.errors.is_empty() { 0 } else { 1 });
 }

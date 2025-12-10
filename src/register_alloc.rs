@@ -3,12 +3,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Serialize;
 
 use crate::{
-    asm::{self, Abi},
+    asm::{self, Abi, Register},
     ir::{Lifetime, Lifetimes, VirtualRegister},
 };
-
-#[derive(Serialize, Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Register(pub u8);
 
 #[derive(Serialize, Debug)]
 pub enum MemoryLocation {
@@ -17,12 +14,6 @@ pub enum MemoryLocation {
 }
 
 pub type RegAlloc = BTreeMap<VirtualRegister, MemoryLocation>;
-
-impl Register {
-    pub fn as_u8(&self) -> u8 {
-        self.0
-    }
-}
 
 // TODO: Constraints.
 pub fn regalloc(vcode: &[asm::VInstruction], lifetimes: &Lifetimes, abi: &Abi) -> RegAlloc {
@@ -33,34 +24,33 @@ pub fn regalloc(vcode: &[asm::VInstruction], lifetimes: &Lifetimes, abi: &Abi) -
         free_registers.insert(*register);
     }
 
-    let mut active = BTreeSet::<usize>::new();
+    for vins in vcode {}
 
-    let mut lifetimes_start_asc = lifetimes.iter().collect::<Vec<_>>();
-    lifetimes_start_asc.sort_by(|(_, a), (_, b)| a.start.cmp(&b.start));
-
-    let mut lifetimes_end_desc: Vec<_> = lifetimes_start_asc.clone();
-    lifetimes_end_desc.sort_by(|(_, a), (_, b)| b.end.cmp(&a.end));
-
-    for (i, (vreg, _lifetime)) in lifetimes_start_asc.iter().enumerate() {
-        expire_old_intervals(
-            i,
-            &lifetimes_start_asc,
-            &lifetimes_end_desc,
-            &mut active,
-            &mut free_registers,
-            &res,
-        );
-
-        if active.len() == abi.gprs.len() {
-            spill_at_interval(i, &lifetimes_end_desc, &mut active);
-        } else {
-            let free_register = free_registers.pop_first().unwrap();
-            res.insert(**vreg, MemoryLocation::Register(free_register));
-            active.insert(i);
-        }
-    }
-
-    // TODO: Linear register allocator.
+    //let mut active = BTreeSet::<usize>::new();
+    //let mut lifetimes_start_asc = lifetimes.iter().collect::<Vec<_>>();
+    //lifetimes_start_asc.sort_by(|(_, a), (_, b)| a.start.cmp(&b.start));
+    //
+    //let mut lifetimes_end_desc: Vec<_> = lifetimes_start_asc.clone();
+    //lifetimes_end_desc.sort_by(|(_, a), (_, b)| b.end.cmp(&a.end));
+    //
+    //for (i, (vreg, _lifetime)) in lifetimes_start_asc.iter().enumerate() {
+    //    expire_old_intervals(
+    //        i,
+    //        &lifetimes_start_asc,
+    //        &lifetimes_end_desc,
+    //        &mut active,
+    //        &mut free_registers,
+    //        &res,
+    //    );
+    //
+    //    if active.len() == abi.gprs.len() {
+    //        spill_at_interval(i, &lifetimes_end_desc, &mut active);
+    //    } else {
+    //        let free_register = free_registers.pop_first().unwrap();
+    //        res.insert(**vreg, MemoryLocation::Register(free_register));
+    //        active.insert(i);
+    //    }
+    //}
 
     res
 }

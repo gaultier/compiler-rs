@@ -1,15 +1,17 @@
-use std::{io::Write, panic};
+use std::panic;
 
 use serde::Serialize;
 
 use crate::{
-    asm::{self, Abi, OperandSize, VInstruction},
+    asm::{
+        self, Abi, Instruction, InstructionInOut, InstructionInOutOperand, Operand, OperandKind,
+        VInstruction,
+    },
     ir::{self},
-    origin::Origin,
-    register_alloc::{self, MemoryLocation, RegAlloc},
+    register_alloc::{MemoryLocation, RegAlloc},
 };
 
-#[derive(Serialize, Debug, Clone, Copy)]
+#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum Register {
     Rax,
@@ -28,30 +30,29 @@ pub enum Register {
     R15,
 }
 
-impl From<&register_alloc::Register> for Register {
-    fn from(value: &register_alloc::Register) -> Self {
-        match value.as_u8() {
-            value if value == Register::Rax as u8 => Register::Rax,
-            value if value == Register::Rbx as u8 => Register::Rbx,
-            value if value == Register::Rcx as u8 => Register::Rcx,
-            value if value == Register::Rdx as u8 => Register::Rdx,
-            value if value == Register::Rdi as u8 => Register::Rdi,
-            value if value == Register::Rsi as u8 => Register::Rsi,
-            value if value == Register::R8 as u8 => Register::R8,
-            value if value == Register::R9 as u8 => Register::R9,
-            value if value == Register::R10 as u8 => Register::R10,
-            value if value == Register::R11 as u8 => Register::R11,
-            value if value == Register::R12 as u8 => Register::R12,
-            value if value == Register::R13 as u8 => Register::R13,
-            value if value == Register::R14 as u8 => Register::R14,
-            value if value == Register::R15 as u8 => Register::R15,
-            _ => panic!("value out of range"),
+impl From<&asm::Register> for Register {
+    fn from(value: &asm::Register) -> Self {
+        match value {
+            asm::Register::Amd64(r) => *r,
         }
     }
 }
-impl From<&Register> for register_alloc::Register {
+
+impl From<asm::Register> for Register {
+    fn from(value: asm::Register) -> Self {
+        (&value).into()
+    }
+}
+
+impl From<&Register> for asm::Register {
     fn from(value: &Register) -> Self {
-        register_alloc::Register(*value as u8)
+        asm::Register::Amd64(*value)
+    }
+}
+
+impl From<Register> for asm::Register {
+    fn from(value: Register) -> Self {
+        asm::Register::Amd64(value)
     }
 }
 
@@ -81,45 +82,13 @@ pub fn abi() -> Abi {
 
 #[derive(Serialize, Debug)]
 #[allow(non_camel_case_types)]
+#[repr(u16)]
 pub enum InstructionKind {
     Mov_R_RM,
     Mov_R_Imm,
     Add_R_RM,
     IMul_R_RM,
     IDiv,
-}
-
-#[derive(Serialize, Debug)]
-pub enum InstructionInOutOperand {
-    FixedRegister(Register),
-    RegisterPosition(u8),
-}
-
-#[derive(Serialize, Debug)]
-pub struct InstructionInOut {
-    registers_read: Vec<InstructionInOutOperand>,
-    registers_written: Vec<InstructionInOutOperand>,
-    // TODO: Maybe also record flags read/written?
-}
-
-#[derive(Serialize, Debug, Clone, Copy)]
-pub enum OperandKind {
-    Register(Register),
-    Immediate(u64),
-}
-
-#[derive(Serialize, Debug, Clone, Copy)]
-pub struct Operand {
-    operand_size: OperandSize,
-    kind: OperandKind,
-}
-
-#[derive(Serialize, Debug)]
-pub struct Instruction {
-    kind: InstructionKind,
-    lhs: Option<Operand>,
-    rhs: Option<Operand>,
-    origin: Origin,
 }
 
 // TODO: For now it is 1:1 but in the future it could be 1:N or N:1.
@@ -166,7 +135,7 @@ pub fn ir_to_vcode(irs: &[ir::Instruction]) -> Vec<VInstruction> {
 }
 
 pub struct Emitter {
-    pub instructions: Vec<Instruction>,
+    pub instructions: Vec<asm::Instruction>,
 }
 
 impl InstructionKind {
@@ -196,23 +165,14 @@ impl InstructionKind {
             },
             InstructionKind::IDiv => InstructionInOut {
                 registers_read: vec![
-                    InstructionInOutOperand::FixedRegister(Register::Rax),
+                    InstructionInOutOperand::FixedRegister((&Register::Rax).into()),
                     InstructionInOutOperand::RegisterPosition(1),
                 ],
                 registers_written: vec![
-                    InstructionInOutOperand::FixedRegister(Register::Rax),
-                    InstructionInOutOperand::FixedRegister(Register::Rdx),
+                    InstructionInOutOperand::FixedRegister((&Register::Rax).into()),
+                    InstructionInOutOperand::FixedRegister((&Register::Rdx).into()),
                 ],
             },
-        }
-    }
-}
-
-impl OperandKind {
-    pub fn is_immediate(&self) -> bool {
-        match self {
-            OperandKind::Immediate(_) => true,
-            _ => false,
         }
     }
 }
@@ -222,27 +182,27 @@ fn ir_operand_to_asm(op: &Option<ir::Operand>, regalloc: &RegAlloc) -> Option<Op
         Some(ir::Operand::VirtualRegister(vreg)) => {
             let memory_location = regalloc.get(vreg).unwrap();
             let kind = match memory_location {
-                MemoryLocation::Register(register) => OperandKind::Register(register.into()),
+                MemoryLocation::Register(register) => OperandKind::Register(*register),
                 MemoryLocation::Stack(_) => todo!(),
             };
             Some(Operand {
-                operand_size: OperandSize::Eight, // TODO
+                operand_size: asm::OperandSize::Eight, // TODO
                 kind,
             })
         }
         Some(ir::Operand::Num(num)) => Some(Operand {
-            operand_size: OperandSize::Eight,
-            kind: OperandKind::Immediate(*num),
+            operand_size: asm::OperandSize::Eight,
+            kind: asm::OperandKind::Immediate(*num),
         }),
         None => None,
     }
 }
 
-fn memory_location_to_asm_operand(location: &MemoryLocation) -> Operand {
+fn memory_location_to_asm_operand(location: &MemoryLocation) -> asm::Operand {
     match location {
-        MemoryLocation::Register(register) => Operand {
-            operand_size: OperandSize::Eight,
-            kind: OperandKind::Register(register.into()),
+        MemoryLocation::Register(register) => asm::Operand {
+            operand_size: asm::OperandSize::Eight,
+            kind: asm::OperandKind::Register(*register),
         },
         MemoryLocation::Stack(_) => todo!(),
     }
@@ -266,7 +226,7 @@ impl Emitter {
                     let rhs_mov = ir_operand_to_asm(&ir.lhs, regalloc);
 
                     let ins_mov = Instruction {
-                        kind: InstructionKind::Mov_R_RM,
+                        kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
                         lhs: Some(res_operand.clone()),
                         rhs: rhs_mov,
                         origin: ir.origin,
@@ -276,7 +236,7 @@ impl Emitter {
                     let rhs_add = ir_operand_to_asm(&ir.rhs, regalloc);
 
                     let ins_add = Instruction {
-                        kind: InstructionKind::IMul_R_RM,
+                        kind: asm::InstructionKind::Amd64(InstructionKind::IMul_R_RM),
                         lhs: Some(res_operand),
                         rhs: rhs_add,
                         origin: ir.origin,
@@ -289,7 +249,7 @@ impl Emitter {
                     let rhs_mov = ir_operand_to_asm(&ir.lhs, regalloc);
 
                     let ins_mov = Instruction {
-                        kind: InstructionKind::Mov_R_RM,
+                        kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
                         lhs: Some(res_operand.clone()),
                         rhs: rhs_mov,
                         origin: ir.origin,
@@ -299,7 +259,7 @@ impl Emitter {
                     let rhs_add = ir_operand_to_asm(&ir.rhs, regalloc);
 
                     let ins_add = Instruction {
-                        kind: InstructionKind::Add_R_RM,
+                        kind: asm::InstructionKind::Amd64(InstructionKind::Add_R_RM),
                         lhs: Some(res_operand),
                         rhs: rhs_add,
                         origin: ir.origin,
@@ -311,7 +271,7 @@ impl Emitter {
                     let res_operand = memory_location_to_asm_operand(res_location);
                     let rhs = ir_operand_to_asm(&ir.lhs, regalloc);
                     let ins = Instruction {
-                        kind: InstructionKind::Mov_R_RM,
+                        kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
                         lhs: Some(res_operand),
                         rhs,
                         origin: ir.origin,
@@ -324,61 +284,33 @@ impl Emitter {
 }
 
 impl Register {
-    pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+    pub(crate) fn to_str(&self) -> &'static str {
         match self {
-            Register::Rax => write!(w, "rax"),
-            Register::Rbx => write!(w, "rbx"),
-            Register::Rcx => write!(w, "rcx"),
-            Register::Rdx => write!(w, "rdx"),
-            Register::Rdi => write!(w, "rdi"),
-            Register::Rsi => write!(w, "rsi"),
-            Register::R8 => write!(w, "r8"),
-            Register::R9 => write!(w, "r9"),
-            Register::R10 => write!(w, "r10"),
-            Register::R11 => write!(w, "r11"),
-            Register::R12 => write!(w, "r12"),
-            Register::R13 => write!(w, "r13"),
-            Register::R14 => write!(w, "r14"),
-            Register::R15 => write!(w, "r15"),
+            Register::Rax => "rax",
+            Register::Rbx => "rbx",
+            Register::Rcx => "rcx",
+            Register::Rdx => "rdx",
+            Register::Rdi => "rdi",
+            Register::Rsi => "rsi",
+            Register::R8 => "r8",
+            Register::R9 => "r9",
+            Register::R10 => "r10",
+            Register::R11 => "r11",
+            Register::R12 => "r12",
+            Register::R13 => "r13",
+            Register::R14 => "r14",
+            Register::R15 => "r15",
         }
     }
 }
 
-impl Operand {
-    pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
-        match &self.kind {
-            OperandKind::Register(register) => register.write(w),
-            OperandKind::Immediate(n) => write!(w, "{}", n),
+impl InstructionKind {
+    pub(crate) fn to_str(&self) -> &'static str {
+        match self {
+            InstructionKind::Mov_R_RM | InstructionKind::Mov_R_Imm => "mov ",
+            InstructionKind::Add_R_RM => "add",
+            InstructionKind::IMul_R_RM => "imul",
+            InstructionKind::IDiv => "idiv",
         }
-    }
-}
-
-impl Instruction {
-    pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
-        match self.kind {
-            InstructionKind::Mov_R_RM | InstructionKind::Mov_R_Imm => {
-                write!(w, "mov ")?;
-            }
-            InstructionKind::Add_R_RM => {
-                write!(w, "add ")?;
-            }
-            InstructionKind::IMul_R_RM => {
-                write!(w, "imul ")?;
-            }
-            InstructionKind::IDiv => {
-                write!(w, "idiv ")?;
-            }
-        };
-
-        if let Some(lhs) = &self.lhs {
-            lhs.write(w)?;
-        }
-        write!(w, ", ")?;
-
-        if let Some(rhs) = &self.rhs {
-            rhs.write(w)?;
-        }
-
-        writeln!(w)
     }
 }

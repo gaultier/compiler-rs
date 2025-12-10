@@ -110,38 +110,31 @@ impl AllocHandle {
 }
 
 #[derive(Serialize)]
-pub struct CompileResult<'a> {
-    pub errors: &'a [Error],
-    pub lex_tokens: &'a [Token],
-    pub ast_nodes: &'a [Node],
-    pub ir_instructions: &'a [Instruction],
+pub struct CompileResult {
+    pub errors: Vec<Error>,
+    pub lex_tokens: Vec<Token>,
+    pub ast_nodes: Vec<Node>,
+    pub ir_instructions: Vec<Instruction>,
     pub ir_text: String,
-    pub ir_lifetimes: &'a Lifetimes,
-    pub ir_eval: &'a ir::EvalResult,
-    pub regalloc: &'a RegAlloc,
-    pub amd64_instructions: &'a [amd64::Instruction],
+    pub ir_lifetimes: Lifetimes,
+    pub ir_eval: ir::EvalResult,
+    pub vcode: Vec<asm::VInstruction>,
+    pub regalloc: RegAlloc,
+    pub asm_instructions: Vec<asm::Instruction>,
     pub asm_text: String,
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn compile(in_ptr: *const u8, in_len: usize, file_id: FileId) -> AllocHandle {
-    let input_bytes = unsafe {
-        std::ptr::slice_from_raw_parts(in_ptr, in_len)
-            .as_ref()
-            .unwrap()
-    };
-    let input_str = std::str::from_utf8(input_bytes).unwrap();
-
+pub fn compile(input: &str, file_id: FileId) -> CompileResult {
     let mut lexer = Lexer::new(file_id);
-    lexer.lex(input_str);
+    lexer.lex(input);
 
-    let mut parser = Parser::new(input_str, &lexer);
+    let mut parser = Parser::new(input, &lexer);
     parser.parse();
 
     let mut ir_emitter = ir::Emitter::new();
     ir_emitter.emit(&parser.nodes);
 
-    let mut ir_text = Vec::with_capacity(in_len * 3);
+    let mut ir_text = Vec::with_capacity(input.len() * 3);
     for ins in &ir_emitter.instructions {
         ins.write(&mut ir_text).unwrap();
     }
@@ -160,18 +153,32 @@ pub extern "C" fn compile(in_ptr: *const u8, in_len: usize, file_id: FileId) -> 
         ins.write(&mut asm_text).unwrap();
     }
 
-    let parser_response = CompileResult {
-        lex_tokens: &parser.tokens,
-        ast_nodes: &parser.nodes,
-        errors: &parser.errors,
-        ir_instructions: &ir_emitter.instructions,
+    CompileResult {
+        lex_tokens: parser.tokens,
+        ast_nodes: parser.nodes,
+        errors: parser.errors,
+        ir_instructions: ir_emitter.instructions,
         ir_text: String::from_utf8(ir_text).unwrap(),
-        ir_lifetimes: &ir_emitter.lifetimes,
-        ir_eval: &eval,
-        regalloc: &regalloc,
-        amd64_instructions: &asm_emitter.instructions,
+        ir_lifetimes: ir_emitter.lifetimes,
+        ir_eval: eval,
+        vcode,
+        regalloc: regalloc,
+        asm_instructions: asm_emitter.instructions,
         asm_text: String::from_utf8(asm_text).unwrap(),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasm_compile(in_ptr: *const u8, in_len: usize, file_id: FileId) -> AllocHandle {
+    let input_bytes = unsafe {
+        std::ptr::slice_from_raw_parts(in_ptr, in_len)
+            .as_ref()
+            .unwrap()
     };
+    let input_str = std::str::from_utf8(input_bytes).unwrap();
+
+    let parser_response = compile(input_str, file_id);
+
     let json = serde_json::to_string(&parser_response).unwrap();
 
     let ptr = json.as_bytes().as_ptr() as u64;
@@ -197,7 +204,7 @@ mod tests {
         let input_slice = unsafe { std::slice::from_raw_parts_mut(input_alloc, input.len()) };
         input_slice.copy_from_slice(input.as_bytes());
 
-        let handle = compile(input_slice.as_ptr(), input_slice.len(), 1);
+        let handle = wasm_compile(input_slice.as_ptr(), input_slice.len(), 1);
         let (ptr, len) = handle.unpack();
         println!("handle={} ptr={} len={}", handle.0, ptr, len);
         assert!(ptr > 0);

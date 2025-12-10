@@ -1,10 +1,11 @@
+use std::io::Write;
+
 use serde::Serialize;
 
 use crate::{
     amd64,
-    ir::{self, Operand},
+    ir::{self},
     origin::Origin,
-    register_alloc::Register,
 };
 
 pub enum ArchKind {
@@ -30,15 +31,61 @@ pub enum InstructionKind {
     Amd64(amd64::InstructionKind),
 }
 
+#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Register {
+    Amd64(amd64::Register),
+}
+
 #[derive(Serialize, Debug)]
 pub struct VInstruction {
+    pub kind: InstructionKind,
+    pub lhs: Option<ir::Operand>,
+    pub rhs: Option<ir::Operand>,
+    pub origin: Origin,
+}
+
+#[derive(Serialize, Debug)]
+pub enum InstructionInOutOperand {
+    FixedRegister(Register),
+    RegisterPosition(u8),
+}
+
+#[derive(Serialize, Debug)]
+pub struct InstructionInOut {
+    pub(crate) registers_read: Vec<InstructionInOutOperand>,
+    pub(crate) registers_written: Vec<InstructionInOutOperand>,
+    // TODO: Maybe also record flags read/written?
+}
+
+#[derive(Serialize, Debug, Clone, Copy)]
+pub struct Operand {
+    pub(crate) operand_size: OperandSize,
+    pub(crate) kind: OperandKind,
+}
+
+#[derive(Serialize, Debug, Clone, Copy)]
+pub enum OperandKind {
+    Register(Register),
+    Immediate(u64),
+}
+
+#[derive(Serialize, Debug)]
+pub struct Instruction {
     pub kind: InstructionKind,
     pub lhs: Option<Operand>,
     pub rhs: Option<Operand>,
     pub origin: Origin,
 }
 
-pub fn ir_to_vcode(irs: &[ir::Instruction], target_arch: &ArchKind) -> Vec<VInstruction> {
+impl InstructionKind {
+    pub(crate) fn get_in_out(&self) -> InstructionInOut {
+        match self {
+            InstructionKind::Amd64(instruction_kind) => instruction_kind.get_in_out(),
+        }
+    }
+}
+
+pub(crate) fn ir_to_vcode(irs: &[ir::Instruction], target_arch: &ArchKind) -> Vec<VInstruction> {
     match target_arch {
         ArchKind::Amd64 => amd64::ir_to_vcode(irs),
     }
@@ -47,5 +94,56 @@ pub fn ir_to_vcode(irs: &[ir::Instruction], target_arch: &ArchKind) -> Vec<VInst
 pub fn abi(target_arch: &ArchKind) -> Abi {
     match target_arch {
         ArchKind::Amd64 => amd64::abi(),
+    }
+}
+
+impl Operand {
+    pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+        match &self.kind {
+            OperandKind::Register(register) => w.write_all(register.to_str().as_bytes()),
+            OperandKind::Immediate(n) => write!(w, "{}", n),
+        }
+    }
+}
+
+impl Instruction {
+    pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+        w.write_all(self.kind.to_str().as_bytes())?;
+
+        if let Some(lhs) = &self.lhs {
+            lhs.write(w)?;
+        }
+        write!(w, ", ")?;
+
+        if let Some(rhs) = &self.rhs {
+            rhs.write(w)?;
+        }
+
+        writeln!(w)
+    }
+}
+
+impl InstructionKind {
+    pub(crate) fn to_str(&self) -> &'static str {
+        match self {
+            InstructionKind::Amd64(instruction_kind) => instruction_kind.to_str(),
+        }
+    }
+}
+
+impl OperandKind {
+    pub fn is_immediate(&self) -> bool {
+        match self {
+            OperandKind::Immediate(_) => true,
+            _ => false,
+        }
+    }
+}
+
+impl Register {
+    pub(crate) fn to_str(&self) -> &'static str {
+        match self {
+            Register::Amd64(r) => r.to_str(),
+        }
     }
 }
