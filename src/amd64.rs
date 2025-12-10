@@ -3,11 +3,8 @@ use std::panic;
 use serde::Serialize;
 
 use crate::{
-    asm::{
-        self, Abi, InstructionInOut, InstructionInOutOperand, Operand, OperandKind, VInstruction,
-    },
+    asm::{self, Abi, InstructionInOut, InstructionInOutOperand, VInstruction},
     ir::{self},
-    register_alloc::{MemoryLocation, RegisterMapping},
 };
 
 #[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -156,10 +153,6 @@ pub fn ir_to_vcode(irs: &[ir::Instruction]) -> Vec<VInstruction> {
     res
 }
 
-pub struct Emitter {
-    pub instructions: Vec<asm::Instruction>,
-}
-
 impl InstructionKind {
     pub fn get_in_out(&self) -> InstructionInOut {
         match self {
@@ -196,112 +189,6 @@ impl InstructionKind {
                 ],
             },
         }
-    }
-}
-
-fn ir_operand_to_asm(op: &Option<ir::Operand>, regalloc: &RegisterMapping) -> Option<Operand> {
-    match op {
-        Some(ir::Operand::VirtualRegister(vreg)) => {
-            let memory_location = regalloc.get(vreg).unwrap();
-            let kind = match memory_location {
-                MemoryLocation::Register(register) => OperandKind::Register(*register),
-                MemoryLocation::Stack(_) => todo!(),
-            };
-            Some(Operand {
-                operand_size: asm::OperandSize::Eight, // TODO
-                kind,
-            })
-        }
-        Some(ir::Operand::Num(num)) => Some(Operand {
-            operand_size: asm::OperandSize::Eight,
-            kind: asm::OperandKind::Immediate(*num),
-        }),
-        None => None,
-    }
-}
-
-fn memory_location_to_asm_operand(location: &MemoryLocation) -> asm::Operand {
-    match location {
-        MemoryLocation::Register(register) => asm::Operand {
-            operand_size: asm::OperandSize::Eight,
-            kind: asm::OperandKind::Register(*register),
-        },
-        MemoryLocation::Stack(_) => todo!(),
-    }
-}
-
-impl Emitter {
-    pub fn new() -> Self {
-        Self {
-            instructions: Vec::new(),
-        }
-    }
-
-    pub fn emit(&mut self, vcode: &[VInstruction], _regalloc: &RegisterMapping) {
-        self.instructions.reserve(vcode.len());
-
-        //for v in vcode {
-        //    match ir.kind {
-        //        ir::InstructionKind::Multiply => {
-        //            let res_location = regalloc.get(&ir.res_vreg.unwrap()).unwrap();
-        //            let res_operand = memory_location_to_asm_operand(res_location);
-        //            let rhs_mov = ir_operand_to_asm(&ir.lhs, regalloc);
-        //
-        //            let ins_mov = Instruction {
-        //                kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
-        //                lhs: Some(res_operand.clone()),
-        //                rhs: rhs_mov,
-        //                origin: ir.origin,
-        //            };
-        //            self.instructions.push(ins_mov);
-        //
-        //            let rhs_add = ir_operand_to_asm(&ir.rhs, regalloc);
-        //
-        //            let ins_add = Instruction {
-        //                kind: asm::InstructionKind::Amd64(InstructionKind::IMul_R_RM),
-        //                lhs: Some(res_operand),
-        //                rhs: rhs_add,
-        //                origin: ir.origin,
-        //            };
-        //            self.instructions.push(ins_add);
-        //        }
-        //        ir::InstructionKind::Add => {
-        //            let res_location = regalloc.get(&ir.res_vreg.unwrap()).unwrap();
-        //            let res_operand = memory_location_to_asm_operand(res_location);
-        //            let rhs_mov = ir_operand_to_asm(&ir.lhs, regalloc);
-        //
-        //            let ins_mov = Instruction {
-        //                kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
-        //                lhs: Some(res_operand.clone()),
-        //                rhs: rhs_mov,
-        //                origin: ir.origin,
-        //            };
-        //            self.instructions.push(ins_mov);
-        //
-        //            let rhs_add = ir_operand_to_asm(&ir.rhs, regalloc);
-        //
-        //            let ins_add = Instruction {
-        //                kind: asm::InstructionKind::Amd64(InstructionKind::Add_R_RM),
-        //                lhs: Some(res_operand),
-        //                rhs: rhs_add,
-        //                origin: ir.origin,
-        //            };
-        //            self.instructions.push(ins_add);
-        //        }
-        //        ir::InstructionKind::Set => {
-        //            let res_location = regalloc.get(&ir.res_vreg.unwrap()).unwrap();
-        //            let res_operand = memory_location_to_asm_operand(res_location);
-        //            let rhs = ir_operand_to_asm(&ir.lhs, regalloc);
-        //            let ins = Instruction {
-        //                kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
-        //                lhs: Some(res_operand),
-        //                rhs,
-        //                origin: ir.origin,
-        //            };
-        //            self.instructions.push(ins);
-        //        }
-        //    }
-        //}
     }
 }
 

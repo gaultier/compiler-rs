@@ -21,7 +21,7 @@ pub(crate) fn regalloc(
     _lifetimes: &Lifetimes,
     abi: &Abi,
 ) -> (Vec<asm::Instruction>, RegisterMapping) {
-    let mut vreg_to_preg = RegisterMapping::new();
+    let mut vreg_to_memory_location = RegisterMapping::new();
     let mut instructions = Vec::with_capacity(vcode.len());
 
     let mut free_registers = BTreeSet::<Register>::new();
@@ -39,7 +39,7 @@ pub(crate) fn regalloc(
                         .pop_first()
                         .expect("need to spill - not yet implemented")
                 });
-                vreg_to_preg.insert(vreg, MemoryLocation::Register(preg));
+                vreg_to_memory_location.insert(vreg, MemoryLocation::Register(preg));
 
                 Some(Operand {
                     operand_size: asm::OperandSize::Eight,
@@ -60,7 +60,7 @@ pub(crate) fn regalloc(
                             .pop_first()
                             .expect("need to spill - not yet implemented")
                     });
-                    vreg_to_preg.insert(*vreg, MemoryLocation::Register(preg));
+                    vreg_to_memory_location.insert(*vreg, MemoryLocation::Register(preg));
 
                     Operand {
                         operand_size: asm::OperandSize::Eight,
@@ -109,7 +109,7 @@ pub(crate) fn regalloc(
     //    }
     //}
 
-    (instructions, vreg_to_preg)
+    (instructions, vreg_to_memory_location)
 }
 
 //fn expire_old_intervals(

@@ -37,7 +37,7 @@ fn main() {
     }
 
     println!("--- RegAlloc ---");
-    println!("vreg_to_preg: {:#?}", &compiled.vreg_to_preg);
+    println!("vreg_to_mem_loc: {:#?}", &compiled.vreg_to_memory_location);
 
     println!("--- ASM ---");
     println!("instructions: {:#?}", &compiled.asm_instructions);
