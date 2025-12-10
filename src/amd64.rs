@@ -3,7 +3,7 @@ use std::{io::Write, panic};
 use serde::Serialize;
 
 use crate::{
-    asm::{self, Abi, OperandSize},
+    asm::{self, Abi, OperandSize, VInstruction},
     ir::{self},
     origin::Origin,
     register_alloc::{self, MemoryLocation, RegAlloc},
@@ -122,8 +122,9 @@ pub struct Instruction {
     origin: Origin,
 }
 
-pub fn instruction_selection(ins: ir::Instruction) -> InstructionKind {
-    match (ins.kind, ins.lhs, ins.rhs) {
+// TODO: For now it is 1:1 but in the future it could be 1:N or N:1.
+fn instruction_selection(ins: &ir::Instruction) -> InstructionKind {
+    match (&ins.kind, &ins.lhs, &ins.rhs) {
         (
             ir::InstructionKind::Add,
             Some(ir::Operand::VirtualRegister(_)),
@@ -146,6 +147,22 @@ pub fn instruction_selection(ins: ir::Instruction) -> InstructionKind {
         ) => InstructionKind::Mov_R_Imm,
         _ => panic!("invalid IR operands"),
     }
+}
+
+pub fn ir_to_vcode(irs: &[ir::Instruction]) -> Vec<VInstruction> {
+    let mut res = Vec::with_capacity(irs.len());
+
+    for ir in irs {
+        let ins = VInstruction {
+            kind: asm::InstructionKind::Amd64(instruction_selection(ir)),
+            lhs: ir.lhs,
+            rhs: ir.rhs,
+            origin: ir.origin,
+        };
+        res.push(ins);
+    }
+
+    res
 }
 
 pub struct Emitter {

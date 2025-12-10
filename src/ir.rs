@@ -32,7 +32,7 @@ pub struct Instruction {
     // TODO: type, lifetime.
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone, Copy)]
 pub enum Operand {
     Num(u64),
     VirtualRegister(VirtualRegister),

@@ -147,7 +147,10 @@ pub extern "C" fn compile(in_ptr: *const u8, in_len: usize, file_id: FileId) -> 
     }
     let eval = ir::eval(&ir_emitter.instructions);
 
-    let regalloc = register_alloc::regalloc(&ir_emitter.lifetimes, &amd64::abi());
+    let target_arch = asm::ArchKind::Amd64;
+    let vcode = asm::ir_to_vcode(&ir_emitter.instructions, &target_arch);
+
+    let regalloc = register_alloc::regalloc(&vcode, &ir_emitter.lifetimes, &asm::abi(&target_arch));
 
     let mut asm_emitter = amd64::Emitter::new();
     asm_emitter.emit(&ir_emitter.instructions, &regalloc);

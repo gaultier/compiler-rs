@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Serialize;
 
 use crate::{
-    asm::Abi,
+    asm::{self, Abi},
     ir::{Lifetime, Lifetimes, VirtualRegister},
 };
 
@@ -25,7 +25,7 @@ impl Register {
 }
 
 // TODO: Constraints.
-pub fn regalloc(lifetimes: &Lifetimes, abi: &Abi) -> RegAlloc {
+pub fn regalloc(vcode: &[asm::VInstruction], lifetimes: &Lifetimes, abi: &Abi) -> RegAlloc {
     let mut res = RegAlloc::new();
 
     let mut free_registers = BTreeSet::<Register>::new();
