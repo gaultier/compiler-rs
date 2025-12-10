@@ -80,10 +80,25 @@ pub fn abi() -> Abi {
 }
 
 #[derive(Serialize, Debug)]
+#[allow(non_camel_case_types)]
 pub enum InstructionKind {
-    Mov,
-    Add,
-    IMul,
+    Mov_R_RM,
+    Add_R_RM,
+    IMul_R_RM,
+    IDiv,
+}
+
+#[derive(Serialize, Debug)]
+pub enum InstructionInOutOperand {
+    FixedRegister(Register),
+    RegisterPosition(u8),
+}
+
+#[derive(Serialize, Debug)]
+pub struct InstructionInOut {
+    registers_read: Vec<InstructionInOutOperand>,
+    registers_written: Vec<InstructionInOutOperand>,
+    // TODO: Maybe also record flags read/written?
 }
 
 #[derive(Serialize, Debug, Clone, Copy)]
@@ -108,6 +123,41 @@ pub struct Instruction {
 
 pub struct Emitter {
     pub instructions: Vec<Instruction>,
+}
+
+impl InstructionKind {
+    pub fn get_in_out(&self) -> InstructionInOut {
+        match self {
+            InstructionKind::Mov_R_RM => InstructionInOut {
+                registers_read: vec![InstructionInOutOperand::RegisterPosition(1)],
+                registers_written: vec![InstructionInOutOperand::RegisterPosition(0)],
+            },
+            InstructionKind::Add_R_RM => InstructionInOut {
+                registers_read: vec![
+                    InstructionInOutOperand::RegisterPosition(0),
+                    InstructionInOutOperand::RegisterPosition(1),
+                ],
+                registers_written: vec![InstructionInOutOperand::RegisterPosition(0)],
+            },
+            InstructionKind::IMul_R_RM => InstructionInOut {
+                registers_read: vec![
+                    InstructionInOutOperand::RegisterPosition(0),
+                    InstructionInOutOperand::RegisterPosition(1),
+                ],
+                registers_written: vec![InstructionInOutOperand::RegisterPosition(0)],
+            },
+            InstructionKind::IDiv => InstructionInOut {
+                registers_read: vec![
+                    InstructionInOutOperand::FixedRegister(Register::Rax),
+                    InstructionInOutOperand::RegisterPosition(1),
+                ],
+                registers_written: vec![
+                    InstructionInOutOperand::FixedRegister(Register::Rax),
+                    InstructionInOutOperand::FixedRegister(Register::Rdx),
+                ],
+            },
+        }
+    }
 }
 
 impl OperandKind {
@@ -168,7 +218,7 @@ impl Emitter {
                     let rhs_mov = ir_operand_to_asm(&ir.lhs, regalloc);
 
                     let ins_mov = Instruction {
-                        kind: InstructionKind::Mov,
+                        kind: InstructionKind::Mov_R_RM,
                         lhs: Some(res_operand.clone()),
                         rhs: rhs_mov,
                         origin: ir.origin,
@@ -178,7 +228,7 @@ impl Emitter {
                     let rhs_add = ir_operand_to_asm(&ir.rhs, regalloc);
 
                     let ins_add = Instruction {
-                        kind: InstructionKind::IMul,
+                        kind: InstructionKind::IMul_R_RM,
                         lhs: Some(res_operand),
                         rhs: rhs_add,
                         origin: ir.origin,
@@ -191,7 +241,7 @@ impl Emitter {
                     let rhs_mov = ir_operand_to_asm(&ir.lhs, regalloc);
 
                     let ins_mov = Instruction {
-                        kind: InstructionKind::Mov,
+                        kind: InstructionKind::Mov_R_RM,
                         lhs: Some(res_operand.clone()),
                         rhs: rhs_mov,
                         origin: ir.origin,
@@ -201,7 +251,7 @@ impl Emitter {
                     let rhs_add = ir_operand_to_asm(&ir.rhs, regalloc);
 
                     let ins_add = Instruction {
-                        kind: InstructionKind::Add,
+                        kind: InstructionKind::Add_R_RM,
                         lhs: Some(res_operand),
                         rhs: rhs_add,
                         origin: ir.origin,
@@ -213,7 +263,7 @@ impl Emitter {
                     let res_operand = memory_location_to_asm_operand(res_location);
                     let rhs = ir_operand_to_asm(&ir.lhs, regalloc);
                     let ins = Instruction {
-                        kind: InstructionKind::Mov,
+                        kind: InstructionKind::Mov_R_RM,
                         lhs: Some(res_operand),
                         rhs,
                         origin: ir.origin,
@@ -258,14 +308,17 @@ impl Operand {
 impl Instruction {
     pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
         match self.kind {
-            InstructionKind::Mov => {
+            InstructionKind::Mov_R_RM => {
                 write!(w, "mov ")?;
             }
-            InstructionKind::Add => {
+            InstructionKind::Add_R_RM => {
                 write!(w, "add ")?;
             }
-            InstructionKind::IMul => {
+            InstructionKind::IMul_R_RM => {
                 write!(w, "imul ")?;
+            }
+            InstructionKind::IDiv => {
+                write!(w, "idiv ")?;
             }
         };
 
