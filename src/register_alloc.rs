@@ -3,8 +3,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Serialize;
 
 use crate::{
-    asm::{self, Abi, Register},
-    ir::{Lifetimes, VirtualRegister},
+    amd64,
+    asm::{self, Abi, Operand, Register},
+    ir::{self, Lifetimes, VirtualRegister},
 };
 
 #[derive(Serialize, Debug)]
@@ -16,15 +17,58 @@ pub enum MemoryLocation {
 pub type RegAlloc = BTreeMap<VirtualRegister, MemoryLocation>;
 
 // TODO: Constraints.
-pub(crate) fn regalloc(vcode: &[asm::VInstruction], _lifetimes: &Lifetimes, abi: &Abi) -> RegAlloc {
-    let /*mut*/ res = RegAlloc::new();
+pub(crate) fn regalloc(
+    vcode: &[asm::VInstruction],
+    _lifetimes: &Lifetimes,
+    abi: &Abi,
+) -> Vec<asm::Instruction> {
+    let mut res = Vec::with_capacity(vcode.len());
 
     let mut free_registers = BTreeSet::<Register>::new();
     for register in &abi.gprs {
         free_registers.insert(*register);
     }
 
-    for _vins in vcode {}
+    for vins in vcode {
+        let in_out = vins.kind.get_in_out();
+        for operand in in_out.registers_written {
+            //match operand {
+            //    asm::InstructionInOutOperand::FixedRegister(_fixed) => todo!(),
+            //    asm::InstructionInOutOperand::RegisterPosition(_) => todo!(),
+            //}
+        }
+
+        let lhs = match vins.lhs {
+            Some(ir::Operand::VirtualRegister(_vreg)) => Some(Operand {
+                operand_size: asm::OperandSize::Eight,
+                kind: asm::OperandKind::Register(Register::Amd64(amd64::Register::R15)),
+            }),
+            Some(ir::Operand::Num(num)) => Some(Operand {
+                operand_size: asm::OperandSize::Eight,
+                kind: asm::OperandKind::Immediate(num),
+            }),
+            None => None,
+        };
+        let rhs = match vins.rhs {
+            Some(ir::Operand::VirtualRegister(_vreg)) => Some(Operand {
+                operand_size: asm::OperandSize::Eight,
+                kind: asm::OperandKind::Register(Register::Amd64(amd64::Register::R14)),
+            }),
+            Some(ir::Operand::Num(num)) => Some(Operand {
+                operand_size: asm::OperandSize::Eight,
+                kind: asm::OperandKind::Immediate(num),
+            }),
+            None => None,
+        };
+
+        let ins = asm::Instruction {
+            kind: vins.kind,
+            lhs,
+            rhs,
+            origin: vins.origin,
+        };
+        res.push(ins);
+    }
 
     //let mut active = BTreeSet::<usize>::new();
     //let mut lifetimes_start_asc = lifetimes.iter().collect::<Vec<_>>();

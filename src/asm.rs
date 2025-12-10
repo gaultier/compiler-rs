@@ -26,7 +26,7 @@ pub enum OperandSize {
     Eight = 8,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone, Copy)]
 pub enum InstructionKind {
     Amd64(amd64::InstructionKind),
 }
@@ -112,11 +112,12 @@ impl Instruction {
         w.write_all(self.kind.to_str().as_bytes())?;
 
         if let Some(lhs) = &self.lhs {
+            write!(w, " ")?;
             lhs.write(w)?;
         }
-        write!(w, ", ")?;
 
         if let Some(rhs) = &self.rhs {
+            write!(w, ", ")?;
             rhs.write(w)?;
         }
 

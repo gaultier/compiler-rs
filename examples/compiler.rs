@@ -36,8 +36,7 @@ fn main() {
         ins.write(&mut stdout()).unwrap();
     }
 
-    println!("--- RegAlloc ---");
-    println!("regalloc: {:#?}", &compiled.regalloc);
+    //println!("--- RegAlloc ---");
 
     println!("--- ASM ---");
     println!("instructions: {:#?}", &compiled.asm_instructions);

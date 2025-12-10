@@ -79,7 +79,7 @@ pub(crate) fn abi() -> Abi {
     }
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone, Copy)]
 #[allow(non_camel_case_types)]
 #[repr(u16)]
 pub enum InstructionKind {
