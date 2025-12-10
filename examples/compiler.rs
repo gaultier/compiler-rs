@@ -31,6 +31,10 @@ fn main() {
 
     println!("--- VCode ---");
     println!("vcode: {:#?}", &compiled.vcode);
+    for (i, ins) in compiled.vcode.iter().enumerate() {
+        print!("{}: ", i);
+        ins.write(&mut stdout()).unwrap();
+    }
 
     println!("--- RegAlloc ---");
     println!("regalloc: {:#?}", &compiled.regalloc);

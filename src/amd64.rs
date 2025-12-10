@@ -125,6 +125,7 @@ pub fn ir_to_vcode(irs: &[ir::Instruction]) -> Vec<VInstruction> {
             lhs: ir.lhs,
             rhs: ir.rhs,
             origin: ir.origin,
+            res_vreg: ir.res_vreg,
         };
         res.push(ins);
     }
@@ -305,7 +306,7 @@ impl Register {
 impl InstructionKind {
     pub(crate) fn to_str(&self) -> &'static str {
         match self {
-            InstructionKind::Mov_R_RM | InstructionKind::Mov_R_Imm => "mov ",
+            InstructionKind::Mov_R_RM | InstructionKind::Mov_R_Imm => "mov",
             InstructionKind::Add_R_RM => "add",
             InstructionKind::IMul_R_RM => "imul",
             InstructionKind::IDiv => "idiv",

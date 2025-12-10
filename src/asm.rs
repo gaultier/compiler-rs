@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use crate::{
     amd64,
-    ir::{self},
+    ir::{self, VirtualRegister},
     origin::Origin,
 };
 
@@ -39,6 +39,7 @@ pub enum Register {
 #[derive(Serialize, Debug)]
 pub struct VInstruction {
     pub kind: InstructionKind,
+    pub res_vreg: Option<VirtualRegister>,
     pub lhs: Option<ir::Operand>,
     pub rhs: Option<ir::Operand>,
     pub origin: Origin,
@@ -145,5 +146,27 @@ impl Register {
         match self {
             Register::Amd64(r) => r.to_str(),
         }
+    }
+}
+
+impl VInstruction {
+    pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+        w.write_all(self.kind.to_str().as_bytes())?;
+        w.write_all(" ".as_bytes())?;
+
+        if let Some(vreg) = self.res_vreg {
+            write!(w, "v{}, ", vreg.0)?;
+        }
+
+        if let Some(lhs) = &self.lhs {
+            lhs.write(w)?;
+            write!(w, ", ")?;
+        }
+
+        if let Some(rhs) = &self.rhs {
+            rhs.write(w)?;
+        }
+
+        writeln!(w)
     }
 }

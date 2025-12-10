@@ -8,7 +8,7 @@ use crate::{
 };
 
 #[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct VirtualRegister(u32);
+pub struct VirtualRegister(pub u32);
 
 //pub enum VirtualRegisterConstraint {
 //    Result,
@@ -172,7 +172,7 @@ impl Operand {
             Operand::Num(n) => {
                 write!(w, "(u64.const {})", n)
             }
-            Operand::VirtualRegister(r) => write!(w, "(vreg {})", r.0),
+            Operand::VirtualRegister(r) => write!(w, "(v{})", r.0),
         }
     }
 }
