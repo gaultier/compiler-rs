@@ -89,7 +89,7 @@ pub enum InstructionKind {
     IDiv,
 }
 
-// TODO: For now it is 1:1 but in the future it could be 1:N or N:1.
+// FIXME: Should be: `-> Vec<VInstruction>`
 fn instruction_selection(ins: &ir::Instruction) -> InstructionKind {
     match (&ins.kind, &ins.lhs, &ins.rhs) {
         (
