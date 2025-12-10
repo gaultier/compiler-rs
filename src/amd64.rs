@@ -213,71 +213,71 @@ impl Emitter {
         }
     }
 
-    pub fn emit(&mut self, irs: &[ir::Instruction], regalloc: &RegAlloc) {
-        self.instructions.reserve(irs.len());
+    pub fn emit(&mut self, vcode: &[VInstruction], _regalloc: &RegAlloc) {
+        self.instructions.reserve(vcode.len());
 
-        for ir in irs {
-            match ir.kind {
-                ir::InstructionKind::Multiply => {
-                    let res_location = regalloc.get(&ir.res_vreg.unwrap()).unwrap();
-                    let res_operand = memory_location_to_asm_operand(res_location);
-                    let rhs_mov = ir_operand_to_asm(&ir.lhs, regalloc);
-
-                    let ins_mov = Instruction {
-                        kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
-                        lhs: Some(res_operand.clone()),
-                        rhs: rhs_mov,
-                        origin: ir.origin,
-                    };
-                    self.instructions.push(ins_mov);
-
-                    let rhs_add = ir_operand_to_asm(&ir.rhs, regalloc);
-
-                    let ins_add = Instruction {
-                        kind: asm::InstructionKind::Amd64(InstructionKind::IMul_R_RM),
-                        lhs: Some(res_operand),
-                        rhs: rhs_add,
-                        origin: ir.origin,
-                    };
-                    self.instructions.push(ins_add);
-                }
-                ir::InstructionKind::Add => {
-                    let res_location = regalloc.get(&ir.res_vreg.unwrap()).unwrap();
-                    let res_operand = memory_location_to_asm_operand(res_location);
-                    let rhs_mov = ir_operand_to_asm(&ir.lhs, regalloc);
-
-                    let ins_mov = Instruction {
-                        kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
-                        lhs: Some(res_operand.clone()),
-                        rhs: rhs_mov,
-                        origin: ir.origin,
-                    };
-                    self.instructions.push(ins_mov);
-
-                    let rhs_add = ir_operand_to_asm(&ir.rhs, regalloc);
-
-                    let ins_add = Instruction {
-                        kind: asm::InstructionKind::Amd64(InstructionKind::Add_R_RM),
-                        lhs: Some(res_operand),
-                        rhs: rhs_add,
-                        origin: ir.origin,
-                    };
-                    self.instructions.push(ins_add);
-                }
-                ir::InstructionKind::Set => {
-                    let res_location = regalloc.get(&ir.res_vreg.unwrap()).unwrap();
-                    let res_operand = memory_location_to_asm_operand(res_location);
-                    let rhs = ir_operand_to_asm(&ir.lhs, regalloc);
-                    let ins = Instruction {
-                        kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
-                        lhs: Some(res_operand),
-                        rhs,
-                        origin: ir.origin,
-                    };
-                    self.instructions.push(ins);
-                }
-            }
-        }
+        //for v in vcode {
+        //    match ir.kind {
+        //        ir::InstructionKind::Multiply => {
+        //            let res_location = regalloc.get(&ir.res_vreg.unwrap()).unwrap();
+        //            let res_operand = memory_location_to_asm_operand(res_location);
+        //            let rhs_mov = ir_operand_to_asm(&ir.lhs, regalloc);
+        //
+        //            let ins_mov = Instruction {
+        //                kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
+        //                lhs: Some(res_operand.clone()),
+        //                rhs: rhs_mov,
+        //                origin: ir.origin,
+        //            };
+        //            self.instructions.push(ins_mov);
+        //
+        //            let rhs_add = ir_operand_to_asm(&ir.rhs, regalloc);
+        //
+        //            let ins_add = Instruction {
+        //                kind: asm::InstructionKind::Amd64(InstructionKind::IMul_R_RM),
+        //                lhs: Some(res_operand),
+        //                rhs: rhs_add,
+        //                origin: ir.origin,
+        //            };
+        //            self.instructions.push(ins_add);
+        //        }
+        //        ir::InstructionKind::Add => {
+        //            let res_location = regalloc.get(&ir.res_vreg.unwrap()).unwrap();
+        //            let res_operand = memory_location_to_asm_operand(res_location);
+        //            let rhs_mov = ir_operand_to_asm(&ir.lhs, regalloc);
+        //
+        //            let ins_mov = Instruction {
+        //                kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
+        //                lhs: Some(res_operand.clone()),
+        //                rhs: rhs_mov,
+        //                origin: ir.origin,
+        //            };
+        //            self.instructions.push(ins_mov);
+        //
+        //            let rhs_add = ir_operand_to_asm(&ir.rhs, regalloc);
+        //
+        //            let ins_add = Instruction {
+        //                kind: asm::InstructionKind::Amd64(InstructionKind::Add_R_RM),
+        //                lhs: Some(res_operand),
+        //                rhs: rhs_add,
+        //                origin: ir.origin,
+        //            };
+        //            self.instructions.push(ins_add);
+        //        }
+        //        ir::InstructionKind::Set => {
+        //            let res_location = regalloc.get(&ir.res_vreg.unwrap()).unwrap();
+        //            let res_operand = memory_location_to_asm_operand(res_location);
+        //            let rhs = ir_operand_to_asm(&ir.lhs, regalloc);
+        //            let ins = Instruction {
+        //                kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
+        //                lhs: Some(res_operand),
+        //                rhs,
+        //                origin: ir.origin,
+        //            };
+        //            self.instructions.push(ins);
+        //        }
+        //    }
+        //}
     }
 }
 

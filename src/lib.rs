@@ -145,8 +145,8 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
 
     let regalloc = register_alloc::regalloc(&vcode, &ir_emitter.lifetimes, &asm::abi(&target_arch));
 
-    //let mut asm_emitter = amd64::Emitter::new();
-    //asm_emitter.emit(&ir_emitter.instructions, &regalloc);
+    let mut asm_emitter = amd64::Emitter::new();
+    asm_emitter.emit(&vcode, &regalloc);
     //
     //let mut asm_text = Vec::with_capacity(asm_emitter.instructions.len() * 8);
     //for ins in &asm_emitter.instructions {
@@ -163,7 +163,7 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
         ir_eval: eval,
         vcode,
         regalloc: regalloc,
-        asm_instructions: vec![],   //asm_emitter.instructions,
+        asm_instructions: asm_emitter.instructions,
         asm_text: String::from(""), // String::from_utf8(asm_text).unwrap(),
     }
 }
