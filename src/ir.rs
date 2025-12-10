@@ -54,6 +54,12 @@ pub struct Emitter {
     //pub constraints: Constraints,
 }
 
+impl Default for Emitter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Emitter {
     pub fn new() -> Self {
         Self {
@@ -224,11 +230,11 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
             InstructionKind::Add => {
                 let lhs = match ir.lhs.as_ref().unwrap() {
                     Operand::Num(num) => Value::Num(*num),
-                    Operand::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
+                    Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
                 };
                 let rhs = match ir.rhs.as_ref().unwrap() {
                     Operand::Num(num) => Value::Num(*num),
-                    Operand::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
+                    Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
                 };
                 let sum = match (lhs, rhs) {
                     (Value::Num(lhs), Value::Num(rhs)) => Value::Num(lhs + rhs),
@@ -239,11 +245,11 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
             InstructionKind::Multiply => {
                 let lhs = match ir.lhs.as_ref().unwrap() {
                     Operand::Num(num) => Value::Num(*num),
-                    Operand::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
+                    Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
                 };
                 let rhs = match ir.rhs.as_ref().unwrap() {
                     Operand::Num(num) => Value::Num(*num),
-                    Operand::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
+                    Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
                 };
                 let mul = match (lhs, rhs) {
                     (Value::Num(lhs), Value::Num(rhs)) => Value::Num(lhs * rhs),
@@ -254,7 +260,7 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
             InstructionKind::Set => {
                 let value = match ir.lhs.as_ref().unwrap() {
                     Operand::Num(num) => Value::Num(*num),
-                    Operand::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
+                    Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
                 };
                 assert!(ir.rhs.is_none());
 
