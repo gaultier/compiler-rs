@@ -193,7 +193,7 @@ impl InstructionKind {
 }
 
 impl Register {
-    pub(crate) fn to_str(&self) -> &'static str {
+    pub(crate) fn to_str(self) -> &'static str {
         match self {
             Register::Rax => "rax",
             Register::Rbx => "rbx",
@@ -214,7 +214,7 @@ impl Register {
 }
 
 impl InstructionKind {
-    pub(crate) fn to_str(&self) -> &'static str {
+    pub(crate) fn to_str(self) -> &'static str {
         match self {
             InstructionKind::Mov_R_RM | InstructionKind::Mov_R_Imm => "mov",
             InstructionKind::Add_R_RM => "add",

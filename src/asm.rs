@@ -153,7 +153,7 @@ impl Instruction {
 }
 
 impl InstructionKind {
-    pub(crate) fn to_str(&self) -> &'static str {
+    pub(crate) fn to_str(self) -> &'static str {
         match self {
             InstructionKind::Amd64(instruction_kind) => instruction_kind.to_str(),
         }
@@ -170,7 +170,7 @@ impl OperandKind {
 }
 
 impl Register {
-    pub(crate) fn to_str(&self) -> &'static str {
+    pub(crate) fn to_str(self) -> &'static str {
         match self {
             Register::Amd64(r) => r.to_str(),
         }
