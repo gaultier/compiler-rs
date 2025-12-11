@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io::Write};
+use std::{collections::BTreeMap, io::Write};
 
 use serde::Serialize;
 
@@ -78,7 +78,7 @@ pub struct Instruction {
     pub origin: Origin,
 }
 
-pub type EvalResult = HashMap<MemoryLocation, ir::Value>;
+pub type EvalResult = BTreeMap<MemoryLocation, ir::Value>;
 
 pub fn eval(instructions: &[Instruction]) -> EvalResult {
     match instructions.get(0).map(|ins| ins.kind) {

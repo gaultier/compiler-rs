@@ -7,7 +7,7 @@ use crate::{
     ir::{self, LiveRange, LiveRanges, VirtualRegister},
 };
 
-#[derive(Serialize, Debug, Hash, PartialEq, Eq)]
+#[derive(Serialize, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MemoryLocation {
     Register(Register),
     Stack(u32), // Stack offset.

@@ -18,7 +18,7 @@ use crate::{
     ir::{Instruction, LiveRanges},
     lex::{Lexer, Token},
     origin::FileId,
-    register_alloc::RegisterMapping,
+    register_alloc::{MemoryLocation, RegisterMapping},
 };
 
 #[cfg(target_arch = "wasm32")]
@@ -110,7 +110,7 @@ impl AllocHandle {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Default, Debug)]
 pub struct CompileResult {
     pub errors: Vec<Error>,
     pub lex_tokens: Vec<Token>,
@@ -126,12 +126,36 @@ pub struct CompileResult {
     pub asm_eval: asm::EvalResult,
 }
 
+#[derive(Serialize, Default, Debug)]
+struct JsonCompileResult {
+    pub errors: Vec<Error>,
+    pub lex_tokens: Vec<Token>,
+    pub ast_nodes: Vec<Node>,
+    pub ir_instructions: Vec<Instruction>,
+    pub ir_text: String,
+    pub ir_live_ranges: LiveRanges,
+    pub ir_eval: ir::EvalResult,
+    pub vcode: Vec<asm::VInstruction>,
+    pub vreg_to_memory_location: RegisterMapping,
+    pub asm_instructions: Vec<asm::Instruction>,
+    pub asm_text: String,
+    pub asm_eval: Vec<(MemoryLocation, ir::Value)>,
+}
+
 pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileResult {
     let mut lexer = Lexer::new(file_id);
     lexer.lex(input);
 
     let mut parser = Parser::new(input, &lexer);
     parser.parse();
+
+    if !parser.errors.is_empty() {
+        return CompileResult {
+            lex_tokens: parser.tokens,
+            ast_nodes: parser.nodes,
+            ..Default::default()
+        };
+    }
 
     let mut ir_emitter = ir::Emitter::new();
     ir_emitter.emit(&parser.nodes);
@@ -185,9 +209,23 @@ pub extern "C" fn wasm_compile(
     };
     let input_str = std::str::from_utf8(input_bytes).unwrap();
 
-    let parser_response = compile(input_str, file_id, target_arch);
+    let compiled = compile(input_str, file_id, target_arch);
+    let json_compiled = JsonCompileResult {
+        errors: compiled.errors,
+        lex_tokens: compiled.lex_tokens,
+        ast_nodes: compiled.ast_nodes,
+        ir_instructions: compiled.ir_instructions,
+        ir_text: compiled.ir_text,
+        ir_live_ranges: compiled.ir_live_ranges,
+        ir_eval: compiled.ir_eval,
+        vcode: compiled.vcode,
+        vreg_to_memory_location: compiled.vreg_to_memory_location,
+        asm_instructions: compiled.asm_instructions,
+        asm_text: compiled.asm_text,
+        asm_eval: compiled.asm_eval.into_iter().collect(),
+    };
 
-    let json = serde_json::to_string(&parser_response).unwrap();
+    let json = serde_json::to_string(&json_compiled).unwrap();
 
     let ptr = json.as_bytes().as_ptr() as u64;
     let len = json.len() as u32 as u64;
