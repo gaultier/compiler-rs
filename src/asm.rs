@@ -144,12 +144,6 @@ impl InstructionKind {
     }
 }
 
-impl OperandKind {
-    pub(crate) fn is_immediate(&self) -> bool {
-        matches!(self, OperandKind::Immediate(_))
-    }
-}
-
 impl From<&MemoryLocation> for OperandKind {
     fn from(value: &MemoryLocation) -> Self {
         match value {
