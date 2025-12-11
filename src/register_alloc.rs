@@ -186,7 +186,7 @@ fn insert_sorted(
     match active.binary_search_by(|(_, range)| {
         let a = (range.end as usize) << 32 | (range.start as usize);
         let b = (item.1.end as usize) << 32 | (item.1.start as usize);
-        a.cmp(&b)
+        b.cmp(&a)
     }) {
         Ok(_pos) => {
             panic!("element already present")

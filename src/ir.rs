@@ -219,7 +219,7 @@ impl Instruction {
     }
 }
 
-#[derive(Serialize, Copy, Clone, Debug)]
+#[derive(Serialize, Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Value {
     Num(u64),
 }

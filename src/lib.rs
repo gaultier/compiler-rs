@@ -224,4 +224,21 @@ mod tests {
         //
         //dealloc(handle);
     }
+
+    #[test]
+    fn test_api() {
+        let input = "123 *2+32";
+
+        let compiled = compile(&input, 1, ArchKind::Amd64);
+        assert_eq!(compiled.errors.len(), 0);
+        assert_eq!(compiled.lex_tokens.len(), 6 /* including EOF */);
+        assert_eq!(compiled.ast_nodes.len(), 5);
+        assert_eq!(compiled.ir_instructions.len(), 5);
+        assert_eq!(compiled.asm_instructions.len(), 7);
+        for (vreg, ir_val) in &compiled.ir_eval {
+            let preg = &compiled.vreg_to_memory_location[vreg];
+            let asm_val = compiled.asm_eval.get(&preg).unwrap();
+            assert_eq!(ir_val, asm_val);
+        }
+    }
 }
