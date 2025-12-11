@@ -1,5 +1,6 @@
 use std::{collections::BTreeMap, io::Write};
 
+use log::trace;
 use serde::Serialize;
 
 use crate::{
@@ -232,6 +233,7 @@ impl Emitter {
         vreg_to_memory_location: &mut RegisterMapping,
     ) -> Vec<Instruction> {
         let mut instructions = Vec::with_capacity(vcode.len());
+        let mut spills = RegisterMapping::new();
 
         for vins in vcode {
             let in_out = vins.kind.get_in_out();
@@ -251,17 +253,26 @@ impl Emitter {
                             }
                             src => {
                                 let stack_offset = self.stack.new_slot(8, 8); // FIXME
-                                let spill = emit_store(
+                                let store = emit_store(
                                     &MemoryLocation::Stack(stack_offset),
                                     &(src.into()),
                                     &vins.kind.arch(),
                                     &OperandSize::Eight,
                                 );
-                                instructions.extend(spill);
+                                instructions.extend(store);
+                                spills.insert(vreg, MemoryLocation::Stack(stack_offset));
+                                trace!("spill: vreg={:?} sp={}", vreg, stack_offset);
+
+                                let load = emit_store(
+                                    &MemoryLocation::Register(*fixed_preg),
+                                    &(src.into()),
+                                    &vins.kind.arch(),
+                                    &OperandSize::Eight,
+                                );
+                                instructions.extend(load);
+                                trace!("shuffle: dst_preg={:?} src={:#?}", fixed_preg, src);
                                 vreg_to_memory_location
-                                    .entry(vreg)
-                                    .and_modify(|e| *e = MemoryLocation::Stack(stack_offset));
-                                println!("[D001] shuffle: vreg={:?} sp={}", vreg, stack_offset);
+                                    .insert(vreg, MemoryLocation::Register(*fixed_preg));
                             }
                         }
                     }
