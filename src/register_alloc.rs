@@ -25,43 +25,27 @@ fn precoloring(vcode: &[asm::VInstruction], abi: &Abi) -> (RegisterMapping, BTre
 
     for vins in vcode {
         let in_out = vins.kind.get_in_out();
+        for op in &vins.operands {
+            if let ir::Operand::VirtualRegister(vreg) = op {
+                for rr in &in_out.registers_read {
+                    if let InstructionInOutOperand::FixedRegister(preg) = rr {
+                        free_registers.remove(preg);
+                        vreg_to_memory_location.insert(*vreg, MemoryLocation::Register(*preg));
+                    }
+                }
+            }
+        }
 
         match vins.dst {
             Some(ir::Operand::VirtualRegister(vreg)) => {
                 if let Some(preg) = in_out.get_fixed_output_reg() {
-                    let present = free_registers.remove(&preg);
-                    assert!(present);
-
-                    assert!(
-                        vreg_to_memory_location
-                            .insert(vreg, MemoryLocation::Register(preg))
-                            .is_none()
-                    );
+                    free_registers.remove(&preg);
+                    vreg_to_memory_location.insert(vreg, MemoryLocation::Register(preg));
                 }
             }
             Some(ir::Operand::Num(_)) => panic!("invalid number as instruction destination"),
             None => {}
         };
-
-        for op in &vins.operands {
-            if let ir::Operand::VirtualRegister(vreg) = op {
-                for rr in &in_out.registers_read {
-                    if let InstructionInOutOperand::FixedRegister(r) = rr {
-                        let present = free_registers.remove(r);
-                        if !present {
-                            // Need to spill or insert moves.
-                            todo!();
-                        }
-
-                        assert!(
-                            vreg_to_memory_location
-                                .insert(*vreg, MemoryLocation::Register(*r))
-                                .is_none()
-                        );
-                    }
-                }
-            }
-        }
     }
 
     (vreg_to_memory_location, free_registers)

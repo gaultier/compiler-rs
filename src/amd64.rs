@@ -353,20 +353,25 @@ pub fn eval(instructions: &[asm::Instruction]) -> EvalResult {
                     } => reg,
                     _ => panic!("invalid dst"),
                 };
+                assert_eq!(dst_reg, asm::Register::Amd64(Register::Rax));
 
                 assert_eq!(ins.operands.len(), 1);
                 let op = ins.operands[0];
                 match op.kind {
                     asm::OperandKind::Register(op) => {
-                        let op_value = *res
-                            .get(&MemoryLocation::Register(op))
-                            .unwrap_or(&Value::Num(0));
+                        let divisor = *res.get(&MemoryLocation::Register(op)).unwrap();
+                        let quotient = res.get_mut(&MemoryLocation::Register(dst_reg)).unwrap();
 
-                        res.entry(MemoryLocation::Register(dst_reg))
-                            .and_modify(|e| {
-                                *e = Value::Num(op_value.as_num() / e.as_num());
-                            })
-                            .or_insert(Value::Num(0));
+                        let rem = quotient.as_num() % divisor.as_num();
+                        *quotient = Value::Num(quotient.as_num() / divisor.as_num());
+
+                        res.entry(MemoryLocation::Register(asm::Register::Amd64(
+                            Register::Rdx,
+                        )))
+                        .and_modify(|e| {
+                            *e = Value::Num(rem);
+                        })
+                        .or_insert(Value::Num(0));
                     }
                     _ => panic!("invalid operand for idiv_r_rm instruction"),
                 };
