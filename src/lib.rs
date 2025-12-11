@@ -273,6 +273,11 @@ mod tests {
         assert_eq!(compiled.ast_nodes.len(), 5);
         assert_eq!(compiled.ir_instructions.len(), 5);
         assert_eq!(compiled.asm_instructions.len(), 7);
+        assert_eq!(
+            compiled.vreg_to_memory_location.len(),
+            compiled.asm_eval.len()
+        );
+
         for (vreg, ir_val) in &compiled.ir_eval {
             let preg = &compiled.vreg_to_memory_location[vreg];
             let asm_val = compiled.asm_eval.get(&preg).unwrap();
