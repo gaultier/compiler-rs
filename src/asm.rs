@@ -32,7 +32,7 @@ pub enum InstructionKind {
     Amd64(amd64::InstructionKind),
 }
 
-#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Register {
     Amd64(amd64::Register),
 }
@@ -42,19 +42,6 @@ pub struct VInstruction {
     pub kind: InstructionKind,
     pub operands: Vec<ir::Operand>,
     pub origin: Origin,
-}
-
-#[derive(Serialize, Debug)]
-pub enum InstructionInOutOperand {
-    FixedRegister(Register),
-    RegisterPosition(u8),
-}
-
-#[derive(Serialize, Debug)]
-pub struct InstructionInOut {
-    pub(crate) registers_read: Vec<InstructionInOutOperand>,
-    pub(crate) registers_written: Vec<InstructionInOutOperand>,
-    // TODO: Maybe also record flags read/written?
 }
 
 #[derive(Serialize, Debug, Clone, Copy)]
@@ -91,29 +78,6 @@ pub fn eval(instructions: &[Instruction]) -> EvalResult {
     match instructions.first().map(|ins| ins.kind) {
         Some(InstructionKind::Amd64(_)) => amd64::eval(instructions),
         _ => EvalResult::new(),
-    }
-}
-
-impl InstructionKind {
-    pub(crate) fn get_in_out(&self) -> InstructionInOut {
-        match self {
-            InstructionKind::Amd64(instruction_kind) => instruction_kind.get_in_out(),
-        }
-    }
-}
-
-impl InstructionInOut {
-    pub(crate) fn get_fixed_output_reg(&self) -> Option<Register> {
-        for reg in &self.registers_written {
-            match reg {
-                InstructionInOutOperand::FixedRegister(reg) => return Some(*reg),
-                InstructionInOutOperand::RegisterPosition(_pos) => {
-
-                    // return Some(registers_written[*pos as usize]);
-                }
-            }
-        }
-        None
     }
 }
 
@@ -164,6 +128,12 @@ impl InstructionKind {
     pub(crate) fn to_str(self) -> &'static str {
         match self {
             InstructionKind::Amd64(instruction_kind) => instruction_kind.to_str(),
+        }
+    }
+
+    pub(crate) fn get_in_out(&self) -> Vec<format::Operand> {
+        match self {
+            InstructionKind::Amd64(k) => k.get_in_out(),
         }
     }
 }
@@ -235,4 +205,25 @@ pub(crate) fn vcode_to_asm(
     }
 
     instructions
+}
+
+pub(crate) mod format {
+    use crate::asm::Mutability;
+
+    pub(crate) enum Location {
+        // Fixed registers.
+        Rax,
+        Rdx,
+
+        Imm64,
+        Rm64,
+        R64,
+    }
+
+    pub(crate) struct Operand {
+        pub(crate) location: Location,
+        pub(crate) mutability: Mutability,
+        pub(crate) implicit: bool,
+        // TODO: extension, align
+    }
 }

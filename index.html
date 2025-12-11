@@ -182,12 +182,16 @@
                 console.log("WebAssembly module loaded and instantiated successfully.", result.instance.exports);
 
                 const input_dom = document.getElementById("input");
-                run(input_dom.value, result.instance);
+                try {
+                    run(input_dom.value, result.instance);
+                } catch(error) {
+                    console.error("Error running WASM:", error);
+                }
                 input_dom.addEventListener('input', function(event) {
                     run(event.target.value, result.instance);
                 });
             } catch (error) {
-                console.error("Error loading or running WASM:", error);
+                console.error("Error loading WASM:", error);
             }
         }
 

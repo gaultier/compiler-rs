@@ -3,7 +3,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Serialize;
 
 use crate::{
-    asm::{self, Abi, InstructionInOutOperand, Register},
+    asm::{
+        self, Abi, Register,
+        format::{Location, Operand},
+    },
     ir::{self, LiveRange, LiveRanges, VirtualRegister},
 };
 
@@ -23,30 +26,35 @@ fn precoloring(vcode: &[asm::VInstruction], abi: &Abi) -> (RegisterMapping, BTre
         free_registers.insert(*register);
     }
 
-    for vins in vcode {
-        let in_out = vins.kind.get_in_out();
-        for op in &vins.operands {
-            if let ir::Operand::VirtualRegister(vreg) = op {
-                for rr in &in_out.registers_read {
-                    if let InstructionInOutOperand::FixedRegister(preg) = rr {
-                        free_registers.remove(preg);
-                        vreg_to_memory_location.insert(*vreg, MemoryLocation::Register(*preg));
-                    }
-                }
-            }
-        }
+    // TODO
 
-        match vins.operands.first() {
-            Some(ir::Operand::VirtualRegister(vreg)) => {
-                if let Some(preg) = in_out.get_fixed_output_reg() {
-                    free_registers.remove(&preg);
-                    vreg_to_memory_location.insert(*vreg, MemoryLocation::Register(preg));
-                }
-            }
-            Some(ir::Operand::Num(_)) => panic!("invalid number as instruction destination"),
-            None => {}
-        };
-    }
+    //for vins in vcode {
+    //    let in_out = vins.kind.get_in_out();
+    //    for op in &vins.operands {
+    //        if let ir::Operand::VirtualRegister(vreg) = op {
+    //            for fmt_op in &in_out {
+    //                match fmt_op {
+    //                    Operand {
+    //                        location: Location::Rax,
+    //                        mutability,
+    //                        implicit,
+    //                    } => {}
+    //                }
+    //            }
+    //        }
+    //    }
+    //
+    //    match vins.operands.first() {
+    //        Some(ir::Operand::VirtualRegister(vreg)) => {
+    //            if let Some(preg) = in_out.get_fixed_output_reg() {
+    //                free_registers.remove(&preg);
+    //                vreg_to_memory_location.insert(*vreg, MemoryLocation::Register(preg));
+    //            }
+    //        }
+    //        Some(ir::Operand::Num(_)) => panic!("invalid number as instruction destination"),
+    //        None => {}
+    //    };
+    //}
 
     (vreg_to_memory_location, free_registers)
 }
