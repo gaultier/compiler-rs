@@ -188,7 +188,11 @@
                     console.error("Error running WASM:", error);
                 }
                 input_dom.addEventListener('input', function(event) {
-                    run(event.target.value, result.instance);
+                    try {
+                        run(event.target.value, result.instance);
+                    } catch(error) {
+                        console.error("Error running WASM:", error);
+                    }
                 });
             } catch (error) {
                 console.error("Error loading WASM:", error);
