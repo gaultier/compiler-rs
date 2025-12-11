@@ -81,7 +81,7 @@ pub struct Instruction {
 pub type EvalResult = BTreeMap<MemoryLocation, ir::Value>;
 
 pub fn eval(instructions: &[Instruction]) -> EvalResult {
-    match instructions.get(0).map(|ins| ins.kind) {
+    match instructions.first().map(|ins| ins.kind) {
         Some(InstructionKind::Amd64(_)) => amd64::eval(instructions),
         _ => EvalResult::new(),
     }
@@ -213,7 +213,7 @@ pub(crate) fn vcode_to_asm(
             .operands
             .iter()
             .map(|op| match op {
-                ir::Operand::VirtualRegister(vreg) => match vreg_to_memory_location.get(&vreg) {
+                ir::Operand::VirtualRegister(vreg) => match vreg_to_memory_location.get(vreg) {
                     Some(MemoryLocation::Register(preg)) => Operand {
                         operand_size: OperandSize::Eight,
                         kind: OperandKind::Register(*preg),

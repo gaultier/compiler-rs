@@ -248,9 +248,7 @@ pub fn eval(instructions: &[asm::Instruction]) -> EvalResult {
     let mut res = EvalResult::new();
 
     for ins in instructions {
-        let kind = match ins.kind {
-            asm::InstructionKind::Amd64(k) => k,
-        };
+        let asm::InstructionKind::Amd64(kind) = ins.kind;
 
         match kind {
             InstructionKind::Mov_R_RM => {

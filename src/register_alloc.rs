@@ -44,25 +44,22 @@ fn precoloring(vcode: &[asm::VInstruction], abi: &Abi) -> (RegisterMapping, BTre
         };
 
         for op in &vins.operands {
-            match op {
-                ir::Operand::VirtualRegister(vreg) => {
-                    for rr in &in_out.registers_read {
-                        if let InstructionInOutOperand::FixedRegister(r) = rr {
-                            let present = free_registers.remove(r);
-                            if !present {
-                                // Need to spill or insert moves.
-                                todo!();
-                            }
-
-                            assert!(
-                                vreg_to_memory_location
-                                    .insert(*vreg, MemoryLocation::Register(*r))
-                                    .is_none()
-                            );
+            if let ir::Operand::VirtualRegister(vreg) = op {
+                for rr in &in_out.registers_read {
+                    if let InstructionInOutOperand::FixedRegister(r) = rr {
+                        let present = free_registers.remove(r);
+                        if !present {
+                            // Need to spill or insert moves.
+                            todo!();
                         }
+
+                        assert!(
+                            vreg_to_memory_location
+                                .insert(*vreg, MemoryLocation::Register(*r))
+                                .is_none()
+                        );
                     }
                 }
-                _ => {}
             }
         }
     }
@@ -116,7 +113,7 @@ pub(crate) fn regalloc(
         assert!(active.is_sorted_by(|(_, a), (_, b)| b.end <= a.end));
 
         // Already filled by pre-coloring?
-        if vreg_to_memory_location.get(&vreg_range.0).is_some() {
+        if vreg_to_memory_location.contains_key(&vreg_range.0) {
             insert_sorted(&mut active, *vreg_range);
             continue;
         }
