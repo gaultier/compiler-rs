@@ -77,7 +77,11 @@ pub type EvalResult = BTreeMap<MemoryLocation, ir::Value>;
 
 pub fn eval(instructions: &[Instruction]) -> EvalResult {
     match instructions.first().map(|ins| ins.kind) {
-        Some(InstructionKind::Amd64(_)) => amd64::eval(instructions),
+        Some(InstructionKind::Amd64(_)) => {
+            let mut interpreter = amd64::Interpreter::new();
+            interpreter.eval(instructions);
+            interpreter.state
+        }
         _ => EvalResult::new(),
     }
 }
@@ -151,6 +155,16 @@ impl From<&MemoryLocation> for OperandKind {
         match value {
             MemoryLocation::Register(reg) => OperandKind::Register(*reg),
             MemoryLocation::Stack(off) => OperandKind::Stack(*off),
+        }
+    }
+}
+
+impl From<&OperandKind> for MemoryLocation {
+    fn from(value: &OperandKind) -> Self {
+        match value {
+            OperandKind::Register(register) => MemoryLocation::Register(*register),
+            OperandKind::Immediate(_imm) => panic!(),
+            OperandKind::Stack(off) => MemoryLocation::Stack(*off),
         }
     }
 }

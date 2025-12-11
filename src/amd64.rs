@@ -202,7 +202,7 @@ pub(crate) fn emit_store(dst: &MemoryLocation, src: &Operand) -> Vec<Instruction
                     },
                     Operand {
                         operand_size: src.operand_size,
-                        kind: OperandKind::Register(*src_reg),
+                        kind: OperandKind::Register(src_reg),
                         implicit: false,
                         mutability: Mutability::Read,
                     },
@@ -247,7 +247,7 @@ pub(crate) fn emit_store(dst: &MemoryLocation, src: &Operand) -> Vec<Instruction
             origin: Origin::default(),
         }],
         (MemoryLocation::Stack(_), OperandKind::Immediate(_)) => todo!(),
-        (MemoryLocation::Register(register), OperandKind::Stack(_)) => todo!(),
+        (MemoryLocation::Register(_register), OperandKind::Stack(_)) => todo!(),
         (MemoryLocation::Stack(_), OperandKind::Stack(_)) => todo!(),
     }
 }
@@ -403,157 +403,153 @@ impl InstructionKind {
     }
 }
 
-pub fn eval(instructions: &[asm::Instruction]) -> EvalResult {
-    let mut res = EvalResult::new();
+pub struct Interpreter {
+    pub state: EvalResult,
+}
 
-    for ins in instructions {
-        let asm::InstructionKind::Amd64(kind) = ins.kind;
-
-        match kind {
-            InstructionKind::Mov_RM_R => {
-                assert_eq!(ins.operands.len(), 2);
-
-                match &ins.operands[0].kind {
-                    OperandKind::Register(_) | OperandKind::Stack(_) => {}
-                    _ => panic!("invalid dst"),
-                };
-
-                match ins.operands[1].kind {
-                    asm::OperandKind::Register(reg) => {
-                        let op_value = *res
-                            .get(&MemoryLocation::Register(reg))
-                            .unwrap_or(&Value::Num(0));
-
-                        *res.entry(MemoryLocation::Register(*dst_reg))
-                            .or_insert(Value::Num(0)) = op_value;
-                    }
-                    _ => panic!("invalid operand for mov_r_rm instruction"),
-                };
-            }
-            InstructionKind::Mov_R_RM => {
-                assert_eq!(ins.operands.len(), 2);
-
-                let dst_reg = match &ins.operands[0] {
-                    Operand {
-                        kind: OperandKind::Register(reg),
-                        ..
-                    } => reg,
-                    _ => panic!("invalid dst"),
-                };
-
-                match ins.operands[1].kind {
-                    asm::OperandKind::Register(reg) => {
-                        let op_value = *res
-                            .get(&MemoryLocation::Register(reg))
-                            .unwrap_or(&Value::Num(0));
-
-                        *res.entry(MemoryLocation::Register(*dst_reg))
-                            .or_insert(Value::Num(0)) = op_value;
-                    }
-                    _ => panic!("invalid operand for mov_r_rm instruction"),
-                };
-            }
-            InstructionKind::Mov_R_Imm => {
-                assert_eq!(ins.operands.len(), 2);
-
-                let dst_reg = match &ins.operands[0] {
-                    Operand {
-                        kind: OperandKind::Register(reg),
-                        ..
-                    } => reg,
-                    _ => panic!("invalid dst"),
-                };
-
-                match ins.operands[1].kind {
-                    asm::OperandKind::Immediate(imm) => {
-                        *res.entry(MemoryLocation::Register(*dst_reg))
-                            .or_insert(Value::Num(0)) = Value::Num(imm);
-                    }
-                    _ => panic!("invalid operand for mov_r_rm instruction"),
-                };
-            }
-            InstructionKind::Add_R_RM => {
-                assert_eq!(ins.operands.len(), 2);
-
-                let dst_reg = match &ins.operands[0] {
-                    Operand {
-                        kind: OperandKind::Register(reg),
-                        ..
-                    } => reg,
-                    _ => panic!("invalid dst"),
-                };
-
-                match ins.operands[1].kind {
-                    asm::OperandKind::Register(op) => {
-                        let op_value = *res
-                            .get(&MemoryLocation::Register(op))
-                            .unwrap_or(&Value::Num(0));
-
-                        res.entry(MemoryLocation::Register(*dst_reg))
-                            .and_modify(|e| {
-                                *e = Value::Num(op_value.as_num() + e.as_num());
-                            })
-                            .or_insert(Value::Num(0));
-                    }
-                    _ => panic!("invalid operand for add_r_rm instruction"),
-                };
-            }
-            InstructionKind::IMul_R_RM => {
-                assert_eq!(ins.operands.len(), 2);
-
-                let dst_reg = match &ins.operands[0] {
-                    Operand {
-                        kind: OperandKind::Register(reg),
-                        ..
-                    } => reg,
-                    _ => panic!("invalid dst"),
-                };
-
-                match ins.operands[1].kind {
-                    asm::OperandKind::Register(op) => {
-                        let op_value = *res
-                            .get(&MemoryLocation::Register(op))
-                            .unwrap_or(&Value::Num(0));
-
-                        res.entry(MemoryLocation::Register(*dst_reg))
-                            .and_modify(|e| {
-                                *e = Value::Num(op_value.as_num() * e.as_num());
-                            })
-                            .or_insert(Value::Num(0));
-                    }
-                    _ => panic!("invalid operand for imul_r_rm instruction"),
-                };
-            }
-            InstructionKind::IDiv => {
-                assert_eq!(ins.operands.len(), 2);
-
-                let dst_reg = match &ins.operands[0] {
-                    Operand {
-                        kind: OperandKind::Register(reg),
-                        ..
-                    } => reg,
-                    _ => panic!("invalid dst"),
-                };
-                assert_eq!(dst_reg, &asm::Register::Amd64(Register::Rax));
-
-                match ins.operands[1].kind {
-                    asm::OperandKind::Register(op) => {
-                        let divisor = *res.get(&MemoryLocation::Register(op)).unwrap();
-                        let quotient = res.get_mut(&MemoryLocation::Register(*dst_reg)).unwrap();
-
-                        let rem = Value::Num(quotient.as_num() % divisor.as_num());
-                        *quotient = Value::Num(quotient.as_num() / divisor.as_num());
-
-                        res.insert(
-                            MemoryLocation::Register(asm::Register::Amd64(Register::Rdx)),
-                            rem,
-                        );
-                    }
-                    _ => panic!("invalid operand for idiv_r_rm instruction"),
-                };
-            }
+impl Interpreter {
+    pub fn new() -> Self {
+        Self {
+            state: EvalResult::new(),
         }
     }
 
-    res
+    fn store(&mut self, dst: &Operand, src: &Operand) {
+        match (dst.kind, src.kind) {
+            (OperandKind::Register(_), OperandKind::Register(_))
+            | (OperandKind::Stack(_), OperandKind::Register(_))
+            | (OperandKind::Register(_), OperandKind::Stack(_)) => {
+                let value = *self.state.get(&(&src.kind).into()).unwrap();
+                self.state.insert((&dst.kind).into(), value);
+            }
+            (OperandKind::Register(_), OperandKind::Immediate(imm))
+            | (OperandKind::Stack(_), OperandKind::Immediate(imm)) => {
+                self.state.insert((&dst.kind).into(), Value::Num(imm));
+            }
+            (OperandKind::Immediate(_), _) => panic!("invalid store destination"),
+            (OperandKind::Stack(_), OperandKind::Stack(_)) => panic!("unsupported store"),
+        };
+    }
+
+    fn load(&mut self, dst: &Operand, src: &Operand) {
+        match (dst.kind, src.kind) {
+            (OperandKind::Register(_), OperandKind::Register(_))
+            | (OperandKind::Stack(_), OperandKind::Register(_))
+            | (OperandKind::Register(_), OperandKind::Stack(_)) => {
+                todo!()
+                //let value = *self.state.get(&(&src.kind).into()).unwrap();
+                //self.state.insert((&dst.kind).into(), value);
+            }
+            (OperandKind::Register(_), OperandKind::Immediate(imm))
+            | (OperandKind::Stack(_), OperandKind::Immediate(imm)) => {
+                todo!()
+                //self.state.insert((&dst.kind).into(), Value::Num(imm));
+            }
+            (OperandKind::Immediate(_), _) => panic!("invalid load destination"),
+            (OperandKind::Stack(_), OperandKind::Stack(_)) => panic!("unsupported load"),
+        };
+    }
+
+    pub fn eval(&mut self, instructions: &[asm::Instruction]) {
+        for ins in instructions {
+            let asm::InstructionKind::Amd64(kind) = ins.kind;
+
+            match kind {
+                InstructionKind::Mov_R_Imm
+                | InstructionKind::Mov_R_RM
+                | InstructionKind::Mov_RM_R => {
+                    assert_eq!(ins.operands.len(), 2);
+                    self.store(&ins.operands[0], &ins.operands[1]);
+                }
+                InstructionKind::Add_R_RM => {
+                    assert_eq!(ins.operands.len(), 2);
+
+                    let dst_reg = match &ins.operands[0] {
+                        Operand {
+                            kind: OperandKind::Register(reg),
+                            ..
+                        } => reg,
+                        _ => panic!("invalid dst"),
+                    };
+
+                    match ins.operands[1].kind {
+                        asm::OperandKind::Register(op) => {
+                            let op_value = *self
+                                .state
+                                .get(&MemoryLocation::Register(op))
+                                .unwrap_or(&Value::Num(0));
+
+                            self.state
+                                .entry(MemoryLocation::Register(*dst_reg))
+                                .and_modify(|e| {
+                                    *e = Value::Num(op_value.as_num() + e.as_num());
+                                })
+                                .or_insert(Value::Num(0));
+                        }
+                        _ => panic!("invalid operand for add_r_rm instruction"),
+                    };
+                }
+                InstructionKind::IMul_R_RM => {
+                    assert_eq!(ins.operands.len(), 2);
+
+                    let dst_reg = match &ins.operands[0] {
+                        Operand {
+                            kind: OperandKind::Register(reg),
+                            ..
+                        } => reg,
+                        _ => panic!("invalid dst"),
+                    };
+
+                    match ins.operands[1].kind {
+                        asm::OperandKind::Register(op) => {
+                            let op_value = *self
+                                .state
+                                .get(&MemoryLocation::Register(op))
+                                .unwrap_or(&Value::Num(0));
+
+                            self.state
+                                .entry(MemoryLocation::Register(*dst_reg))
+                                .and_modify(|e| {
+                                    *e = Value::Num(op_value.as_num() * e.as_num());
+                                })
+                                .or_insert(Value::Num(0));
+                        }
+                        _ => panic!("invalid operand for imul_r_rm instruction"),
+                    };
+                }
+                InstructionKind::IDiv => {
+                    assert_eq!(ins.operands.len(), 2);
+
+                    let dst_reg = match &ins.operands[0] {
+                        Operand {
+                            kind: OperandKind::Register(reg),
+                            ..
+                        } => reg,
+                        _ => panic!("invalid dst"),
+                    };
+                    assert_eq!(dst_reg, &asm::Register::Amd64(Register::Rax));
+
+                    match ins.operands[1].kind {
+                        asm::OperandKind::Register(op) => {
+                            let divisor = *self.state.get(&MemoryLocation::Register(op)).unwrap();
+                            let quotient = self
+                                .state
+                                .get_mut(&MemoryLocation::Register(*dst_reg))
+                                .unwrap();
+
+                            let rem = Value::Num(quotient.as_num() % divisor.as_num());
+                            *quotient = Value::Num(quotient.as_num() / divisor.as_num());
+
+                            self.state.insert(
+                                MemoryLocation::Register(asm::Register::Amd64(Register::Rdx)),
+                                rem,
+                            );
+                        }
+                        _ => panic!("invalid operand for idiv_r_rm instruction"),
+                    };
+                }
+                InstructionKind::Lea => todo!(),
+            }
+        }
+    }
 }
