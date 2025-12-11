@@ -148,6 +148,7 @@ pub(crate) fn regalloc(
     // Sorted by the end of the live range, descending.
     let mut active = Vec::<(VirtualRegister, LiveRange)>::with_capacity(abi.gprs.len());
 
+    // Sorted by the start of the live range, ascending.
     let mut live_ranges_start_asc = live_ranges
         .iter()
         .collect::<Vec<(VirtualRegister, LiveRange)>>();
