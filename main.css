@@ -43,7 +43,7 @@ body, html {
     border-radius: .3rem;
 }
 
-#parse, #ir, #regalloc, #ir_eval {
+#parse, #ir, #regalloc, #ir_eval, #asm_eval {
     display: flex ;
     flex-direction: column;
     align-items: flex-start;

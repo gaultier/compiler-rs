@@ -8,15 +8,15 @@
 </head>
     <body>
         <div class="container">
-        <textarea id="input" default="123 + 456"></textarea>
-        <div id="errors"></div>
-        <div id="lex"></div>
-        <div id="parse"></div>
-        <div id="ir"></div>
-        <div id="ir_eval"></div>
-        <div id="regalloc"></div>
-        <div id="asm"></div>
-
+            <textarea id="input" default="123 + 456"></textarea>
+            <div id="errors"></div>
+            <div id="lex"></div>
+            <div id="parse"></div>
+            <div id="ir"></div>
+            <div id="ir_eval"></div>
+            <div id="regalloc"></div>
+            <div id="asm"></div>
+            <div id="asm_eval"></div>
         </div>
     </body>
     <script>
@@ -150,6 +150,19 @@
 
             const asm_dom = document.getElementById("asm");
             asm_dom.innerText = res.asm_text;
+
+            const asm_eval_dom = document.getElementById("asm_eval");
+            asm_eval_dom.innerText = "";
+            for (const [mem_loc, val] of res.asm_eval) {
+                const item = document.createElement("span");
+                if (mem_loc.Register && mem_loc.Register.Amd64) {
+                    item.innerText = `${mem_loc.Register.Amd64}: ${val.Num}`;
+                } else if (mem_loc.Stack) {
+                    item.innerText = `stack ${mem_loc.Stack}: ${val.Num}`;
+                }
+
+                asm_eval_dom.appendChild(item);
+            }
         }
 
         async function loadWasm() {
