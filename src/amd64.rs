@@ -362,16 +362,13 @@ pub fn eval(instructions: &[asm::Instruction]) -> EvalResult {
                         let divisor = *res.get(&MemoryLocation::Register(op)).unwrap();
                         let quotient = res.get_mut(&MemoryLocation::Register(dst_reg)).unwrap();
 
-                        let rem = quotient.as_num() % divisor.as_num();
+                        let rem = Value::Num(quotient.as_num() % divisor.as_num());
                         *quotient = Value::Num(quotient.as_num() / divisor.as_num());
 
-                        res.entry(MemoryLocation::Register(asm::Register::Amd64(
-                            Register::Rdx,
-                        )))
-                        .and_modify(|e| {
-                            *e = Value::Num(rem);
-                        })
-                        .or_insert(Value::Num(0));
+                        res.insert(
+                            MemoryLocation::Register(asm::Register::Amd64(Register::Rdx)),
+                            rem,
+                        );
                     }
                     _ => panic!("invalid operand for idiv_r_rm instruction"),
                 };
