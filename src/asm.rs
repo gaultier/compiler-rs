@@ -6,7 +6,7 @@ use crate::{
     amd64,
     ir::{self},
     origin::Origin,
-    register_alloc::MemoryLocation,
+    register_alloc::{MemoryLocation, RegisterMapping},
 };
 
 #[repr(u8)]
@@ -187,4 +187,55 @@ impl VInstruction {
 
         writeln!(w)
     }
+}
+
+pub(crate) fn vcode_to_asm(
+    vcode: &[VInstruction],
+    vreg_to_memory_location: &RegisterMapping,
+) -> Vec<Instruction> {
+    let mut instructions = Vec::with_capacity(vcode.len());
+
+    for vins in vcode {
+        let dst = match vins.dst {
+            Some(ir::Operand::VirtualRegister(vreg)) => match vreg_to_memory_location.get(&vreg) {
+                Some(MemoryLocation::Register(preg)) => Some(Operand {
+                    operand_size: OperandSize::Eight,
+                    kind: OperandKind::Register(*preg),
+                }),
+                Some(MemoryLocation::Stack(_)) => todo!(),
+                None => panic!("vreg does not have a preg"),
+            },
+            Some(ir::Operand::Num(_)) => panic!("invalid number as instruction destination"),
+            None => None,
+        };
+
+        let operands = vins
+            .operands
+            .iter()
+            .map(|op| match op {
+                ir::Operand::VirtualRegister(vreg) => match vreg_to_memory_location.get(&vreg) {
+                    Some(MemoryLocation::Register(preg)) => Operand {
+                        operand_size: OperandSize::Eight,
+                        kind: OperandKind::Register(*preg),
+                    },
+                    Some(MemoryLocation::Stack(_)) => todo!(),
+                    None => panic!("vreg does not have a preg"),
+                },
+                ir::Operand::Num(num) => Operand {
+                    operand_size: OperandSize::Eight,
+                    kind: OperandKind::Immediate(*num),
+                },
+            })
+            .collect::<Vec<Operand>>();
+
+        let ins = Instruction {
+            kind: vins.kind,
+            dst,
+            operands,
+            origin: vins.origin,
+        };
+        instructions.push(ins);
+    }
+
+    instructions
 }

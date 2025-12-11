@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Serialize;
 
 use crate::{
-    asm::{self, Abi, InstructionInOutOperand, Operand, Register},
+    asm::{self, Abi, InstructionInOutOperand, Register},
     ir::{self, LiveRange, LiveRanges, VirtualRegister},
 };
 
@@ -72,68 +72,8 @@ pub(crate) fn regalloc(
     vcode: &[asm::VInstruction],
     live_ranges: &LiveRanges,
     abi: &Abi,
-) -> (Vec<asm::Instruction>, RegisterMapping) {
-    let mut instructions = Vec::with_capacity(vcode.len());
-
+) -> RegisterMapping {
     let (mut vreg_to_memory_location, mut free_registers) = precoloring(vcode, abi);
-
-    //for vins in vcode {
-    //    let dst = match vins.dst {
-    //        Some(ir::Operand::VirtualRegister(vreg)) => {
-    //            let preg = if let Some(MemoryLocation::Register(preg)) =
-    //                vreg_to_memory_location.get(&vreg)
-    //            {
-    //                *preg
-    //            } else {
-    //                free_registers
-    //                    .pop_first()
-    //                    .expect("need to spill - not yet implemented")
-    //            };
-    //            vreg_to_memory_location.insert(vreg, MemoryLocation::Register(preg));
-    //
-    //            Some(Operand {
-    //                operand_size: asm::OperandSize::Eight,
-    //                kind: asm::OperandKind::Register(preg),
-    //            })
-    //        }
-    //        Some(ir::Operand::Num(_)) => panic!("invalid number as instruction destination"),
-    //        None => None,
-    //    };
-    //
-    //    let operands = vins
-    //        .operands
-    //        .iter()
-    //        .map(|op| match op {
-    //            ir::Operand::VirtualRegister(vreg) => {
-    //                let preg = if let Some(MemoryLocation::Register(preg)) =
-    //                    vreg_to_memory_location.get(&vreg)
-    //                {
-    //                    *preg
-    //                } else {
-    //                    todo!();
-    //                };
-    //                vreg_to_memory_location.insert(*vreg, MemoryLocation::Register(preg));
-    //
-    //                Operand {
-    //                    operand_size: asm::OperandSize::Eight,
-    //                    kind: asm::OperandKind::Register(preg),
-    //                }
-    //            }
-    //            ir::Operand::Num(num) => Operand {
-    //                operand_size: asm::OperandSize::Eight,
-    //                kind: asm::OperandKind::Immediate(*num),
-    //            },
-    //        })
-    //        .collect::<Vec<Operand>>();
-    //
-    //    let ins = asm::Instruction {
-    //        kind: vins.kind,
-    //        dst,
-    //        operands,
-    //        origin: vins.origin,
-    //    };
-    //    instructions.push(ins);
-    //}
 
     // Source: https://dl.acm.org/doi/pdf/10.1145/330249.330250
     // LinearScanRegisterAllocation
@@ -157,7 +97,9 @@ pub(crate) fn regalloc(
     live_ranges_start_asc.sort_by(|(_, a), (_, b)| a.start.cmp(&b.start));
 
     for vreg_range in &live_ranges_start_asc {
+        assert!(free_registers.len() <= abi.gprs.len());
         assert!(active.len() <= abi.gprs.len());
+        assert!(active.is_sorted_by(|(_, a), (_, b)| b.end <= a.end));
 
         active = expire_old_intervals(
             &vreg_range.1,
@@ -167,6 +109,8 @@ pub(crate) fn regalloc(
         );
 
         assert!(active.len() <= abi.gprs.len());
+        assert!(free_registers.len() <= abi.gprs.len());
+        assert!(active.is_sorted_by(|(_, a), (_, b)| b.end <= a.end));
 
         // Already filled by pre-coloring?
         if vreg_to_memory_location.get(&vreg_range.0).is_some() {
@@ -184,7 +128,7 @@ pub(crate) fn regalloc(
         }
     }
 
-    (instructions, vreg_to_memory_location)
+    vreg_to_memory_location
 }
 
 // ExpireOldIntervals(i)
@@ -216,6 +160,8 @@ fn expire_old_intervals(
         };
     }
 
+    assert!(new_active.len() <= active.len());
+    assert!(new_active.is_sorted_by(|(_, a), (_, b)| b.end <= a.end));
     new_active
 }
 
@@ -236,10 +182,12 @@ fn insert_sorted(
     active: &mut Vec<(VirtualRegister, LiveRange)>,
     item: (VirtualRegister, LiveRange),
 ) {
+    assert!(active.is_sorted_by(|(_, a), (_, b)| b.end <= a.end));
     match active.binary_search_by(|(_, range)| range.end.cmp(&item.1.end)) {
         Ok(_pos) => {
             panic!("element already present")
         }
         Err(pos) => active.insert(pos, item),
     }
+    assert!(active.is_sorted_by(|(_, a), (_, b)| b.end <= a.end));
 }
