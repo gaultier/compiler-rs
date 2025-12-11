@@ -273,6 +273,7 @@ pub(crate) mod format {
         Imm64,
         Rm64,
         R64,
+        Memory, // Memory
     }
 
     pub(crate) struct Operand {

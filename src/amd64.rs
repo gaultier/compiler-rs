@@ -1,7 +1,7 @@
 use serde::Serialize;
 
 use crate::{
-    asm::{self, Abi, EvalResult, Operand, OperandKind, VInstruction},
+    asm::{self, Abi, EvalResult, Instruction, Operand, OperandKind, VInstruction},
     ir::{self, Value},
     register_alloc::MemoryLocation,
 };
@@ -80,9 +80,11 @@ pub(crate) fn abi() -> Abi {
 pub enum InstructionKind {
     Mov_R_RM,
     Mov_R_Imm,
+    Mov_RM_R,
     Add_R_RM,
     IMul_R_RM,
     IDiv,
+    Lea,
 }
 
 fn instruction_selection(ins: &ir::Instruction) -> Vec<VInstruction> {
@@ -185,6 +187,15 @@ pub fn ir_to_vcode(irs: &[ir::Instruction]) -> Vec<VInstruction> {
     res
 }
 
+pub(crate) fn emit_store(dst: &MemoryLocation, src: &Operand) -> Vec<Instruction> {
+    match (dst, src.kind) {
+        (MemoryLocation::Register(register), OperandKind::Register(register)) => todo!(),
+        (MemoryLocation::Register(register), OperandKind::Immediate(_)) => todo!(),
+        (MemoryLocation::Stack(_), OperandKind::Register(register)) => todo!(),
+        (MemoryLocation::Stack(_), OperandKind::Immediate(_)) => todo!(),
+    }
+}
+
 impl InstructionKind {
     pub(crate) fn get_in_out(&self) -> Vec<asm::format::Operand> {
         match self {
@@ -202,6 +213,20 @@ impl InstructionKind {
                     },
                 ]
             }
+            InstructionKind::Mov_RM_R => {
+                vec![
+                    asm::format::Operand {
+                        implicit: false,
+                        mutability: asm::Mutability::Write,
+                        location: asm::format::Location::Rm64,
+                    },
+                    asm::format::Operand {
+                        implicit: false,
+                        mutability: asm::Mutability::Read,
+                        location: asm::format::Location::R64,
+                    },
+                ]
+            }
             InstructionKind::Mov_R_Imm => {
                 vec![
                     asm::format::Operand {
@@ -213,6 +238,21 @@ impl InstructionKind {
                         implicit: false,
                         mutability: asm::Mutability::Read,
                         location: asm::format::Location::Imm64,
+                    },
+                ]
+            }
+
+            InstructionKind::Lea => {
+                vec![
+                    asm::format::Operand {
+                        implicit: false,
+                        mutability: asm::Mutability::Write,
+                        location: asm::format::Location::R64,
+                    },
+                    asm::format::Operand {
+                        implicit: false,
+                        mutability: asm::Mutability::Read,
+                        location: asm::format::Location::Memory,
                     },
                 ]
             }
