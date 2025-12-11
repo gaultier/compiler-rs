@@ -63,6 +63,7 @@ pub struct Operand {
 pub enum OperandKind {
     Register(Register),
     Immediate(u64),
+    Stack(usize),
 }
 
 #[derive(Serialize, Debug)]
@@ -98,6 +99,7 @@ impl Operand {
         match &self.kind {
             OperandKind::Register(register) => w.write_all(register.to_str().as_bytes()),
             OperandKind::Immediate(n) => write!(w, "{}", n),
+            OperandKind::Stack(off) => write!(w, "sp + {}", off),
         }
     }
 }
@@ -139,8 +141,17 @@ impl InstructionKind {
 }
 
 impl OperandKind {
-    pub fn is_immediate(&self) -> bool {
+    pub(crate) fn is_immediate(&self) -> bool {
         matches!(self, OperandKind::Immediate(_))
+    }
+}
+
+impl From<&MemoryLocation> for OperandKind {
+    fn from(value: &MemoryLocation) -> Self {
+        match value {
+            MemoryLocation::Register(reg) => OperandKind::Register(*reg),
+            MemoryLocation::Stack(off) => OperandKind::Stack(*off),
+        }
     }
 }
 
@@ -217,6 +228,7 @@ impl Emitter {
                                             "need to shuffle registers around for an instruction with an operand that requires a fixed register"
                                         );
                                     }
+                                    Some(MemoryLocation::Stack(_off)) => todo!(),
                                     _ => {}
                                 }
                             }

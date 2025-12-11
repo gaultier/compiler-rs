@@ -1,8 +1,9 @@
 use serde::Serialize;
 
 use crate::{
-    asm::{self, Abi, EvalResult, Instruction, Operand, OperandKind, VInstruction},
+    asm::{self, Abi, EvalResult, Instruction, Mutability, Operand, OperandKind, VInstruction},
     ir::{self, Value},
+    origin::Origin,
     register_alloc::MemoryLocation,
 };
 
@@ -189,10 +190,65 @@ pub fn ir_to_vcode(irs: &[ir::Instruction]) -> Vec<VInstruction> {
 
 pub(crate) fn emit_store(dst: &MemoryLocation, src: &Operand) -> Vec<Instruction> {
     match (dst, src.kind) {
-        (MemoryLocation::Register(register), OperandKind::Register(register)) => todo!(),
-        (MemoryLocation::Register(register), OperandKind::Immediate(_)) => todo!(),
-        (MemoryLocation::Stack(_), OperandKind::Register(register)) => todo!(),
+        (MemoryLocation::Register(dst_reg), OperandKind::Register(src_reg)) => {
+            vec![Instruction {
+                kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
+                operands: vec![
+                    Operand {
+                        operand_size: src.operand_size,
+                        kind: OperandKind::Register(*dst_reg),
+                        implicit: false,
+                        mutability: Mutability::Write,
+                    },
+                    Operand {
+                        operand_size: src.operand_size,
+                        kind: OperandKind::Register(*src_reg),
+                        implicit: false,
+                        mutability: Mutability::Read,
+                    },
+                ],
+                origin: Origin::default(),
+            }]
+        }
+        (MemoryLocation::Register(dst_reg), OperandKind::Immediate(src_imm)) => vec![Instruction {
+            kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_Imm),
+            operands: vec![
+                Operand {
+                    operand_size: src.operand_size,
+                    kind: OperandKind::Register(*dst_reg),
+                    implicit: false,
+                    mutability: Mutability::Write,
+                },
+                Operand {
+                    operand_size: src.operand_size,
+                    kind: OperandKind::Immediate(src_imm),
+                    implicit: false,
+                    mutability: Mutability::Read,
+                },
+            ],
+            origin: Origin::default(),
+        }],
+        (MemoryLocation::Stack(dst_stack), OperandKind::Register(src_reg)) => vec![Instruction {
+            kind: asm::InstructionKind::Amd64(InstructionKind::Mov_RM_R),
+            operands: vec![
+                Operand {
+                    operand_size: src.operand_size,
+                    kind: OperandKind::Stack(*dst_stack),
+                    implicit: false,
+                    mutability: Mutability::Write,
+                },
+                Operand {
+                    operand_size: src.operand_size,
+                    kind: OperandKind::Register(src_reg),
+                    implicit: false,
+                    mutability: Mutability::Read,
+                },
+            ],
+            origin: Origin::default(),
+        }],
         (MemoryLocation::Stack(_), OperandKind::Immediate(_)) => todo!(),
+        (MemoryLocation::Register(register), OperandKind::Stack(_)) => todo!(),
+        (MemoryLocation::Stack(_), OperandKind::Stack(_)) => todo!(),
     }
 }
 
@@ -336,10 +392,13 @@ impl Register {
 impl InstructionKind {
     pub(crate) fn to_str(self) -> &'static str {
         match self {
-            InstructionKind::Mov_R_RM | InstructionKind::Mov_R_Imm => "mov",
+            InstructionKind::Mov_RM_R | InstructionKind::Mov_R_RM | InstructionKind::Mov_R_Imm => {
+                "mov"
+            }
             InstructionKind::Add_R_RM => "add",
             InstructionKind::IMul_R_RM => "imul",
             InstructionKind::IDiv => "idiv",
+            InstructionKind::Lea => "lea",
         }
     }
 }
@@ -351,6 +410,26 @@ pub fn eval(instructions: &[asm::Instruction]) -> EvalResult {
         let asm::InstructionKind::Amd64(kind) = ins.kind;
 
         match kind {
+            InstructionKind::Mov_RM_R => {
+                assert_eq!(ins.operands.len(), 2);
+
+                match &ins.operands[0].kind {
+                    OperandKind::Register(_) | OperandKind::Stack(_) => {}
+                    _ => panic!("invalid dst"),
+                };
+
+                match ins.operands[1].kind {
+                    asm::OperandKind::Register(reg) => {
+                        let op_value = *res
+                            .get(&MemoryLocation::Register(reg))
+                            .unwrap_or(&Value::Num(0));
+
+                        *res.entry(MemoryLocation::Register(*dst_reg))
+                            .or_insert(Value::Num(0)) = op_value;
+                    }
+                    _ => panic!("invalid operand for mov_r_rm instruction"),
+                };
+            }
             InstructionKind::Mov_R_RM => {
                 assert_eq!(ins.operands.len(), 2);
 
