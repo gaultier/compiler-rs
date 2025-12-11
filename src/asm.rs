@@ -115,16 +115,14 @@ impl Instruction {
         self.operands
             .iter()
             .filter(|o| !o.implicit)
-            .enumerate()
-            .map(|(i, o)| {
+            .enumerate().try_for_each(|(i, o)| {
                 if i == 0 {
                     write!(w, " ")?;
                 } else {
                     write!(w, ", ")?;
                 }
                 o.write(w)
-            })
-            .collect::<std::io::Result<()>>()?;
+            })?;
 
         writeln!(w)
     }
@@ -220,30 +218,24 @@ impl Emitter {
         for vins in vcode {
             let in_out = vins.kind.get_in_out();
             for (i, fmt_op) in in_out.iter().enumerate() {
-                match fmt_op {
-                    format::Operand {
+                if let format::Operand {
                         location: format::Location::FixedRegister(fixed_preg),
                         mutability,
                         ..
-                    } => {
-                        let op = vins.operands[i];
-                        match op {
-                            ir::Operand::VirtualRegister(vreg) => {
-                                match vreg_to_memory_location.get(&vreg) {
-                                    Some(MemoryLocation::Register(preg)) if preg != fixed_preg => {
-                                        let _stack_offset = self.stack.new_slot(8, 8); // FIXME
-                                        todo!(
-                                            "need to shuffle registers around for an instruction with an operand that requires a fixed register"
-                                        );
-                                    }
-                                    Some(MemoryLocation::Stack(_off)) => todo!(),
-                                    _ => {}
-                                }
+                    } = fmt_op {
+                    let op = vins.operands[i];
+                    if let ir::Operand::VirtualRegister(vreg) = op {
+                        match vreg_to_memory_location.get(&vreg) {
+                            Some(MemoryLocation::Register(preg)) if preg != fixed_preg => {
+                                let _stack_offset = self.stack.new_slot(8, 8); // FIXME
+                                todo!(
+                                    "need to shuffle registers around for an instruction with an operand that requires a fixed register"
+                                );
                             }
+                            Some(MemoryLocation::Stack(_off)) => todo!(),
                             _ => {}
                         }
                     }
-                    _ => {}
                 }
             }
 
