@@ -29,7 +29,7 @@ pub struct Instruction {
     pub rhs: Option<Operand>,
     pub origin: Origin,
     pub res_vreg: Option<VirtualRegister>,
-    // TODO: type, lifetime.
+    // TODO: type, live_range.
 }
 
 #[derive(Serialize, Debug, Clone, Copy)]
@@ -38,19 +38,19 @@ pub enum Operand {
     VirtualRegister(VirtualRegister),
 }
 
-#[derive(Serialize, Debug)]
-pub struct Lifetime {
+#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LiveRange {
     pub(crate) start: u32,
     pub(crate) end: u32, // Inclusive.
 }
 
-pub type Lifetimes = BTreeMap<VirtualRegister, Lifetime>;
+pub type LiveRanges = BTreeMap<VirtualRegister, LiveRange>;
 //pub type Constraints = BTreeMap<VirtualRegister, VirtualRegisterConstraint>;
 
 pub struct Emitter {
     pub instructions: Vec<Instruction>,
     vreg: VirtualRegister,
-    pub lifetimes: Lifetimes,
+    pub live_ranges: LiveRanges,
     //pub constraints: Constraints,
 }
 
@@ -65,7 +65,7 @@ impl Emitter {
         Self {
             instructions: Vec::new(),
             vreg: VirtualRegister(0),
-            lifetimes: Lifetimes::new(),
+            live_ranges: LiveRanges::new(),
             //constraints: Constraints::new(),
         }
     }
@@ -136,15 +136,19 @@ impl Emitter {
             }
         }
 
-        self.lifetimes = self.compute_lifetimes();
+        self.live_ranges = self.compute_live_ranges();
     }
 
-    fn extend_lifetime_on_use(vreg: VirtualRegister, ins_position: u32, lifetimes: &mut Lifetimes) {
-        lifetimes.entry(vreg).and_modify(|e| e.end = ins_position);
+    fn extend_live_range_on_use(
+        vreg: VirtualRegister,
+        ins_position: u32,
+        live_ranges: &mut LiveRanges,
+    ) {
+        live_ranges.entry(vreg).and_modify(|e| e.end = ins_position);
     }
 
-    fn compute_lifetimes(&self) -> Lifetimes {
-        let mut res = Lifetimes::new();
+    fn compute_live_ranges(&self) -> LiveRanges {
+        let mut res = LiveRanges::new();
 
         for (i, ins) in self.instructions.iter().enumerate() {
             match ins.kind {
@@ -152,17 +156,17 @@ impl Emitter {
                     let res_vreg = ins.res_vreg.unwrap();
                     assert!(res_vreg.0 > 0);
 
-                    let lifetime = Lifetime {
+                    let live_range = LiveRange {
                         start: i as u32,
                         end: i as u32,
                     };
-                    res.insert(res_vreg, lifetime);
+                    res.insert(res_vreg, live_range);
 
                     if let Some(Operand::VirtualRegister(vreg)) = &ins.lhs {
-                        Self::extend_lifetime_on_use(*vreg, i as u32, &mut res);
+                        Self::extend_live_range_on_use(*vreg, i as u32, &mut res);
                     }
                     if let Some(Operand::VirtualRegister(vreg)) = &ins.rhs {
-                        Self::extend_lifetime_on_use(*vreg, i as u32, &mut res);
+                        Self::extend_live_range_on_use(*vreg, i as u32, &mut res);
                     }
                 }
             }

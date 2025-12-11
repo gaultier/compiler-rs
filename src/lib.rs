@@ -15,7 +15,7 @@ use crate::{
     asm::ArchKind,
     ast::{Node, Parser},
     error::Error,
-    ir::{Instruction, Lifetimes},
+    ir::{Instruction, LiveRanges},
     lex::{Lexer, Token},
     origin::FileId,
     register_alloc::RegisterMapping,
@@ -117,7 +117,7 @@ pub struct CompileResult {
     pub ast_nodes: Vec<Node>,
     pub ir_instructions: Vec<Instruction>,
     pub ir_text: String,
-    pub ir_lifetimes: Lifetimes,
+    pub ir_live_ranges: LiveRanges,
     pub ir_eval: ir::EvalResult,
     pub vcode: Vec<asm::VInstruction>,
     pub vreg_to_memory_location: RegisterMapping,
@@ -145,7 +145,7 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
     let vcode = asm::ir_to_vcode(&ir_emitter.instructions, &target_arch);
 
     let (asm_instructions, vreg_to_memory_location) =
-        register_alloc::regalloc(&vcode, &ir_emitter.lifetimes, &asm::abi(&target_arch));
+        register_alloc::regalloc(&vcode, &ir_emitter.live_ranges, &asm::abi(&target_arch));
 
     let mut asm_text = Vec::with_capacity(asm_instructions.len() * 8);
     for ins in &asm_instructions {
@@ -160,7 +160,7 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
         errors: parser.errors,
         ir_instructions: ir_emitter.instructions,
         ir_text: String::from_utf8(ir_text).unwrap(),
-        ir_lifetimes: ir_emitter.lifetimes,
+        ir_live_ranges: ir_emitter.live_ranges,
         ir_eval: eval,
         vcode,
         vreg_to_memory_location,

@@ -22,7 +22,7 @@ fn main() {
 
     println!("--- IR ---");
     println!("instructions: {:#?}", &compiled.ir_instructions);
-    println!("lifetimes: {:#?}", &compiled.ir_lifetimes);
+    println!("live_ranges: {:#?}", &compiled.ir_live_ranges);
     for (i, ins) in compiled.ir_instructions.iter().enumerate() {
         print!("{}: ", i);
         ins.write(&mut stdout()).unwrap();
