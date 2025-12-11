@@ -49,7 +49,10 @@ fn precoloring(vcode: &[asm::VInstruction], abi: &Abi) -> (RegisterMapping, BTre
                     for rr in &in_out.registers_read {
                         if let InstructionInOutOperand::FixedRegister(r) = rr {
                             let present = free_registers.remove(r);
-                            assert!(present);
+                            if !present {
+                                // Need to spill or insert moves.
+                                todo!();
+                            }
 
                             assert!(
                                 vreg_to_memory_location
