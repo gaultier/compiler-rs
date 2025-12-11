@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Serialize;
 
 use crate::{
-    asm::{self, Abi, Operand, Register},
+    asm::{self, Abi, InstructionInOutOperand, Operand, Register},
     ir::{self, Lifetimes, VirtualRegister},
 };
 
@@ -15,14 +15,8 @@ pub enum MemoryLocation {
 
 pub type RegisterMapping = BTreeMap<VirtualRegister, MemoryLocation>;
 
-// TODO: Constraints.
-pub(crate) fn regalloc(
-    vcode: &[asm::VInstruction],
-    _lifetimes: &Lifetimes,
-    abi: &Abi,
-) -> (Vec<asm::Instruction>, RegisterMapping) {
+fn precoloring(vcode: &[asm::VInstruction], _lifetimes: &Lifetimes, abi: &Abi) -> RegisterMapping {
     let mut vreg_to_memory_location = RegisterMapping::new();
-    let mut instructions = Vec::with_capacity(vcode.len());
 
     let mut free_registers = BTreeSet::<Register>::new();
     for register in &abi.gprs {
@@ -32,14 +26,63 @@ pub(crate) fn regalloc(
     for vins in vcode {
         let in_out = vins.kind.get_in_out();
 
+        match vins.dst {
+            Some(ir::Operand::VirtualRegister(vreg)) => {
+                if let Some(preg) = in_out.get_fixed_output_reg() {
+                    assert!(
+                        vreg_to_memory_location
+                            .insert(vreg, MemoryLocation::Register(preg))
+                            .is_none()
+                    );
+                }
+            }
+            Some(ir::Operand::Num(_)) => panic!("invalid number as instruction destination"),
+            None => {}
+        };
+
+        for op in &vins.operands {
+            match op {
+                ir::Operand::VirtualRegister(vreg) => {
+                    for rr in &in_out.registers_read {
+                        if let InstructionInOutOperand::FixedRegister(r) = rr {
+                            assert!(
+                                vreg_to_memory_location
+                                    .insert(*vreg, MemoryLocation::Register(*r))
+                                    .is_none()
+                            );
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    vreg_to_memory_location
+}
+
+// TODO: Constraints.
+pub(crate) fn regalloc(
+    vcode: &[asm::VInstruction],
+    _lifetimes: &Lifetimes,
+    abi: &Abi,
+) -> (Vec<asm::Instruction>, RegisterMapping) {
+    let mut instructions = Vec::with_capacity(vcode.len());
+
+    let mut free_registers = BTreeSet::<Register>::new();
+    for register in &abi.gprs {
+        free_registers.insert(*register);
+    }
+
+    let mut vreg_to_memory_location = precoloring(vcode, _lifetimes, abi);
+
+    for vins in vcode {
         let dst = match vins.dst {
             Some(ir::Operand::VirtualRegister(vreg)) => {
                 let preg = if let Some(MemoryLocation::Register(preg)) =
                     vreg_to_memory_location.get(&vreg)
                 {
                     *preg
-                } else if let Some(preg) = in_out.get_fixed_output_reg() {
-                    preg
                 } else {
                     free_registers
                         .pop_first()
