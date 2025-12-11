@@ -252,7 +252,9 @@ pub fn eval(instructions: &[asm::Instruction]) -> EvalResult {
 
         match kind {
             InstructionKind::Mov_R_RM => {
-                let dst_reg = match ins.dst.unwrap() {
+                assert_eq!(ins.operands.len(), 2);
+
+                let dst_reg = match &ins.operands[0] {
                     Operand {
                         kind: OperandKind::Register(reg),
                         ..
@@ -260,22 +262,22 @@ pub fn eval(instructions: &[asm::Instruction]) -> EvalResult {
                     _ => panic!("invalid dst"),
                 };
 
-                assert_eq!(ins.operands.len(), 1);
-                let op = ins.operands[0];
-                match op.kind {
+                match ins.operands[1].kind {
                     asm::OperandKind::Register(reg) => {
                         let op_value = *res
                             .get(&MemoryLocation::Register(reg))
                             .unwrap_or(&Value::Num(0));
 
-                        *res.entry(MemoryLocation::Register(dst_reg))
+                        *res.entry(MemoryLocation::Register(*dst_reg))
                             .or_insert(Value::Num(0)) = op_value;
                     }
                     _ => panic!("invalid operand for mov_r_rm instruction"),
                 };
             }
             InstructionKind::Mov_R_Imm => {
-                let dst_reg = match ins.dst.unwrap() {
+                assert_eq!(ins.operands.len(), 2);
+
+                let dst_reg = match &ins.operands[0] {
                     Operand {
                         kind: OperandKind::Register(reg),
                         ..
@@ -283,18 +285,18 @@ pub fn eval(instructions: &[asm::Instruction]) -> EvalResult {
                     _ => panic!("invalid dst"),
                 };
 
-                assert_eq!(ins.operands.len(), 1);
-                let op = ins.operands[0];
-                match op.kind {
+                match ins.operands[1].kind {
                     asm::OperandKind::Immediate(imm) => {
-                        *res.entry(MemoryLocation::Register(dst_reg))
+                        *res.entry(MemoryLocation::Register(*dst_reg))
                             .or_insert(Value::Num(0)) = Value::Num(imm);
                     }
                     _ => panic!("invalid operand for mov_r_rm instruction"),
                 };
             }
             InstructionKind::Add_R_RM => {
-                let dst_reg = match ins.dst.unwrap() {
+                assert_eq!(ins.operands.len(), 2);
+
+                let dst_reg = match &ins.operands[0] {
                     Operand {
                         kind: OperandKind::Register(reg),
                         ..
@@ -302,15 +304,13 @@ pub fn eval(instructions: &[asm::Instruction]) -> EvalResult {
                     _ => panic!("invalid dst"),
                 };
 
-                assert_eq!(ins.operands.len(), 1);
-                let op = ins.operands[0];
-                match op.kind {
+                match ins.operands[1].kind {
                     asm::OperandKind::Register(op) => {
                         let op_value = *res
                             .get(&MemoryLocation::Register(op))
                             .unwrap_or(&Value::Num(0));
 
-                        res.entry(MemoryLocation::Register(dst_reg))
+                        res.entry(MemoryLocation::Register(*dst_reg))
                             .and_modify(|e| {
                                 *e = Value::Num(op_value.as_num() + e.as_num());
                             })
@@ -320,7 +320,9 @@ pub fn eval(instructions: &[asm::Instruction]) -> EvalResult {
                 };
             }
             InstructionKind::IMul_R_RM => {
-                let dst_reg = match ins.dst.unwrap() {
+                assert_eq!(ins.operands.len(), 2);
+
+                let dst_reg = match &ins.operands[0] {
                     Operand {
                         kind: OperandKind::Register(reg),
                         ..
@@ -328,15 +330,13 @@ pub fn eval(instructions: &[asm::Instruction]) -> EvalResult {
                     _ => panic!("invalid dst"),
                 };
 
-                assert_eq!(ins.operands.len(), 1);
-                let op = ins.operands[0];
-                match op.kind {
+                match ins.operands[1].kind {
                     asm::OperandKind::Register(op) => {
                         let op_value = *res
                             .get(&MemoryLocation::Register(op))
                             .unwrap_or(&Value::Num(0));
 
-                        res.entry(MemoryLocation::Register(dst_reg))
+                        res.entry(MemoryLocation::Register(*dst_reg))
                             .and_modify(|e| {
                                 *e = Value::Num(op_value.as_num() * e.as_num());
                             })
@@ -346,21 +346,21 @@ pub fn eval(instructions: &[asm::Instruction]) -> EvalResult {
                 };
             }
             InstructionKind::IDiv => {
-                let dst_reg = match ins.dst.unwrap() {
+                assert_eq!(ins.operands.len(), 2);
+
+                let dst_reg = match &ins.operands[0] {
                     Operand {
                         kind: OperandKind::Register(reg),
                         ..
                     } => reg,
                     _ => panic!("invalid dst"),
                 };
-                assert_eq!(dst_reg, asm::Register::Amd64(Register::Rax));
+                assert_eq!(dst_reg, &asm::Register::Amd64(Register::Rax));
 
-                assert_eq!(ins.operands.len(), 1);
-                let op = ins.operands[0];
-                match op.kind {
+                match ins.operands[1].kind {
                     asm::OperandKind::Register(op) => {
                         let divisor = *res.get(&MemoryLocation::Register(op)).unwrap();
-                        let quotient = res.get_mut(&MemoryLocation::Register(dst_reg)).unwrap();
+                        let quotient = res.get_mut(&MemoryLocation::Register(*dst_reg)).unwrap();
 
                         let rem = Value::Num(quotient.as_num() % divisor.as_num());
                         *quotient = Value::Num(quotient.as_num() / divisor.as_num());

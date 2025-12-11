@@ -59,9 +59,18 @@ pub struct InstructionInOut {
 }
 
 #[derive(Serialize, Debug, Clone, Copy)]
+pub enum Mutability {
+    Read,
+    Write,
+    ReadWrite,
+}
+
+#[derive(Serialize, Debug, Clone, Copy)]
 pub struct Operand {
-    pub(crate) operand_size: OperandSize,
-    pub(crate) kind: OperandKind,
+    pub operand_size: OperandSize,
+    pub kind: OperandKind,
+    pub implicit: bool,
+    pub mutability: Mutability,
 }
 
 #[derive(Serialize, Debug, Clone, Copy)]
@@ -73,7 +82,6 @@ pub enum OperandKind {
 #[derive(Serialize, Debug)]
 pub struct Instruction {
     pub kind: InstructionKind,
-    pub dst: Option<Operand>,
     pub operands: Vec<Operand>,
     pub origin: Origin,
 }
@@ -135,15 +143,19 @@ impl Instruction {
     pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
         w.write_all(self.kind.to_str().as_bytes())?;
 
-        if let Some(dst) = &self.dst {
-            write!(w, " ")?;
-            dst.write(w)?;
-        }
-
-        for op in &self.operands {
-            write!(w, ", ")?;
-            op.write(w)?;
-        }
+        self.operands
+            .iter()
+            .filter(|o| !o.implicit)
+            .enumerate()
+            .map(|(i, o)| {
+                if i == 0 {
+                    write!(w, " ")?;
+                } else {
+                    write!(w, ", ")?;
+                }
+                o.write(w)
+            })
+            .collect::<std::io::Result<()>>()?;
 
         writeln!(w)
     }
@@ -196,19 +208,6 @@ pub(crate) fn vcode_to_asm(
     let mut instructions = Vec::with_capacity(vcode.len());
 
     for vins in vcode {
-        let dst = match vins.dst {
-            Some(ir::Operand::VirtualRegister(vreg)) => match vreg_to_memory_location.get(&vreg) {
-                Some(MemoryLocation::Register(preg)) => Some(Operand {
-                    operand_size: OperandSize::Eight,
-                    kind: OperandKind::Register(*preg),
-                }),
-                Some(MemoryLocation::Stack(_)) => todo!(),
-                None => panic!("vreg does not have a preg"),
-            },
-            Some(ir::Operand::Num(_)) => panic!("invalid number as instruction destination"),
-            None => None,
-        };
-
         let operands = vins
             .operands
             .iter()
@@ -217,6 +216,9 @@ pub(crate) fn vcode_to_asm(
                     Some(MemoryLocation::Register(preg)) => Operand {
                         operand_size: OperandSize::Eight,
                         kind: OperandKind::Register(*preg),
+                        // FIXME
+                        implicit: false,
+                        mutability: Mutability::Read,
                     },
                     Some(MemoryLocation::Stack(_)) => todo!(),
                     None => panic!("vreg does not have a preg"),
@@ -224,13 +226,14 @@ pub(crate) fn vcode_to_asm(
                 ir::Operand::Num(num) => Operand {
                     operand_size: OperandSize::Eight,
                     kind: OperandKind::Immediate(*num),
+                    implicit: false,
+                    mutability: Mutability::Read,
                 },
             })
             .collect::<Vec<Operand>>();
 
         let ins = Instruction {
             kind: vins.kind,
-            dst,
             operands,
             origin: vins.origin,
         };
