@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use crate::{
     asm::{self, Abi, InstructionInOutOperand, Operand, Register},
-    ir::{self, LiveRange, VirtualRegister},
+    ir::{self, LiveRange, LiveRanges, VirtualRegister},
 };
 
 #[derive(Serialize, Debug, Hash, PartialEq, Eq)]
@@ -70,7 +70,7 @@ fn precoloring(vcode: &[asm::VInstruction], abi: &Abi) -> (RegisterMapping, BTre
 // TODO: Constraints.
 pub(crate) fn regalloc(
     vcode: &[asm::VInstruction],
-    live_ranges: &live_ranges,
+    live_ranges: &LiveRanges,
     abi: &Abi,
 ) -> (Vec<asm::Instruction>, RegisterMapping) {
     let mut instructions = Vec::with_capacity(vcode.len());
@@ -135,6 +135,7 @@ pub(crate) fn regalloc(
     //    instructions.push(ins);
     //}
 
+    // Source: https://dl.acm.org/doi/pdf/10.1145/330249.330250
     // LinearScanRegisterAllocation
     //     active ← {}
     //     foreach live interval i, in order of increasing start point
@@ -151,14 +152,15 @@ pub(crate) fn regalloc(
     // Sorted by the start of the live range, ascending.
     let mut live_ranges_start_asc = live_ranges
         .iter()
+        .map(|(vreg, range)| (*vreg, *range))
         .collect::<Vec<(VirtualRegister, LiveRange)>>();
     live_ranges_start_asc.sort_by(|(_, a), (_, b)| a.start.cmp(&b.start));
 
-    for vreg_range in live_ranges_start_asc {
+    for vreg_range in &live_ranges_start_asc {
         assert!(active.len() <= abi.gprs.len());
 
         active = expire_old_intervals(
-            vreg_range.1,
+            &vreg_range.1,
             &active,
             &mut free_registers,
             &vreg_to_memory_location,
@@ -167,18 +169,18 @@ pub(crate) fn regalloc(
         assert!(active.len() <= abi.gprs.len());
 
         // Already filled by pre-coloring?
-        if vreg_to_memory_location.get(vreg_range.0).is_some() {
-            insert_sorted(&mut active, vreg_range);
+        if vreg_to_memory_location.get(&vreg_range.0).is_some() {
+            insert_sorted(&mut active, *vreg_range);
             continue;
         }
 
         if active.len() == abi.gprs.len() {
-            spill_at_interval(&vreg_range, &mut active);
+            spill_at_interval(&vreg_range.1, &mut active);
         } else {
             // TODO: We could have a heuristic here instead of just 'the first free register'.
             let free_register = free_registers.pop_first().unwrap();
             vreg_to_memory_location.insert(vreg_range.0, MemoryLocation::Register(free_register));
-            insert_sorted(&mut active, vreg_range);
+            insert_sorted(&mut active, *vreg_range);
         }
     }
 
@@ -205,7 +207,9 @@ fn expire_old_intervals(
         }
 
         // TODO: Could probably be optimized?
-        new_active.extract_if(.., |&mut e| &e.1 == live_range);
+        new_active = new_active
+            .extract_if(.., |&mut e| &e.1 == live_range)
+            .collect();
 
         if let MemoryLocation::Register(preg) = vreg_to_memory_location[vreg] {
             free_registers.insert(preg);
