@@ -153,6 +153,7 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
         return CompileResult {
             lex_tokens: parser.tokens,
             ast_nodes: parser.nodes,
+            errors: parser.errors,
             ..Default::default()
         };
     }

@@ -15,6 +15,8 @@ fn main() {
 
     println!("--- Parse ---");
     println!("nodes: {:#?}", &compiled.ast_nodes);
+
+    println!("--- Errors ---");
     for err in &compiled.errors {
         err.write(&mut std::io::stderr(), &file_content, &file_id_to_names)
             .unwrap();

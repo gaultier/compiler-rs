@@ -72,18 +72,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn add_error(&mut self, kind: ErrorKind, origin: Origin) {
-        if self.error_mode {
-            return;
-        }
-
-        self.errors.push(Error::new(kind, origin, String::new()));
-        self.error_mode = true;
-
-        // Skip to the next newline to avoid having cascading errors.
-        self.skip_to_next_line();
-    }
-
     fn add_error_with_explanation(&mut self, kind: ErrorKind, origin: Origin, explanation: String) {
         if self.error_mode {
             return;
@@ -334,18 +322,22 @@ impl<'a> Parser<'a> {
             }
 
             match self.peek_token().map(|t| t.kind) {
-                None | Some(TokenKind::Eof) => {
+                None | Some(TokenKind::Eof) | Some(TokenKind::Newline) => {
                     return;
                 }
-                _ => {
+                token => {
                     if self.parse_statement() {
                         continue;
                     }
 
                     // Catch-all.
-                    self.add_error(
+                    self.add_error_with_explanation(
                         ErrorKind::ParseStatement,
                         self.current_or_last_token_origin().unwrap(),
+                        format!(
+                            "catch-all parse statement error: encountered unexpected token {:#?}",
+                            token
+                        ),
                     );
                 }
             }
