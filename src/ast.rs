@@ -12,6 +12,7 @@ pub enum NodeKind {
     Number,
     Add,
     Multiply,
+    Divide,
 }
 
 #[derive(Serialize, Copy, Clone, Debug)]
@@ -225,7 +226,7 @@ impl<'a> Parser<'a> {
         }
 
         loop {
-            let token = match self.match_kind(TokenKind::Star) {
+            let token = match self.match_kind1_or_kind2(TokenKind::Star, TokenKind::Slash) {
                 None => return true,
                 Some(t) => t,
             };
@@ -241,7 +242,11 @@ impl<'a> Parser<'a> {
             }
 
             let node = Node {
-                kind: NodeKind::Multiply,
+                kind: if token.kind == TokenKind::Star {
+                    NodeKind::Multiply
+                } else {
+                    NodeKind::Divide
+                },
                 data: None,
                 origin: token.origin,
             };

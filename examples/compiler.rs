@@ -1,4 +1,7 @@
-use std::{collections::HashMap, io::stdout};
+use std::{
+    collections::HashMap,
+    io::{Write, stdout},
+};
 
 use compiler_rs_lib::{asm, compile};
 

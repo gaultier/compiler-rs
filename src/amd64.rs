@@ -91,7 +91,7 @@ pub enum InstructionKind {
 fn instruction_selection(ins: &ir::Instruction) -> Vec<VInstruction> {
     match (&ins.kind, &ins.lhs, &ins.rhs) {
         (
-            ir::InstructionKind::Add,
+            ir::InstructionKind::IAdd,
             Some(ir::Operand::VirtualRegister(lhs)),
             Some(ir::Operand::VirtualRegister(rhs)),
         ) => vec![
@@ -109,7 +109,7 @@ fn instruction_selection(ins: &ir::Instruction) -> Vec<VInstruction> {
             },
         ],
         (
-            ir::InstructionKind::Multiply,
+            ir::InstructionKind::IMultiply,
             Some(ir::Operand::VirtualRegister(lhs)),
             Some(ir::Operand::VirtualRegister(rhs)),
         ) => vec![
@@ -121,6 +121,24 @@ fn instruction_selection(ins: &ir::Instruction) -> Vec<VInstruction> {
             },
             VInstruction {
                 kind: asm::InstructionKind::Amd64(InstructionKind::IMul_R_RM),
+                dst: Some(ir::Operand::VirtualRegister(ins.res_vreg.unwrap())),
+                operands: vec![ir::Operand::VirtualRegister(*rhs)],
+                origin: ins.origin,
+            },
+        ],
+        (
+            ir::InstructionKind::IDivide,
+            Some(ir::Operand::VirtualRegister(lhs)),
+            Some(ir::Operand::VirtualRegister(rhs)),
+        ) => vec![
+            VInstruction {
+                kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
+                dst: Some(ir::Operand::VirtualRegister(ins.res_vreg.unwrap())),
+                operands: vec![ir::Operand::VirtualRegister(*lhs)],
+                origin: ins.origin,
+            },
+            VInstruction {
+                kind: asm::InstructionKind::Amd64(InstructionKind::IDiv),
                 dst: Some(ir::Operand::VirtualRegister(ins.res_vreg.unwrap())),
                 operands: vec![ir::Operand::VirtualRegister(*rhs)],
                 origin: ins.origin,
@@ -182,6 +200,7 @@ impl InstructionKind {
             InstructionKind::IDiv => InstructionInOut {
                 registers_read: vec![
                     InstructionInOutOperand::FixedRegister((&Register::Rax).into()),
+                    InstructionInOutOperand::FixedRegister((&Register::Rdx).into()),
                     InstructionInOutOperand::RegisterPosition(1),
                 ],
                 registers_written: vec![

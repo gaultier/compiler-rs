@@ -16,8 +16,9 @@ pub struct VirtualRegister(pub u32);
 
 #[derive(Serialize, Debug)]
 pub enum InstructionKind {
-    Add,
-    Multiply,
+    IAdd,
+    IMultiply,
+    IDivide,
     Set, // Set virtual register.
 }
 
@@ -105,7 +106,7 @@ impl Emitter {
                     let res_vreg = self.make_vreg();
 
                     let ins = Instruction {
-                        kind: InstructionKind::Add,
+                        kind: InstructionKind::IAdd,
                         args_count: 2,
                         lhs: Some(Operand::VirtualRegister(lhs)),
                         rhs: Some(Operand::VirtualRegister(rhs)),
@@ -123,7 +124,25 @@ impl Emitter {
                     let res_vreg = self.make_vreg();
 
                     let ins = Instruction {
-                        kind: InstructionKind::Multiply,
+                        kind: InstructionKind::IMultiply,
+                        args_count: 2,
+                        lhs: Some(Operand::VirtualRegister(lhs)),
+                        rhs: Some(Operand::VirtualRegister(rhs)),
+                        origin: node.origin,
+                        res_vreg: Some(res_vreg),
+                    };
+                    self.instructions.push(ins);
+                    stack.push(res_vreg);
+                }
+                crate::ast::NodeKind::Divide => {
+                    // TODO: Checks.
+                    let rhs = stack.pop().unwrap();
+                    let lhs = stack.pop().unwrap();
+
+                    let res_vreg = self.make_vreg();
+
+                    let ins = Instruction {
+                        kind: InstructionKind::IDivide,
                         args_count: 2,
                         lhs: Some(Operand::VirtualRegister(lhs)),
                         rhs: Some(Operand::VirtualRegister(rhs)),
@@ -152,7 +171,10 @@ impl Emitter {
 
         for (i, ins) in self.instructions.iter().enumerate() {
             match ins.kind {
-                InstructionKind::Add | InstructionKind::Multiply | InstructionKind::Set => {
+                InstructionKind::IAdd
+                | InstructionKind::IMultiply
+                | InstructionKind::IDivide
+                | InstructionKind::Set => {
                     let res_vreg = ins.res_vreg.unwrap();
                     assert!(res_vreg.0 > 0);
 
@@ -194,11 +216,14 @@ impl Instruction {
         }
 
         match self.kind {
-            InstructionKind::Add => {
-                write!(w, "add")?;
+            InstructionKind::IAdd => {
+                write!(w, "iadd")?;
             }
-            InstructionKind::Multiply => {
-                write!(w, "mul")?;
+            InstructionKind::IMultiply => {
+                write!(w, "imul")?;
+            }
+            InstructionKind::IDivide => {
+                write!(w, "idiv")?;
             }
             InstructionKind::Set => {
                 write!(w, "set")?;
@@ -239,7 +264,7 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
 
     for ir in irs {
         match ir.kind {
-            InstructionKind::Add => {
+            InstructionKind::IAdd => {
                 let lhs = match ir.lhs.as_ref().unwrap() {
                     Operand::Num(num) => Value::Num(*num),
                     Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
@@ -251,7 +276,7 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                 let sum = Value::Num(lhs.as_num() + rhs.as_num());
                 res.insert(ir.res_vreg.unwrap(), sum);
             }
-            InstructionKind::Multiply => {
+            InstructionKind::IMultiply => {
                 let lhs = match ir.lhs.as_ref().unwrap() {
                     Operand::Num(num) => Value::Num(*num),
                     Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
@@ -262,6 +287,21 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                 };
                 let mul = match (lhs, rhs) {
                     (Value::Num(lhs), Value::Num(rhs)) => Value::Num(lhs * rhs),
+                    //_ => panic!("unexpected values, not numerical"),
+                };
+                res.insert(ir.res_vreg.unwrap(), mul);
+            }
+            InstructionKind::IDivide => {
+                let lhs = match ir.lhs.as_ref().unwrap() {
+                    Operand::Num(num) => Value::Num(*num),
+                    Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
+                };
+                let rhs = match ir.rhs.as_ref().unwrap() {
+                    Operand::Num(num) => Value::Num(*num),
+                    Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
+                };
+                let mul = match (lhs, rhs) {
+                    (Value::Num(lhs), Value::Num(rhs)) => Value::Num(lhs / rhs),
                     //_ => panic!("unexpected values, not numerical"),
                 };
                 res.insert(ir.res_vreg.unwrap(), mul);
