@@ -183,7 +183,11 @@ fn insert_sorted(
     item: (VirtualRegister, LiveRange),
 ) {
     assert!(active.is_sorted_by(|(_, a), (_, b)| b.end <= a.end));
-    match active.binary_search_by(|(_, range)| range.end.cmp(&item.1.end)) {
+    match active.binary_search_by(|(_, range)| {
+        let a = (range.end as usize) << 32 | (range.start as usize);
+        let b = (item.1.end as usize) << 32 | (item.1.start as usize);
+        a.cmp(&b)
+    }) {
         Ok(_pos) => {
             panic!("element already present")
         }
