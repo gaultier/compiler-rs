@@ -97,14 +97,18 @@ fn instruction_selection(ins: &ir::Instruction) -> Vec<VInstruction> {
         ) => vec![
             VInstruction {
                 kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
-                dst: Some(ir::Operand::VirtualRegister(ins.res_vreg.unwrap())),
-                operands: vec![ir::Operand::VirtualRegister(*lhs)],
+                operands: vec![
+                    ir::Operand::VirtualRegister(ins.res_vreg.unwrap()),
+                    ir::Operand::VirtualRegister(*lhs),
+                ],
                 origin: ins.origin,
             },
             VInstruction {
                 kind: asm::InstructionKind::Amd64(InstructionKind::Add_R_RM),
-                dst: Some(ir::Operand::VirtualRegister(ins.res_vreg.unwrap())),
-                operands: vec![ir::Operand::VirtualRegister(*rhs)],
+                operands: vec![
+                    ir::Operand::VirtualRegister(ins.res_vreg.unwrap()),
+                    ir::Operand::VirtualRegister(*rhs),
+                ],
                 origin: ins.origin,
             },
         ],
@@ -115,14 +119,18 @@ fn instruction_selection(ins: &ir::Instruction) -> Vec<VInstruction> {
         ) => vec![
             VInstruction {
                 kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
-                dst: Some(ir::Operand::VirtualRegister(ins.res_vreg.unwrap())),
-                operands: vec![ir::Operand::VirtualRegister(*lhs)],
+                operands: vec![
+                    ir::Operand::VirtualRegister(ins.res_vreg.unwrap()),
+                    ir::Operand::VirtualRegister(*lhs),
+                ],
                 origin: ins.origin,
             },
             VInstruction {
                 kind: asm::InstructionKind::Amd64(InstructionKind::IMul_R_RM),
-                dst: Some(ir::Operand::VirtualRegister(ins.res_vreg.unwrap())),
-                operands: vec![ir::Operand::VirtualRegister(*rhs)],
+                operands: vec![
+                    ir::Operand::VirtualRegister(ins.res_vreg.unwrap()),
+                    ir::Operand::VirtualRegister(*rhs),
+                ],
                 origin: ins.origin,
             },
         ],
@@ -133,29 +141,37 @@ fn instruction_selection(ins: &ir::Instruction) -> Vec<VInstruction> {
         ) => vec![
             VInstruction {
                 kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
-                dst: Some(ir::Operand::VirtualRegister(ins.res_vreg.unwrap())),
-                operands: vec![ir::Operand::VirtualRegister(*lhs)],
+                operands: vec![
+                    ir::Operand::VirtualRegister(ins.res_vreg.unwrap()),
+                    ir::Operand::VirtualRegister(*lhs),
+                ],
                 origin: ins.origin,
             },
             VInstruction {
                 kind: asm::InstructionKind::Amd64(InstructionKind::IDiv),
-                dst: Some(ir::Operand::VirtualRegister(ins.res_vreg.unwrap())),
-                operands: vec![ir::Operand::VirtualRegister(*rhs)],
+                operands: vec![
+                    ir::Operand::VirtualRegister(ins.res_vreg.unwrap()),
+                    ir::Operand::VirtualRegister(*rhs),
+                ],
                 origin: ins.origin,
             },
         ],
         (ir::InstructionKind::Set, Some(ir::Operand::VirtualRegister(lhs)), None) => {
             vec![VInstruction {
                 kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
-                dst: Some(ir::Operand::VirtualRegister(ins.res_vreg.unwrap())),
-                operands: vec![ir::Operand::VirtualRegister(*lhs)],
+                operands: vec![
+                    ir::Operand::VirtualRegister(ins.res_vreg.unwrap()),
+                    ir::Operand::VirtualRegister(*lhs),
+                ],
                 origin: ins.origin,
             }]
         }
         (ir::InstructionKind::Set, Some(ir::Operand::Num(num)), None) => vec![VInstruction {
             kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_Imm),
-            dst: Some(ir::Operand::VirtualRegister(ins.res_vreg.unwrap())),
-            operands: vec![ir::Operand::Num(*num)],
+            operands: vec![
+                ir::Operand::VirtualRegister(ins.res_vreg.unwrap()),
+                ir::Operand::Num(*num),
+            ],
             origin: ins.origin,
         }],
         _ => panic!("invalid IR operands"),

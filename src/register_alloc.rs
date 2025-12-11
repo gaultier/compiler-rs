@@ -36,11 +36,11 @@ fn precoloring(vcode: &[asm::VInstruction], abi: &Abi) -> (RegisterMapping, BTre
             }
         }
 
-        match vins.dst {
+        match vins.operands.first() {
             Some(ir::Operand::VirtualRegister(vreg)) => {
                 if let Some(preg) = in_out.get_fixed_output_reg() {
                     free_registers.remove(&preg);
-                    vreg_to_memory_location.insert(vreg, MemoryLocation::Register(preg));
+                    vreg_to_memory_location.insert(*vreg, MemoryLocation::Register(preg));
                 }
             }
             Some(ir::Operand::Num(_)) => panic!("invalid number as instruction destination"),

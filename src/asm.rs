@@ -40,7 +40,6 @@ pub enum Register {
 #[derive(Serialize, Debug)]
 pub struct VInstruction {
     pub kind: InstructionKind,
-    pub dst: Option<ir::Operand>,
     pub operands: Vec<ir::Operand>,
     pub origin: Origin,
 }
@@ -187,13 +186,8 @@ impl VInstruction {
     pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
         w.write_all(self.kind.to_str().as_bytes())?;
 
-        if let Some(dst) = &self.dst {
-            write!(w, " ")?;
-            dst.write(w)?;
-        }
-
         for op in &self.operands {
-            write!(w, ", ")?;
+            write!(w, " ")?;
             op.write(w)?;
         }
 
