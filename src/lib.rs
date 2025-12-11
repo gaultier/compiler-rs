@@ -9,6 +9,7 @@ pub mod lex;
 mod origin;
 pub mod register_alloc;
 
+use log::trace;
 use serde::Serialize;
 
 use crate::{
@@ -145,9 +146,11 @@ struct JsonCompileResult {
 pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileResult {
     let mut lexer = Lexer::new(file_id);
     lexer.lex(input);
+    trace!("lexer: {:#?}", lexer);
 
     let mut parser = Parser::new(input, &lexer);
     parser.parse();
+    trace!("parser: {:#?}", parser);
 
     if !parser.errors.is_empty() {
         return CompileResult {
@@ -160,26 +163,38 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
 
     let mut ir_emitter = ir::Emitter::new();
     ir_emitter.emit(&parser.nodes);
+    trace!("ir_emitter: {:#?}", ir_emitter);
 
     let mut ir_text = Vec::with_capacity(input.len() * 3);
     for ins in &ir_emitter.instructions {
         ins.write(&mut ir_text).unwrap();
     }
-    let eval = ir::eval(&ir_emitter.instructions);
+    trace!("ir_text: {}", unsafe { str::from_utf8_unchecked(&ir_text) });
+
+    let ir_eval = ir::eval(&ir_emitter.instructions);
+    trace!("ir_eval: {:#?}", ir_eval);
 
     let vcode = asm::ir_to_vcode(&ir_emitter.instructions, &target_arch);
+    trace!("vcode: {:#?}", vcode);
 
     let mut vreg_to_memory_location =
         register_alloc::regalloc(&vcode, &ir_emitter.live_ranges, &asm::abi(&target_arch));
+    trace!("vreg_to_memory_location: {:#?}", vreg_to_memory_location);
+
     let mut asm_emitter = asm::Emitter::new();
     let asm_instructions = asm_emitter.vcode_to_asm(&vcode, &mut vreg_to_memory_location);
+    trace!("asm_instructions: {:#?}", asm_instructions);
 
     let mut asm_text = Vec::with_capacity(asm_instructions.len() * 8);
     for ins in &asm_instructions {
         ins.write(&mut asm_text).unwrap();
     }
+    trace!("asm_text: {}", unsafe {
+        str::from_utf8_unchecked(&asm_text)
+    });
 
     let asm_eval = asm::eval(&asm_instructions);
+    trace!("asm_eval: {:#?}", asm_eval);
 
     CompileResult {
         lex_tokens: parser.tokens,
@@ -188,7 +203,7 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
         ir_instructions: ir_emitter.instructions,
         ir_text: String::from_utf8(ir_text).unwrap(),
         ir_live_ranges: ir_emitter.live_ranges,
-        ir_eval: eval,
+        ir_eval,
         vcode,
         vreg_to_memory_location,
         asm_instructions,

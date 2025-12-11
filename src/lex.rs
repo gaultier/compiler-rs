@@ -6,6 +6,7 @@ use crate::{
     origin::{FileId, Origin},
 };
 
+#[derive(Debug)]
 pub struct Lexer {
     origin: Origin,
     error_mode: bool,

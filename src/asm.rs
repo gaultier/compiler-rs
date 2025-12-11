@@ -251,12 +251,13 @@ impl Emitter {
                             }
                             src => {
                                 let stack_offset = self.stack.new_slot(8, 8); // FIXME
-                                emit_store(
+                                let spill = emit_store(
                                     &MemoryLocation::Stack(stack_offset),
                                     &(src.into()),
                                     &vins.kind.arch(),
                                     &OperandSize::Eight,
                                 );
+                                instructions.extend(spill);
                                 vreg_to_memory_location
                                     .entry(vreg)
                                     .and_modify(|e| *e = MemoryLocation::Stack(stack_offset));

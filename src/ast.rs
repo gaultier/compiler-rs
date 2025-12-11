@@ -27,6 +27,7 @@ pub struct Node {
     pub origin: Origin,
 }
 
+#[derive(Debug)]
 pub struct Parser<'a> {
     error_mode: bool,
     pub tokens: Vec<Token>,

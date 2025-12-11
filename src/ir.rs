@@ -48,6 +48,7 @@ pub struct LiveRange {
 pub type LiveRanges = BTreeMap<VirtualRegister, LiveRange>;
 //pub type Constraints = BTreeMap<VirtualRegister, VirtualRegisterConstraint>;
 
+#[derive(Debug)]
 pub struct Emitter {
     pub instructions: Vec<Instruction>,
     vreg: VirtualRegister,
