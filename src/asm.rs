@@ -115,7 +115,8 @@ impl Instruction {
         self.operands
             .iter()
             .filter(|o| !o.implicit)
-            .enumerate().try_for_each(|(i, o)| {
+            .enumerate()
+            .try_for_each(|(i, o)| {
                 if i == 0 {
                     write!(w, " ")?;
                 } else {
@@ -129,6 +130,12 @@ impl Instruction {
 }
 
 impl InstructionKind {
+    pub(crate) fn arch(&self) -> ArchKind {
+        match self {
+            InstructionKind::Amd64(_) => ArchKind::Amd64,
+        }
+    }
+
     pub(crate) fn to_str(self) -> &'static str {
         match self {
             InstructionKind::Amd64(instruction_kind) => instruction_kind.to_str(),
@@ -201,6 +208,17 @@ impl Stack {
     }
 }
 
+pub(crate) fn emit_store(
+    dst: &MemoryLocation,
+    src: &OperandKind,
+    arch: &ArchKind,
+    size: &OperandSize,
+) -> Vec<Instruction> {
+    match arch {
+        ArchKind::Amd64 => amd64::emit_store(dst, src, size),
+    }
+}
+
 impl Emitter {
     pub(crate) fn new() -> Self {
         Self {
@@ -211,7 +229,7 @@ impl Emitter {
     pub(crate) fn vcode_to_asm(
         &mut self,
         vcode: &[VInstruction],
-        vreg_to_memory_location: &RegisterMapping,
+        vreg_to_memory_location: &mut RegisterMapping,
     ) -> Vec<Instruction> {
         let mut instructions = Vec::with_capacity(vcode.len());
 
@@ -219,21 +237,31 @@ impl Emitter {
             let in_out = vins.kind.get_in_out();
             for (i, fmt_op) in in_out.iter().enumerate() {
                 if let format::Operand {
-                        location: format::Location::FixedRegister(fixed_preg),
-                        mutability,
-                        ..
-                    } = fmt_op {
+                    location: format::Location::FixedRegister(fixed_preg),
+                    //mutability: Mutability::Write | Mutability::ReadWrite,
+                    ..
+                } = fmt_op
+                {
                     let op = vins.operands[i];
                     if let ir::Operand::VirtualRegister(vreg) = op {
-                        match vreg_to_memory_location.get(&vreg) {
-                            Some(MemoryLocation::Register(preg)) if preg != fixed_preg => {
-                                let _stack_offset = self.stack.new_slot(8, 8); // FIXME
-                                todo!(
-                                    "need to shuffle registers around for an instruction with an operand that requires a fixed register"
-                                );
+                        match vreg_to_memory_location.get(&vreg).unwrap() {
+                            MemoryLocation::Register(preg) if preg == fixed_preg => {
+                                // No need to shuffle things around, already in the right place.
+                                continue;
                             }
-                            Some(MemoryLocation::Stack(_off)) => todo!(),
-                            _ => {}
+                            src => {
+                                let stack_offset = self.stack.new_slot(8, 8); // FIXME
+                                emit_store(
+                                    &MemoryLocation::Stack(stack_offset),
+                                    &(src.into()),
+                                    &vins.kind.arch(),
+                                    &OperandSize::Eight,
+                                );
+                                vreg_to_memory_location
+                                    .entry(vreg)
+                                    .and_modify(|e| *e = MemoryLocation::Stack(stack_offset));
+                                println!("[D001] shuffle: vreg={:?} sp={}", vreg, stack_offset);
+                            }
                         }
                     }
                 }
@@ -243,17 +271,16 @@ impl Emitter {
                 .operands
                 .iter()
                 .map(|op| match op {
-                    ir::Operand::VirtualRegister(vreg) => match vreg_to_memory_location.get(vreg) {
-                        Some(MemoryLocation::Register(preg)) => Operand {
+                    ir::Operand::VirtualRegister(vreg) => {
+                        let loc = vreg_to_memory_location.get(vreg).unwrap();
+                        Operand {
                             operand_size: OperandSize::Eight,
-                            kind: OperandKind::Register(*preg),
-                            // FIXME
+                            kind: loc.into(),
+                            // FIXME: get rid of these fields?
                             implicit: false,
                             mutability: Mutability::Read,
-                        },
-                        Some(MemoryLocation::Stack(_)) => todo!(),
-                        None => panic!("vreg does not have a preg"),
-                    },
+                        }
+                    }
                     ir::Operand::Num(num) => Operand {
                         operand_size: OperandSize::Eight,
                         kind: OperandKind::Immediate(*num),

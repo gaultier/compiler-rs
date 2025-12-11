@@ -1,7 +1,10 @@
 use serde::Serialize;
 
 use crate::{
-    asm::{self, Abi, EvalResult, Instruction, Mutability, Operand, OperandKind, VInstruction},
+    asm::{
+        self, Abi, EvalResult, Instruction, Mutability, Operand, OperandKind, OperandSize,
+        VInstruction,
+    },
     ir::{self, Value},
     origin::Origin,
     register_alloc::MemoryLocation,
@@ -188,21 +191,25 @@ pub fn ir_to_vcode(irs: &[ir::Instruction]) -> Vec<VInstruction> {
     res
 }
 
-pub(crate) fn emit_store(dst: &MemoryLocation, src: &Operand) -> Vec<Instruction> {
-    match (dst, src.kind) {
+pub(crate) fn emit_store(
+    dst: &MemoryLocation,
+    src: &OperandKind,
+    size: &OperandSize,
+) -> Vec<Instruction> {
+    match (dst, src) {
         (MemoryLocation::Register(dst_reg), OperandKind::Register(src_reg)) => {
             vec![Instruction {
                 kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
                 operands: vec![
                     Operand {
-                        operand_size: src.operand_size,
+                        operand_size: *size,
                         kind: OperandKind::Register(*dst_reg),
                         implicit: false,
                         mutability: Mutability::Write,
                     },
                     Operand {
-                        operand_size: src.operand_size,
-                        kind: OperandKind::Register(src_reg),
+                        operand_size: *size,
+                        kind: OperandKind::Register(*src_reg),
                         implicit: false,
                         mutability: Mutability::Read,
                     },
@@ -214,14 +221,14 @@ pub(crate) fn emit_store(dst: &MemoryLocation, src: &Operand) -> Vec<Instruction
             kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_Imm),
             operands: vec![
                 Operand {
-                    operand_size: src.operand_size,
+                    operand_size: *size,
                     kind: OperandKind::Register(*dst_reg),
                     implicit: false,
                     mutability: Mutability::Write,
                 },
                 Operand {
-                    operand_size: src.operand_size,
-                    kind: OperandKind::Immediate(src_imm),
+                    operand_size: *size,
+                    kind: OperandKind::Immediate(*src_imm),
                     implicit: false,
                     mutability: Mutability::Read,
                 },
@@ -232,14 +239,14 @@ pub(crate) fn emit_store(dst: &MemoryLocation, src: &Operand) -> Vec<Instruction
             kind: asm::InstructionKind::Amd64(InstructionKind::Mov_RM_R),
             operands: vec![
                 Operand {
-                    operand_size: src.operand_size,
+                    operand_size: *size,
                     kind: OperandKind::Stack(*dst_stack),
                     implicit: false,
                     mutability: Mutability::Write,
                 },
                 Operand {
-                    operand_size: src.operand_size,
-                    kind: OperandKind::Register(src_reg),
+                    operand_size: *size,
+                    kind: OperandKind::Register(*src_reg),
                     implicit: false,
                     mutability: Mutability::Read,
                 },
