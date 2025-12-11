@@ -433,20 +433,11 @@ impl Interpreter {
 
     fn load(&mut self, dst: &Operand, src: &Operand) {
         match (dst.kind, src.kind) {
-            (OperandKind::Register(_), OperandKind::Register(_))
-            | (OperandKind::Stack(_), OperandKind::Register(_))
-            | (OperandKind::Register(_), OperandKind::Stack(_)) => {
-                todo!()
-                //let value = *self.state.get(&(&src.kind).into()).unwrap();
-                //self.state.insert((&dst.kind).into(), value);
+            (OperandKind::Register(_), OperandKind::Stack(_)) => {
+                let value = *self.state.get(&(&src.kind).into()).unwrap();
+                self.state.insert((&dst.kind).into(), value);
             }
-            (OperandKind::Register(_), OperandKind::Immediate(imm))
-            | (OperandKind::Stack(_), OperandKind::Immediate(imm)) => {
-                todo!()
-                //self.state.insert((&dst.kind).into(), Value::Num(imm));
-            }
-            (OperandKind::Immediate(_), _) => panic!("invalid load destination"),
-            (OperandKind::Stack(_), OperandKind::Stack(_)) => panic!("unsupported load"),
+            _ => panic!("unsupported load"),
         };
     }
 
@@ -548,7 +539,10 @@ impl Interpreter {
                         _ => panic!("invalid operand for idiv_r_rm instruction"),
                     };
                 }
-                InstructionKind::Lea => todo!(),
+                InstructionKind::Lea => {
+                    assert_eq!(ins.operands.len(), 2);
+                    self.load(&ins.operands[0], &ins.operands[1]);
+                }
             }
         }
     }
