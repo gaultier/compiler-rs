@@ -3,11 +3,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Serialize;
 
 use crate::{
-    asm::{
-        self, Abi, Register,
-        format::{Location, Operand},
-    },
-    ir::{self, LiveRange, LiveRanges, VirtualRegister},
+    asm::{self, Abi, Register},
+    ir::{LiveRange, LiveRanges, VirtualRegister},
 };
 
 #[derive(Serialize, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -18,54 +15,18 @@ pub enum MemoryLocation {
 
 pub type RegisterMapping = BTreeMap<VirtualRegister, MemoryLocation>;
 
-fn precoloring(vcode: &[asm::VInstruction], abi: &Abi) -> (RegisterMapping, BTreeSet<Register>) {
+// TODO: Constraints.
+pub(crate) fn regalloc(
+    _vcode: &[asm::VInstruction],
+    live_ranges: &LiveRanges,
+    abi: &Abi,
+) -> RegisterMapping {
     let mut vreg_to_memory_location = RegisterMapping::new();
 
     let mut free_registers = BTreeSet::<Register>::new();
     for register in &abi.gprs {
         free_registers.insert(*register);
     }
-
-    // TODO
-
-    //for vins in vcode {
-    //    let in_out = vins.kind.get_in_out();
-    //    for op in &vins.operands {
-    //        if let ir::Operand::VirtualRegister(vreg) = op {
-    //            for fmt_op in &in_out {
-    //                match fmt_op {
-    //                    Operand {
-    //                        location: Location::Rax,
-    //                        mutability,
-    //                        implicit,
-    //                    } => {}
-    //                }
-    //            }
-    //        }
-    //    }
-    //
-    //    match vins.operands.first() {
-    //        Some(ir::Operand::VirtualRegister(vreg)) => {
-    //            if let Some(preg) = in_out.get_fixed_output_reg() {
-    //                free_registers.remove(&preg);
-    //                vreg_to_memory_location.insert(*vreg, MemoryLocation::Register(preg));
-    //            }
-    //        }
-    //        Some(ir::Operand::Num(_)) => panic!("invalid number as instruction destination"),
-    //        None => {}
-    //    };
-    //}
-
-    (vreg_to_memory_location, free_registers)
-}
-
-// TODO: Constraints.
-pub(crate) fn regalloc(
-    vcode: &[asm::VInstruction],
-    live_ranges: &LiveRanges,
-    abi: &Abi,
-) -> RegisterMapping {
-    let (mut vreg_to_memory_location, mut free_registers) = precoloring(vcode, abi);
 
     // Source: https://dl.acm.org/doi/pdf/10.1145/330249.330250
     // LinearScanRegisterAllocation

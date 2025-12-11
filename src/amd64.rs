@@ -186,7 +186,7 @@ pub fn ir_to_vcode(irs: &[ir::Instruction]) -> Vec<VInstruction> {
 }
 
 impl InstructionKind {
-    pub fn get_in_out(&self) -> Vec<asm::format::Operand> {
+    pub(crate) fn get_in_out(&self) -> Vec<asm::format::Operand> {
         match self {
             InstructionKind::Mov_R_RM => {
                 vec![
@@ -250,12 +250,16 @@ impl InstructionKind {
                     asm::format::Operand {
                         implicit: true,
                         mutability: asm::Mutability::ReadWrite,
-                        location: asm::format::Location::Rax,
+                        location: asm::format::Location::FixedRegister(asm::Register::Amd64(
+                            Register::Rax,
+                        )),
                     },
                     asm::format::Operand {
                         implicit: true,
                         mutability: asm::Mutability::ReadWrite,
-                        location: asm::format::Location::Rdx,
+                        location: asm::format::Location::FixedRegister(asm::Register::Amd64(
+                            Register::Rdx,
+                        )),
                     },
                     asm::format::Operand {
                         implicit: false,

@@ -171,7 +171,8 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
 
     let vreg_to_memory_location =
         register_alloc::regalloc(&vcode, &ir_emitter.live_ranges, &asm::abi(&target_arch));
-    let asm_instructions = asm::vcode_to_asm(&vcode, &vreg_to_memory_location);
+    let mut asm_emitter = asm::Emitter::new();
+    let asm_instructions = asm_emitter.vcode_to_asm(&vcode, &vreg_to_memory_location);
 
     let mut asm_text = Vec::with_capacity(asm_instructions.len() * 8);
     for ins in &asm_instructions {
