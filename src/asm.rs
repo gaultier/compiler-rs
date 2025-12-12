@@ -1,6 +1,5 @@
 use std::{collections::BTreeMap, io::Write};
 
-use log::trace;
 use serde::Serialize;
 
 use crate::{
@@ -39,18 +38,9 @@ pub enum Register {
 }
 
 #[derive(Serialize, Debug, Clone, Copy)]
-pub enum Mutability {
-    Read,
-    Write,
-    ReadWrite,
-}
-
-#[derive(Serialize, Debug, Clone, Copy)]
 pub struct Operand {
     pub operand_size: OperandSize,
     pub kind: OperandKind,
-    pub implicit: bool,
-    pub mutability: Mutability,
 }
 
 #[derive(Serialize, Debug, Clone, Copy)]
@@ -87,6 +77,20 @@ pub(crate) fn abi(target_arch: &ArchKind) -> Abi {
 }
 
 impl Operand {
+    pub(crate) fn new(operand_size: &OperandSize, kind: &OperandKind) -> Self {
+        Self {
+            operand_size: *operand_size,
+            kind: *kind,
+        }
+    }
+
+    pub(crate) fn from_memory_location(operand_size: &OperandSize, loc: &MemoryLocation) -> Self {
+        Self {
+            operand_size: *operand_size,
+            kind: loc.into(),
+        }
+    }
+
     pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
         match &self.kind {
             OperandKind::Register(register) => w.write_all(register.to_str().as_bytes()),
@@ -100,18 +104,14 @@ impl Instruction {
     pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
         w.write_all(self.kind.to_str().as_bytes())?;
 
-        self.operands
-            .iter()
-            .filter(|o| !o.implicit)
-            .enumerate()
-            .try_for_each(|(i, o)| {
-                if i == 0 {
-                    write!(w, " ")?;
-                } else {
-                    write!(w, ", ")?;
-                }
-                o.write(w)
-            })?;
+        self.operands.iter().enumerate().try_for_each(|(i, o)| {
+            if i == 0 {
+                write!(w, " ")?;
+            } else {
+                write!(w, ", ")?;
+            }
+            o.write(w)
+        })?;
 
         writeln!(w)
     }
@@ -177,19 +177,12 @@ impl Stack {
     }
 }
 
-pub(crate) fn emit_store(
-    dst: &MemoryLocation,
-    src: &OperandKind,
-    arch: &ArchKind,
-    size: &OperandSize,
-) -> Vec<Instruction> {
-    match arch {
-        ArchKind::Amd64 => amd64::emit_store(dst, src, size),
-    }
-}
-
-pub(crate) fn emit(irs: &[ir::Instruction], target_arch: &ArchKind) -> (Vec<Instruction>, Stack) {
+pub(crate) fn emit(
+    irs: &[ir::Instruction],
+    vreg_to_memory_location: &RegisterMapping,
+    target_arch: &ArchKind,
+) -> (Vec<Instruction>, Stack) {
     match target_arch {
-        ArchKind::Amd64 => amd64::emit(irs),
+        ArchKind::Amd64 => amd64::emit(irs, vreg_to_memory_location),
     }
 }

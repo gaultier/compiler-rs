@@ -1,14 +1,18 @@
 use serde::Serialize;
 
 use crate::{
-    asm::{
-        self, Abi, EvalResult, Instruction, Instruction, Mutability, Operand, OperandKind,
-        OperandSize, Stack,
-    },
+    asm::{self, Abi, EvalResult, Operand, OperandKind, OperandSize, Stack},
     ir::{self, Value},
     origin::Origin,
-    register_alloc::MemoryLocation,
+    register_alloc::{MemoryLocation, RegisterMapping},
 };
+
+#[derive(Serialize, Debug)]
+pub(crate) struct Instruction {
+    pub(crate) kind: InstructionKind,
+    pub(crate) operands: Vec<Operand>,
+    pub(crate) origin: Origin,
+}
 
 #[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
@@ -91,7 +95,10 @@ pub enum InstructionKind {
     Lea,
 }
 
-fn instruction_selection(ins: &ir::Instruction) -> Vec<Instruction> {
+fn instruction_selection(
+    ins: &ir::Instruction,
+    vreg_to_memory_location: &RegisterMapping,
+) -> Vec<Instruction> {
     match (&ins.kind, &ins.lhs, &ins.rhs) {
         (
             ir::InstructionKind::IAdd,
@@ -99,18 +106,30 @@ fn instruction_selection(ins: &ir::Instruction) -> Vec<Instruction> {
             Some(ir::Operand::VirtualRegister(rhs)),
         ) => vec![
             Instruction {
-                kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
+                kind: InstructionKind::Mov_R_RM,
                 operands: vec![
-                    ir::Operand::VirtualRegister(ins.res_vreg.unwrap()),
-                    ir::Operand::VirtualRegister(*lhs),
+                    Operand::from_memory_location(
+                        &OperandSize::Eight,
+                        vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
+                    ),
+                    Operand::from_memory_location(
+                        &OperandSize::Eight,
+                        vreg_to_memory_location.get(lhs).unwrap(),
+                    ),
                 ],
                 origin: ins.origin,
             },
             Instruction {
-                kind: asm::InstructionKind::Amd64(InstructionKind::Add_R_RM),
+                kind: InstructionKind::Add_R_RM,
                 operands: vec![
-                    ir::Operand::VirtualRegister(ins.res_vreg.unwrap()),
-                    ir::Operand::VirtualRegister(*rhs),
+                    Operand::from_memory_location(
+                        &OperandSize::Eight,
+                        vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
+                    ),
+                    Operand::from_memory_location(
+                        &OperandSize::Eight,
+                        vreg_to_memory_location.get(rhs).unwrap(),
+                    ),
                 ],
                 origin: ins.origin,
             },
@@ -121,18 +140,30 @@ fn instruction_selection(ins: &ir::Instruction) -> Vec<Instruction> {
             Some(ir::Operand::VirtualRegister(rhs)),
         ) => vec![
             Instruction {
-                kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
+                kind: InstructionKind::Mov_R_RM,
                 operands: vec![
-                    ir::Operand::VirtualRegister(ins.res_vreg.unwrap()),
-                    ir::Operand::VirtualRegister(*lhs),
+                    Operand::from_memory_location(
+                        &OperandSize::Eight,
+                        vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
+                    ),
+                    Operand::from_memory_location(
+                        &OperandSize::Eight,
+                        vreg_to_memory_location.get(lhs).unwrap(),
+                    ),
                 ],
                 origin: ins.origin,
             },
             Instruction {
-                kind: asm::InstructionKind::Amd64(InstructionKind::IMul_R_RM),
+                kind: InstructionKind::IMul_R_RM,
                 operands: vec![
-                    ir::Operand::VirtualRegister(ins.res_vreg.unwrap()),
-                    ir::Operand::VirtualRegister(*rhs),
+                    Operand::from_memory_location(
+                        &OperandSize::Eight,
+                        vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
+                    ),
+                    Operand::from_memory_location(
+                        &OperandSize::Eight,
+                        vreg_to_memory_location.get(rhs).unwrap(),
+                    ),
                 ],
                 origin: ins.origin,
             },
@@ -143,37 +174,58 @@ fn instruction_selection(ins: &ir::Instruction) -> Vec<Instruction> {
             Some(ir::Operand::VirtualRegister(rhs)),
         ) => vec![
             Instruction {
-                kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
+                kind: InstructionKind::Mov_R_RM,
                 operands: vec![
-                    ir::Operand::VirtualRegister(ins.res_vreg.unwrap()),
-                    ir::Operand::VirtualRegister(*lhs),
+                    Operand::from_memory_location(
+                        &OperandSize::Eight,
+                        vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
+                    ),
+                    Operand::from_memory_location(
+                        &OperandSize::Eight,
+                        vreg_to_memory_location.get(lhs).unwrap(),
+                    ),
                 ],
                 origin: ins.origin,
             },
             Instruction {
-                kind: asm::InstructionKind::Amd64(InstructionKind::IDiv),
+                kind: InstructionKind::IDiv,
                 operands: vec![
-                    ir::Operand::VirtualRegister(ins.res_vreg.unwrap()),
-                    ir::Operand::VirtualRegister(*rhs),
+                    Operand::from_memory_location(
+                        &OperandSize::Eight,
+                        vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
+                    ),
+                    Operand::from_memory_location(
+                        &OperandSize::Eight,
+                        vreg_to_memory_location.get(rhs).unwrap(),
+                    ),
                 ],
                 origin: ins.origin,
             },
         ],
         (ir::InstructionKind::Set, Some(ir::Operand::VirtualRegister(lhs)), None) => {
             vec![Instruction {
-                kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
+                kind: InstructionKind::Mov_R_RM,
                 operands: vec![
-                    ir::Operand::VirtualRegister(ins.res_vreg.unwrap()),
-                    ir::Operand::VirtualRegister(*lhs),
+                    Operand::from_memory_location(
+                        &OperandSize::Eight,
+                        vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
+                    ),
+                    Operand::from_memory_location(
+                        &OperandSize::Eight,
+                        vreg_to_memory_location.get(lhs).unwrap(),
+                    ),
                 ],
                 origin: ins.origin,
             }]
         }
         (ir::InstructionKind::Set, Some(ir::Operand::Num(num)), None) => vec![Instruction {
-            kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_Imm),
+            kind: InstructionKind::Mov_R_Imm,
             operands: vec![
-                ir::Operand::VirtualRegister(ins.res_vreg.unwrap()),
-                ir::Operand::Num(*num),
+                Operand::from_memory_location(
+                    &OperandSize::Eight,
+                    vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
+                ),
+                Operand::new(&OperandSize::Eight, &OperandKind::Immediate(*num)),
             ],
             origin: ins.origin,
         }],
@@ -181,15 +233,27 @@ fn instruction_selection(ins: &ir::Instruction) -> Vec<Instruction> {
     }
 }
 
-pub(crate) fn emit(irs: &[ir::Instruction]) -> (Vec<Instruction>, Stack) {
+pub(crate) fn emit(
+    irs: &[ir::Instruction],
+    vreg_to_memory_location: &RegisterMapping,
+) -> (Vec<asm::Instruction>, Stack) {
     let mut asm = Vec::with_capacity(irs.len() * 2);
-    let mut stack = Stack::new();
+    let mut _stack = Stack::new();
 
     for ir in irs {
-        asm.extend(ir.instruction_selection(&mut stack));
+        asm.extend(instruction_selection(ir, vreg_to_memory_location));
     }
 
-    (asm, stack)
+    (
+        asm.into_iter()
+            .map(|x| asm::Instruction {
+                kind: asm::InstructionKind::Amd64(x.kind),
+                operands: x.operands,
+                origin: x.origin,
+            })
+            .collect(),
+        _stack,
+    )
 }
 
 pub(crate) fn emit_store(
@@ -200,56 +264,44 @@ pub(crate) fn emit_store(
     match (dst, src) {
         (MemoryLocation::Register(dst_reg), OperandKind::Register(src_reg)) => {
             vec![Instruction {
-                kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
+                kind: InstructionKind::Mov_R_RM,
                 operands: vec![
                     Operand {
                         operand_size: *size,
                         kind: OperandKind::Register(*dst_reg),
-                        implicit: false,
-                        mutability: Mutability::Write,
                     },
                     Operand {
                         operand_size: *size,
                         kind: OperandKind::Register(*src_reg),
-                        implicit: false,
-                        mutability: Mutability::Read,
                     },
                 ],
                 origin: Origin::default(),
             }]
         }
         (MemoryLocation::Register(dst_reg), OperandKind::Immediate(src_imm)) => vec![Instruction {
-            kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_Imm),
+            kind: InstructionKind::Mov_R_Imm,
             operands: vec![
                 Operand {
                     operand_size: *size,
                     kind: OperandKind::Register(*dst_reg),
-                    implicit: false,
-                    mutability: Mutability::Write,
                 },
                 Operand {
                     operand_size: *size,
                     kind: OperandKind::Immediate(*src_imm),
-                    implicit: false,
-                    mutability: Mutability::Read,
                 },
             ],
             origin: Origin::default(),
         }],
         (MemoryLocation::Stack(dst_stack), OperandKind::Register(src_reg)) => vec![Instruction {
-            kind: asm::InstructionKind::Amd64(InstructionKind::Mov_RM_R),
+            kind: InstructionKind::Mov_RM_R,
             operands: vec![
                 Operand {
                     operand_size: *size,
                     kind: OperandKind::Stack(*dst_stack),
-                    implicit: false,
-                    mutability: Mutability::Write,
                 },
                 Operand {
                     operand_size: *size,
                     kind: OperandKind::Register(*src_reg),
-                    implicit: false,
-                    mutability: Mutability::Read,
                 },
             ],
             origin: Origin::default(),

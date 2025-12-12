@@ -55,13 +55,6 @@ fn main() {
     }
     println!("eval: {:#?}", &compiled.ir_eval);
 
-    println!("--- VCode ---");
-    println!("vcode: {:#?}", &compiled.vcode);
-    for (i, ins) in compiled.vcode.iter().enumerate() {
-        print!("{}: ", i);
-        ins.write(&mut stdout()).unwrap();
-    }
-
     println!("--- RegAlloc ---");
     println!("vreg_to_mem_loc: {:#?}", &compiled.vreg_to_memory_location);
 

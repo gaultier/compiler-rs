@@ -120,7 +120,6 @@ pub struct CompileResult {
     pub ir_text: String,
     pub ir_live_ranges: LiveRanges,
     pub ir_eval: ir::EvalResult,
-    pub vcode: Vec<asm::VInstruction>,
     pub vreg_to_memory_location: RegisterMapping,
     pub asm_instructions: Vec<asm::Instruction>,
     pub asm_text: String,
@@ -136,7 +135,6 @@ struct JsonCompileResult {
     pub ir_text: String,
     pub ir_live_ranges: LiveRanges,
     pub ir_eval: ir::EvalResult,
-    pub vcode: Vec<asm::VInstruction>,
     pub vreg_to_memory_location: RegisterMapping,
     pub asm_instructions: Vec<asm::Instruction>,
     pub asm_text: String,
@@ -178,8 +176,11 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
         register_alloc::regalloc(&ir_emitter.live_ranges, &asm::abi(&target_arch));
     trace!("vreg_to_memory_location: {:#?}", vreg_to_memory_location);
 
-    let mut asm_emitter = asm::Emitter::new();
-    let asm_instructions = asm_emitter.emit(&ir_emitter.instructions, &mut vreg_to_memory_location);
+    let (asm_instructions, _) = asm::emit(
+        &ir_emitter.instructions,
+        &mut vreg_to_memory_location,
+        &target_arch,
+    );
     trace!("asm_instructions: {:#?}", asm_instructions);
 
     let mut asm_text = Vec::with_capacity(asm_instructions.len() * 8);
@@ -201,7 +202,6 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
         ir_text: String::from_utf8(ir_text).unwrap(),
         ir_live_ranges: ir_emitter.live_ranges,
         ir_eval,
-        vcode,
         vreg_to_memory_location,
         asm_instructions,
         asm_text: String::from_utf8(asm_text).unwrap(),
@@ -232,7 +232,6 @@ pub extern "C" fn wasm_compile(
         ir_text: compiled.ir_text,
         ir_live_ranges: compiled.ir_live_ranges,
         ir_eval: compiled.ir_eval,
-        vcode: compiled.vcode,
         vreg_to_memory_location: compiled.vreg_to_memory_location,
         asm_instructions: compiled.asm_instructions,
         asm_text: compiled.asm_text,
