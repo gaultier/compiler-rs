@@ -178,7 +178,7 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
 
     let (asm_instructions, _) = asm::emit(
         &ir_emitter.instructions,
-        &mut vreg_to_memory_location,
+        &vreg_to_memory_location,
         &target_arch,
     );
     trace!("asm_instructions: {:#?}", asm_instructions);

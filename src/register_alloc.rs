@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Serialize;
 
 use crate::{
-    asm::{self, Abi, Register},
+    asm::{Abi, Register},
     ir::{LiveRange, LiveRanges, VirtualRegister},
 };
 
