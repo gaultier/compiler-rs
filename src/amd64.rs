@@ -301,7 +301,7 @@ pub(crate) fn emit(
                 origin: x.origin,
             })
             .collect(),
-        _stack,
+        stack,
     )
 }
 
