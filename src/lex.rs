@@ -18,6 +18,8 @@ pub struct Lexer {
 pub enum TokenKind {
     Whitespace,
     LiteralNumber,
+    LiteralBool,
+    Identifier,
     Plus,
     Star,
     Slash,
@@ -51,6 +53,38 @@ impl Lexer {
     fn add_error_at(&mut self, kind: ErrorKind, origin: Origin) {
         self.errors.push(Error::new(kind, origin, String::new()));
         self.error_mode = true;
+    }
+
+    fn lex_keyword(&mut self, input: &str, it: &mut Peekable<Chars<'_>>) {
+        let start_origin = self.origin;
+        let first = it.next().unwrap();
+        assert!(first.is_ascii_alphabetic());
+        self.origin.column += 1;
+        self.origin.offset += 1;
+
+        while let Some(c) = it.peek() {
+            if !(c.is_alphanumeric() || *c == '_') {
+                break;
+            }
+
+            self.origin.column += 1;
+            self.origin.offset += 1;
+            it.next();
+        }
+
+        let len = self.origin.offset - start_origin.offset;
+        let origin = Origin {
+            len,
+            ..start_origin
+        };
+
+        let lit = &input[origin.offset as usize..origin.offset as usize + len as usize];
+        let kind = match lit {
+            "true" | "false" => TokenKind::LiteralBool,
+            _ => TokenKind::Identifier,
+        };
+
+        self.tokens.push(Token { kind, origin });
     }
 
     fn lex_literal_number(&mut self, it: &mut Peekable<Chars<'_>>) {
@@ -159,6 +193,7 @@ impl Lexer {
                     it.next();
                 }
                 _ if c.is_ascii_digit() => self.lex_literal_number(&mut it),
+                _ if c.is_ascii_alphabetic() => self.lex_keyword(input, &mut it),
                 _ => {
                     self.tokens.push(Token {
                         kind: TokenKind::Unknown,
