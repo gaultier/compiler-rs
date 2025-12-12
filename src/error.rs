@@ -2,7 +2,10 @@ use std::{collections::HashMap, io::Write};
 
 use serde::Serialize;
 
-use crate::origin::{FileId, Origin};
+use crate::{
+    origin::{FileId, Origin},
+    type_checker::Type,
+};
 
 #[derive(Serialize, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ErrorKind {
@@ -12,6 +15,8 @@ pub enum ErrorKind {
     MissingNewline,
     ParseTermMissingRhs,
     ParseFactorMissingRhs,
+
+    IncompatibleTypes,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -30,6 +35,14 @@ impl Error {
         }
     }
 
+    pub(crate) fn new_incompatible_types(origin: &Origin, a: &Type, b: &Type) -> Self {
+        Self {
+            kind: crate::error::ErrorKind::IncompatibleTypes,
+            origin: *origin,
+            explanation: format!("incompatible types: {} vs {}", a, b),
+        }
+    }
+
     pub fn write<W: Write>(
         &self,
         w: &mut W,
@@ -39,20 +52,7 @@ impl Error {
         self.origin.write(w, file_id_to_names)?;
 
         w.write_all(b": Error: ")?;
-
-        match self.kind {
-            ErrorKind::UnknownToken => w.write_all(b"unknown token")?,
-            ErrorKind::InvalidLiteralNumber => w.write_all(b"invalid number literal")?,
-            ErrorKind::ParseStatement => w.write_all(b"invalid parse statement")?,
-            ErrorKind::MissingNewline => w.write_all(b"missing newline")?,
-            ErrorKind::ParseFactorMissingRhs => {
-                w.write_all(b"missing right operand in + or - operation")?
-            }
-            ErrorKind::ParseTermMissingRhs => {
-                w.write_all(b"missing right operand in * or / operation")?
-            }
-        };
-
+        w.write_all(self.explanation.as_bytes())?;
         w.write_all(b": ")?;
 
         {

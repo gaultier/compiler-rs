@@ -4,6 +4,7 @@ use crate::{
     error::{Error, ErrorKind},
     lex::{Lexer, Token, TokenKind},
     origin::Origin,
+    type_checker::Type,
 };
 use serde::Serialize;
 
@@ -25,6 +26,7 @@ pub struct Node {
     pub kind: NodeKind,
     pub data: Option<NodeData>,
     pub origin: Origin,
+    pub typ: Type,
 }
 
 #[derive(Debug)]
@@ -130,6 +132,7 @@ impl<'a> Parser<'a> {
                 kind: NodeKind::Number,
                 data: Some(NodeData::Num(num)),
                 origin: token.origin,
+                typ: Type::u64(),
             };
             self.nodes.push(node);
             return true;
@@ -213,6 +216,7 @@ impl<'a> Parser<'a> {
                 kind: NodeKind::Add,
                 data: None,
                 origin: token.origin,
+                typ: Type::default(),
             };
             self.nodes.push(node);
         }
@@ -250,6 +254,7 @@ impl<'a> Parser<'a> {
                 },
                 data: None,
                 origin: token.origin,
+                typ: Type::default(),
             };
             self.nodes.push(node);
         }

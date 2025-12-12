@@ -175,7 +175,7 @@
             try {
                 // TODO: Fetch release build.
                 const result = await WebAssembly.instantiateStreaming(
-                    fetch("target/wasm32-unknown-unknown/debug/compiler_rs_lib.wasm"),
+                    fetch("target/wasm32-unknown-unknown/release/compiler_rs_lib.wasm"),
                     //importsObject // Provide the required imports (host functions, memory)
                 );
 
