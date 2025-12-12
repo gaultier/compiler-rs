@@ -146,7 +146,7 @@ impl<'a> Parser<'a> {
 
             let node = Node {
                 kind: NodeKind::Bool,
-                data: Some(NodeData::Bool(if src == "true" { true } else { false })),
+                data: Some(NodeData::Bool(src == "true")),
                 origin: token.origin,
                 typ: Type::bool(),
             };

@@ -89,6 +89,12 @@ pub struct Checker {
     //types: BTreeSet<Type>,
 }
 
+impl Default for Checker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Checker {
     pub fn new() -> Self {
         Self {

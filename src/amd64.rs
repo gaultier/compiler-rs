@@ -101,6 +101,12 @@ pub struct Emitter {
     pub(crate) asm: Vec<Instruction>,
 }
 
+impl Default for Emitter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Emitter {
     pub fn new() -> Self {
         Self {
@@ -110,7 +116,7 @@ impl Emitter {
     }
 
     // TODO: Use a free register if possible.
-    fn find_free_spill_slot(self: &mut Self, op_size: &OperandSize) -> MemoryLocation {
+    fn find_free_spill_slot(&mut self, op_size: &OperandSize) -> MemoryLocation {
         let (size, align) = (op_size.as_bytes(), 8); // TODO: Improve.
         let offset = self.stack.new_slot(size, align);
         MemoryLocation::Stack(offset)
@@ -321,6 +327,22 @@ impl Emitter {
                             vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                         ),
                         Operand::new(&OperandSize::_64, &OperandKind::Immediate(*num)),
+                    ],
+                    origin: ins.origin,
+                });
+            }
+            (ir::InstructionKind::Set, Some(ir::Operand::Bool(b)), None) => {
+                self.asm.push(Instruction {
+                    kind: InstructionKind::Mov_R_Imm,
+                    operands: vec![
+                        Operand::from_memory_location(
+                            &OperandSize::_64,
+                            vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
+                        ),
+                        Operand::new(
+                            &OperandSize::_64,
+                            &OperandKind::Immediate(if *b { 1 } else { 0 }),
+                        ),
                     ],
                     origin: ins.origin,
                 });
