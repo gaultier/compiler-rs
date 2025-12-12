@@ -4,13 +4,27 @@ use serde::Serialize;
 
 pub type FileId = u32;
 
-#[derive(PartialEq, Eq, Debug, Serialize, Copy, Clone, Default)]
+#[derive(PartialEq, Eq, Debug, Serialize, Copy, Clone)]
 pub struct Origin {
     pub line: u32,
     pub column: u32,
     pub offset: u32,
     pub len: u32,
     pub file_id: FileId,
+    pub synthetic: bool,
+}
+
+impl Default for Origin {
+    fn default() -> Self {
+        Self {
+            line: Default::default(),
+            column: Default::default(),
+            offset: Default::default(),
+            len: Default::default(),
+            file_id: Default::default(),
+            synthetic: true,
+        }
+    }
 }
 
 impl Origin {
@@ -21,6 +35,7 @@ impl Origin {
             offset,
             len,
             file_id,
+            synthetic: false,
         }
     }
 
