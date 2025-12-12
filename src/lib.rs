@@ -138,7 +138,7 @@ struct JsonCompileResult {
     pub vreg_to_memory_location: RegisterMapping,
     pub asm_instructions: Vec<asm::Instruction>,
     pub asm_text: String,
-    pub asm_eval: Vec<(MemoryLocation, ir::Value)>,
+    pub asm_eval: Vec<(MemoryLocation, ir::EvalValue)>,
 }
 
 pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileResult {

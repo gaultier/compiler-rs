@@ -10,10 +10,6 @@ use crate::{
 #[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct VirtualRegister(pub u32);
 
-//pub enum VirtualRegisterConstraint {
-//    Result,
-//}
-
 #[derive(Serialize, Debug)]
 pub enum InstructionKind {
     IAdd,
@@ -30,7 +26,6 @@ pub struct Instruction {
     pub rhs: Option<Operand>,
     pub origin: Origin,
     pub res_vreg: Option<VirtualRegister>,
-    // TODO: type, live_range.
 }
 
 #[derive(Serialize, Debug, Clone, Copy)]
@@ -46,14 +41,12 @@ pub struct LiveRange {
 }
 
 pub type LiveRanges = BTreeMap<VirtualRegister, LiveRange>;
-//pub type Constraints = BTreeMap<VirtualRegister, VirtualRegisterConstraint>;
 
 #[derive(Debug)]
 pub struct Emitter {
     pub instructions: Vec<Instruction>,
     vreg: VirtualRegister,
     pub live_ranges: LiveRanges,
-    //pub constraints: Constraints,
 }
 
 impl Default for Emitter {
@@ -63,12 +56,11 @@ impl Default for Emitter {
 }
 
 impl Emitter {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             instructions: Vec::new(),
             vreg: VirtualRegister(0),
             live_ranges: LiveRanges::new(),
-            //constraints: Constraints::new(),
         }
     }
 
@@ -246,16 +238,16 @@ impl Instruction {
 }
 
 #[derive(Serialize, Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Value {
+pub enum EvalValue {
     Num(u64),
 }
 
-pub type EvalResult = BTreeMap<VirtualRegister, Value>;
+pub type EvalResult = BTreeMap<VirtualRegister, EvalValue>;
 
-impl Value {
+impl EvalValue {
     pub(crate) fn as_num(&self) -> u64 {
         match self {
-            Value::Num(num) => *num,
+            EvalValue::Num(num) => *num,
         }
     }
 }
@@ -267,49 +259,49 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
         match ir.kind {
             InstructionKind::IAdd => {
                 let lhs = match ir.lhs.as_ref().unwrap() {
-                    Operand::Num(num) => Value::Num(*num),
+                    Operand::Num(num) => EvalValue::Num(*num),
                     Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
                 };
                 let rhs = match ir.rhs.as_ref().unwrap() {
-                    Operand::Num(num) => Value::Num(*num),
+                    Operand::Num(num) => EvalValue::Num(*num),
                     Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
                 };
-                let sum = Value::Num(lhs.as_num() + rhs.as_num());
+                let sum = EvalValue::Num(lhs.as_num() + rhs.as_num());
                 res.insert(ir.res_vreg.unwrap(), sum);
             }
             InstructionKind::IMultiply => {
                 let lhs = match ir.lhs.as_ref().unwrap() {
-                    Operand::Num(num) => Value::Num(*num),
+                    Operand::Num(num) => EvalValue::Num(*num),
                     Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
                 };
                 let rhs = match ir.rhs.as_ref().unwrap() {
-                    Operand::Num(num) => Value::Num(*num),
+                    Operand::Num(num) => EvalValue::Num(*num),
                     Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
                 };
                 let mul = match (lhs, rhs) {
-                    (Value::Num(lhs), Value::Num(rhs)) => Value::Num(lhs * rhs),
+                    (EvalValue::Num(lhs), EvalValue::Num(rhs)) => EvalValue::Num(lhs * rhs),
                     //_ => panic!("unexpected values, not numerical"),
                 };
                 res.insert(ir.res_vreg.unwrap(), mul);
             }
             InstructionKind::IDivide => {
                 let lhs = match ir.lhs.as_ref().unwrap() {
-                    Operand::Num(num) => Value::Num(*num),
+                    Operand::Num(num) => EvalValue::Num(*num),
                     Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
                 };
                 let rhs = match ir.rhs.as_ref().unwrap() {
-                    Operand::Num(num) => Value::Num(*num),
+                    Operand::Num(num) => EvalValue::Num(*num),
                     Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
                 };
                 let mul = match (lhs, rhs) {
-                    (Value::Num(lhs), Value::Num(rhs)) => Value::Num(lhs / rhs),
+                    (EvalValue::Num(lhs), EvalValue::Num(rhs)) => EvalValue::Num(lhs / rhs),
                     //_ => panic!("unexpected values, not numerical"),
                 };
                 res.insert(ir.res_vreg.unwrap(), mul);
             }
             InstructionKind::Set => {
                 let value = match ir.lhs.as_ref().unwrap() {
-                    Operand::Num(num) => Value::Num(*num),
+                    Operand::Num(num) => EvalValue::Num(*num),
                     Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
                 };
                 assert!(ir.rhs.is_none());

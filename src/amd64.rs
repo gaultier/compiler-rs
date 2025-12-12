@@ -3,7 +3,7 @@ use serde::Serialize;
 
 use crate::{
     asm::{self, Abi, EvalResult, Operand, OperandKind, OperandSize, Stack},
-    ir::{self, Value},
+    ir::{self, EvalValue},
     origin::Origin,
     register_alloc::{MemoryLocation, RegisterMapping},
 };
@@ -480,7 +480,7 @@ impl Interpreter {
             }
             (OperandKind::Register(_), OperandKind::Immediate(imm))
             | (OperandKind::Stack(_), OperandKind::Immediate(imm)) => {
-                self.state.insert((&dst.kind).into(), Value::Num(imm));
+                self.state.insert((&dst.kind).into(), EvalValue::Num(imm));
             }
             (OperandKind::Immediate(_), _) => panic!("invalid store destination"),
             (OperandKind::Stack(_), OperandKind::Stack(_)) => panic!("unsupported store"),
@@ -524,14 +524,14 @@ impl Interpreter {
                             let op_value = *self
                                 .state
                                 .get(&MemoryLocation::Register(op))
-                                .unwrap_or(&Value::Num(0));
+                                .unwrap_or(&EvalValue::Num(0));
 
                             self.state
                                 .entry(MemoryLocation::Register(*dst_reg))
                                 .and_modify(|e| {
-                                    *e = Value::Num(op_value.as_num() + e.as_num());
+                                    *e = EvalValue::Num(op_value.as_num() + e.as_num());
                                 })
-                                .or_insert(Value::Num(0));
+                                .or_insert(EvalValue::Num(0));
                         }
                         _ => panic!("invalid operand for add_r_rm instruction"),
                     };
@@ -552,14 +552,14 @@ impl Interpreter {
                             let op_value = *self
                                 .state
                                 .get(&MemoryLocation::Register(op))
-                                .unwrap_or(&Value::Num(0));
+                                .unwrap_or(&EvalValue::Num(0));
 
                             self.state
                                 .entry(MemoryLocation::Register(*dst_reg))
                                 .and_modify(|e| {
-                                    *e = Value::Num(op_value.as_num() * e.as_num());
+                                    *e = EvalValue::Num(op_value.as_num() * e.as_num());
                                 })
-                                .or_insert(Value::Num(0));
+                                .or_insert(EvalValue::Num(0));
                         }
                         _ => panic!("invalid operand for imul_r_rm instruction"),
                     };
@@ -577,8 +577,8 @@ impl Interpreter {
                                 )))
                                 .unwrap();
 
-                            let rem = Value::Num(quotient.as_num() % divisor.as_num());
-                            *quotient = Value::Num(quotient.as_num() / divisor.as_num());
+                            let rem = EvalValue::Num(quotient.as_num() % divisor.as_num());
+                            *quotient = EvalValue::Num(quotient.as_num() / divisor.as_num());
 
                             self.state.insert(
                                 MemoryLocation::Register(asm::Register::Amd64(Register::Rdx)),

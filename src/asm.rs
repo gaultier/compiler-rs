@@ -57,7 +57,7 @@ pub struct Instruction {
     pub origin: Origin,
 }
 
-pub type EvalResult = BTreeMap<MemoryLocation, ir::Value>;
+pub type EvalResult = BTreeMap<MemoryLocation, ir::EvalValue>;
 
 pub fn eval(instructions: &[Instruction]) -> EvalResult {
     match instructions.first().map(|ins| ins.kind) {
