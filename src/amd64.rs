@@ -103,6 +103,7 @@ fn find_free_spill_slot(stack: &mut Stack, op_size: &OperandSize) -> MemoryLocat
     MemoryLocation::Stack(offset)
 }
 
+#[warn(unused_results)]
 fn instruction_selection(
     ins: &ir::Instruction,
     vreg_to_memory_location: &RegisterMapping,
@@ -233,18 +234,23 @@ fn instruction_selection(
             // If `dst` should be in `rax`, then nothing to do.
             // Otherwise: need to `mov dst, rax`.
             if dst != &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)) {
-                emit_store(
+                res.extend(emit_store(
                     dst,
                     &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rax))).into(),
                     &OperandSize::Eight,
                     &ins.origin,
-                );
+                ));
             }
 
             // Finally: if we did a spill in the beginning, then we need to restore `lhs`
             // to its original place, i.e. : `mov lhs, spill_slot`.
             if let Some(slot) = &lhs_spill_slot {
-                emit_store(lhs, &slot.into(), &OperandSize::Eight, &Origin::default());
+                res.extend(emit_store(
+                    lhs,
+                    &slot.into(),
+                    &OperandSize::Eight,
+                    &Origin::default(),
+                ));
                 trace!("unspill after idiv: dst={:#?} spill_slot={:#?}", lhs, slot);
             }
 
@@ -281,6 +287,7 @@ fn instruction_selection(
     }
 }
 
+#[warn(unused_results)]
 pub(crate) fn emit(
     irs: &[ir::Instruction],
     vreg_to_memory_location: &RegisterMapping,
@@ -308,6 +315,7 @@ pub(crate) fn emit(
     )
 }
 
+#[warn(unused_results)]
 pub(crate) fn emit_store(
     dst: &MemoryLocation,
     src: &OperandKind,
