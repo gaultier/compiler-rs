@@ -96,325 +96,328 @@ pub enum InstructionKind {
     Lea,
 }
 
-// TODO: Use a free register if possible.
-fn find_free_spill_slot(stack: &mut Stack, op_size: &OperandSize) -> MemoryLocation {
-    let (size, align) = (op_size.as_bytes(), 8); // TODO: Improve.
-    let offset = stack.new_slot(size, align);
-    MemoryLocation::Stack(offset)
+pub struct Emitter {
+    pub(crate) stack: Stack,
+    pub(crate) asm: Vec<Instruction>,
 }
 
-#[warn(unused_results)]
-fn instruction_selection(
-    ins: &ir::Instruction,
-    vreg_to_memory_location: &RegisterMapping,
-    stack: &mut Stack,
-) -> Vec<Instruction> {
-    match (&ins.kind, &ins.lhs, &ins.rhs) {
-        (
-            ir::InstructionKind::IAdd,
-            Some(ir::Operand::VirtualRegister(lhs)),
-            Some(ir::Operand::VirtualRegister(rhs)),
-        ) => vec![
-            Instruction {
-                kind: InstructionKind::Mov_R_RM,
-                operands: vec![
-                    Operand::from_memory_location(
-                        &OperandSize::_64,
-                        vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
-                    ),
-                    Operand::from_memory_location(
-                        &OperandSize::_64,
-                        vreg_to_memory_location.get(lhs).unwrap(),
-                    ),
-                ],
-                origin: ins.origin,
-            },
-            Instruction {
-                kind: InstructionKind::Add_R_RM,
-                operands: vec![
-                    Operand::from_memory_location(
-                        &OperandSize::_64,
-                        vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
-                    ),
-                    Operand::from_memory_location(
-                        &OperandSize::_64,
-                        vreg_to_memory_location.get(rhs).unwrap(),
-                    ),
-                ],
-                origin: ins.origin,
-            },
-        ],
-        (
-            ir::InstructionKind::IMultiply,
-            Some(ir::Operand::VirtualRegister(lhs)),
-            Some(ir::Operand::VirtualRegister(rhs)),
-        ) => vec![
-            Instruction {
-                kind: InstructionKind::Mov_R_RM,
-                operands: vec![
-                    Operand::from_memory_location(
-                        &OperandSize::_64,
-                        vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
-                    ),
-                    Operand::from_memory_location(
-                        &OperandSize::_64,
-                        vreg_to_memory_location.get(lhs).unwrap(),
-                    ),
-                ],
-                origin: ins.origin,
-            },
-            Instruction {
-                kind: InstructionKind::IMul_R_RM,
-                operands: vec![
-                    Operand::from_memory_location(
-                        &OperandSize::_64,
-                        vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
-                    ),
-                    Operand::from_memory_location(
-                        &OperandSize::_64,
-                        vreg_to_memory_location.get(rhs).unwrap(),
-                    ),
-                ],
-                origin: ins.origin,
-            },
-        ],
-        (
-            ir::InstructionKind::IDivide,
-            Some(ir::Operand::VirtualRegister(lhs)),
-            Some(ir::Operand::VirtualRegister(rhs)),
-        ) => {
-            // `dst = lhs / rhs`
-            // =>
-            // `mov rax, lhs`
-            // with: dst in rax.
-            // then:
-            // `idiv rhs`
-            // with: dst in rax.
-            let mut res = Vec::with_capacity(2);
+impl Emitter {
+    pub fn new() -> Self {
+        Self {
+            stack: Stack::new(),
+            asm: Vec::new(),
+        }
+    }
 
-            // `rdx` gets overwritten by `idiv`. So before issuing `idiv`, spill `rdx`.
-            // At the end, we restore it.
-            // TODO: Could be done conditionally by checking if `rdx` contains a meaningful value.
-            // TODO: There is a case where `rdx_spill_slot` and `lhs_spill_slot` could be merged
-            // into one.
-            let rdx_spill_slot = {
-                let spill_slot = find_free_spill_slot(stack, &OperandSize::_64);
-                res.extend(emit_store(
-                    &spill_slot,
-                    &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rdx))).into(),
-                    &OperandSize::_64,
-                    &Origin::default(),
-                ));
-                trace!("spill rdx before idiv: spill_slot={:#?}", spill_slot);
+    // TODO: Use a free register if possible.
+    fn find_free_spill_slot(self: &mut Self, op_size: &OperandSize) -> MemoryLocation {
+        let (size, align) = (op_size.as_bytes(), 8); // TODO: Improve.
+        let offset = self.stack.new_slot(size, align);
+        MemoryLocation::Stack(offset)
+    }
 
-                spill_slot
-            };
-            let rax_spill_slot = {
-                let spill_slot = find_free_spill_slot(stack, &OperandSize::_64);
-                res.extend(emit_store(
-                    &spill_slot,
-                    &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rax))).into(),
-                    &OperandSize::_64,
-                    &Origin::default(),
-                ));
-                trace!("spill rax before idiv: spill_slot={:#?}", spill_slot);
-
-                spill_slot
-            };
-
-            let lhs = vreg_to_memory_location.get(lhs).unwrap();
-            res.extend(emit_store(
-                &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)),
-                &lhs.into(),
-                &OperandSize::_64,
-                &Origin::default(),
-            ));
-
-            // `idiv` technically divides the 128 bit `rdx:rax` value. Thus, `rdx` is zeroed
-            // first to only divide `rax`.
-            res.push(Instruction {
-                kind: InstructionKind::Mov_R_Imm,
-                operands: vec![
-                    Operand::new(
-                        &OperandSize::_64,
-                        &OperandKind::Register(asm::Register::Amd64(Register::Rdx)),
-                    ),
-                    Operand::new(&OperandSize::_64, &OperandKind::Immediate(0)),
-                ],
-                origin: ins.origin,
-            });
-            res.push(Instruction {
-                kind: InstructionKind::IDiv,
-                operands: vec![Operand::from_memory_location(
-                    &OperandSize::_64,
-                    vreg_to_memory_location.get(rhs).unwrap(),
-                )],
-                origin: ins.origin,
-            });
-
-            let dst = vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap();
-            // The quotient is now in `rax`.
-            // If `dst` should be in `rax`, then nothing to do.
-            // Otherwise: need to `mov dst, rax`.
-            if dst != &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)) {
-                res.extend(emit_store(
-                    dst,
-                    &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rax))).into(),
-                    &OperandSize::_64,
-                    &ins.origin,
-                ));
+    #[warn(unused_results)]
+    fn instruction_selection(
+        &mut self,
+        ins: &ir::Instruction,
+        vreg_to_memory_location: &RegisterMapping,
+    ) {
+        match (&ins.kind, &ins.lhs, &ins.rhs) {
+            (
+                ir::InstructionKind::IAdd,
+                Some(ir::Operand::VirtualRegister(lhs)),
+                Some(ir::Operand::VirtualRegister(rhs)),
+            ) => {
+                self.asm.push(Instruction {
+                    kind: InstructionKind::Mov_R_RM,
+                    operands: vec![
+                        Operand::from_memory_location(
+                            &OperandSize::_64,
+                            vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
+                        ),
+                        Operand::from_memory_location(
+                            &OperandSize::_64,
+                            vreg_to_memory_location.get(lhs).unwrap(),
+                        ),
+                    ],
+                    origin: ins.origin,
+                });
+                self.asm.push(Instruction {
+                    kind: InstructionKind::Add_R_RM,
+                    operands: vec![
+                        Operand::from_memory_location(
+                            &OperandSize::_64,
+                            vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
+                        ),
+                        Operand::from_memory_location(
+                            &OperandSize::_64,
+                            vreg_to_memory_location.get(rhs).unwrap(),
+                        ),
+                    ],
+                    origin: ins.origin,
+                });
             }
+            (
+                ir::InstructionKind::IMultiply,
+                Some(ir::Operand::VirtualRegister(lhs)),
+                Some(ir::Operand::VirtualRegister(rhs)),
+            ) => {
+                self.asm.push(Instruction {
+                    kind: InstructionKind::Mov_R_RM,
+                    operands: vec![
+                        Operand::from_memory_location(
+                            &OperandSize::_64,
+                            vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
+                        ),
+                        Operand::from_memory_location(
+                            &OperandSize::_64,
+                            vreg_to_memory_location.get(lhs).unwrap(),
+                        ),
+                    ],
+                    origin: ins.origin,
+                });
+                self.asm.push(Instruction {
+                    kind: InstructionKind::IMul_R_RM,
+                    operands: vec![
+                        Operand::from_memory_location(
+                            &OperandSize::_64,
+                            vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
+                        ),
+                        Operand::from_memory_location(
+                            &OperandSize::_64,
+                            vreg_to_memory_location.get(rhs).unwrap(),
+                        ),
+                    ],
+                    origin: ins.origin,
+                });
+            }
+            (
+                ir::InstructionKind::IDivide,
+                Some(ir::Operand::VirtualRegister(lhs)),
+                Some(ir::Operand::VirtualRegister(rhs)),
+            ) => {
+                // `dst = lhs / rhs`
+                // =>
+                // `mov rax, lhs`
+                // with: dst in rax.
+                // then:
+                // `idiv rhs`
+                // with: dst in rax.
 
-            // Finally: restore rax & rdx.
-            {
-                res.extend(emit_store(
-                    &MemoryLocation::Register(asm::Register::Amd64(Register::Rdx)),
-                    &(&rdx_spill_slot).into(),
-                    &OperandSize::_64,
-                    &Origin::default(),
-                ));
-                trace!("unspill rdx after idiv: spill_slot={:#?}", rdx_spill_slot);
+                // `rdx` gets overwritten by `idiv`. So before issuing `idiv`, spill `rdx`.
+                // At the end, we restore it.
+                // TODO: Could be done conditionally by checking if `rdx` contains a meaningful value.
+                // TODO: There is a case where `rdx_spill_slot` and `lhs_spill_slot` could be merged
+                // into one.
+                let rdx_spill_slot = {
+                    let spill_slot = self.find_free_spill_slot(&OperandSize::_64);
+                    self.emit_store(
+                        &spill_slot,
+                        &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rdx))).into(),
+                        &OperandSize::_64,
+                        &Origin::default(),
+                    );
+                    trace!("spill rdx before idiv: spill_slot={:#?}", spill_slot);
 
-                res.extend(emit_store(
+                    spill_slot
+                };
+                let rax_spill_slot = {
+                    let spill_slot = self.find_free_spill_slot(&OperandSize::_64);
+                    self.emit_store(
+                        &spill_slot,
+                        &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rax))).into(),
+                        &OperandSize::_64,
+                        &Origin::default(),
+                    );
+                    trace!("spill rax before idiv: spill_slot={:#?}", spill_slot);
+
+                    spill_slot
+                };
+
+                let lhs = vreg_to_memory_location.get(lhs).unwrap();
+                self.emit_store(
                     &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)),
-                    &(&rax_spill_slot).into(),
+                    &lhs.into(),
                     &OperandSize::_64,
                     &Origin::default(),
-                ));
-                trace!("unspill rax after idiv: spill_slot={:#?}", rax_spill_slot);
+                );
+
+                // `idiv` technically divides the 128 bit `rdx:rax` value. Thus, `rdx` is zeroed
+                // first to only divide `rax`.
+                self.asm.push(Instruction {
+                    kind: InstructionKind::Mov_R_Imm,
+                    operands: vec![
+                        Operand::new(
+                            &OperandSize::_64,
+                            &OperandKind::Register(asm::Register::Amd64(Register::Rdx)),
+                        ),
+                        Operand::new(&OperandSize::_64, &OperandKind::Immediate(0)),
+                    ],
+                    origin: ins.origin,
+                });
+                self.asm.push(Instruction {
+                    kind: InstructionKind::IDiv,
+                    operands: vec![Operand::from_memory_location(
+                        &OperandSize::_64,
+                        vreg_to_memory_location.get(rhs).unwrap(),
+                    )],
+                    origin: ins.origin,
+                });
+
+                let dst = vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap();
+                // The quotient is now in `rax`.
+                // If `dst` should be in `rax`, then nothing to do.
+                // Otherwise: need to `mov dst, rax`.
+                if dst != &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)) {
+                    self.emit_store(
+                        dst,
+                        &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rax))).into(),
+                        &OperandSize::_64,
+                        &ins.origin,
+                    );
+                }
+
+                // Finally: restore rax & rdx.
+                {
+                    self.emit_store(
+                        &MemoryLocation::Register(asm::Register::Amd64(Register::Rdx)),
+                        &(&rdx_spill_slot).into(),
+                        &OperandSize::_64,
+                        &Origin::default(),
+                    );
+                    trace!("unspill rdx after idiv: spill_slot={:#?}", rdx_spill_slot);
+
+                    self.emit_store(
+                        &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)),
+                        &(&rax_spill_slot).into(),
+                        &OperandSize::_64,
+                        &Origin::default(),
+                    );
+                    trace!("unspill rax after idiv: spill_slot={:#?}", rax_spill_slot);
+                }
             }
-
-            res
+            (ir::InstructionKind::Set, Some(ir::Operand::VirtualRegister(lhs)), None) => {
+                self.asm.push(Instruction {
+                    kind: InstructionKind::Mov_R_RM,
+                    operands: vec![
+                        Operand::from_memory_location(
+                            &OperandSize::_64,
+                            vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
+                        ),
+                        Operand::from_memory_location(
+                            &OperandSize::_64,
+                            vreg_to_memory_location.get(lhs).unwrap(),
+                        ),
+                    ],
+                    origin: ins.origin,
+                });
+            }
+            (ir::InstructionKind::Set, Some(ir::Operand::Num(num)), None) => {
+                self.asm.push(Instruction {
+                    kind: InstructionKind::Mov_R_Imm,
+                    operands: vec![
+                        Operand::from_memory_location(
+                            &OperandSize::_64,
+                            vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
+                        ),
+                        Operand::new(&OperandSize::_64, &OperandKind::Immediate(*num)),
+                    ],
+                    origin: ins.origin,
+                });
+            }
+            _ => panic!("invalid IR operands"),
         }
-        (ir::InstructionKind::Set, Some(ir::Operand::VirtualRegister(lhs)), None) => {
-            vec![Instruction {
-                kind: InstructionKind::Mov_R_RM,
-                operands: vec![
-                    Operand::from_memory_location(
-                        &OperandSize::_64,
-                        vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
-                    ),
-                    Operand::from_memory_location(
-                        &OperandSize::_64,
-                        vreg_to_memory_location.get(lhs).unwrap(),
-                    ),
-                ],
-                origin: ins.origin,
-            }]
-        }
-        (ir::InstructionKind::Set, Some(ir::Operand::Num(num)), None) => vec![Instruction {
-            kind: InstructionKind::Mov_R_Imm,
-            operands: vec![
-                Operand::from_memory_location(
-                    &OperandSize::_64,
-                    vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
-                ),
-                Operand::new(&OperandSize::_64, &OperandKind::Immediate(*num)),
-            ],
-            origin: ins.origin,
-        }],
-        _ => panic!("invalid IR operands"),
-    }
-}
-
-#[warn(unused_results)]
-pub(crate) fn emit(
-    irs: &[ir::Instruction],
-    vreg_to_memory_location: &RegisterMapping,
-) -> (Vec<asm::Instruction>, Stack) {
-    let mut asm = Vec::with_capacity(irs.len() * 2);
-    let mut stack = Stack::new();
-
-    for ir in irs {
-        asm.extend(instruction_selection(
-            ir,
-            vreg_to_memory_location,
-            &mut stack,
-        ));
     }
 
-    (
-        asm.into_iter()
-            .map(|x| asm::Instruction {
-                kind: asm::InstructionKind::Amd64(x.kind),
-                operands: x.operands,
-                origin: x.origin,
-            })
-            .collect(),
-        stack,
-    )
-}
+    #[warn(unused_results)]
+    pub(crate) fn emit(
+        &mut self,
+        irs: &[ir::Instruction],
+        vreg_to_memory_location: &RegisterMapping,
+    ) {
+        self.asm = Vec::with_capacity(irs.len() * 2);
 
-#[warn(unused_results)]
-pub(crate) fn emit_store(
-    dst: &MemoryLocation,
-    src: &OperandKind,
-    size: &OperandSize,
-    origin: &Origin,
-) -> Vec<Instruction> {
-    match (dst, src) {
-        (MemoryLocation::Register(dst_reg), OperandKind::Register(src_reg)) => {
-            vec![Instruction {
-                kind: InstructionKind::Mov_R_RM,
-                operands: vec![
-                    Operand {
-                        operand_size: *size,
-                        kind: OperandKind::Register(*dst_reg),
-                    },
-                    Operand {
-                        operand_size: *size,
-                        kind: OperandKind::Register(*src_reg),
-                    },
-                ],
-                origin: *origin,
-            }]
+        for ir in irs {
+            self.instruction_selection(ir, vreg_to_memory_location);
         }
-        (MemoryLocation::Register(dst_reg), OperandKind::Immediate(src_imm)) => vec![Instruction {
-            kind: InstructionKind::Mov_R_Imm,
-            operands: vec![
-                Operand {
-                    operand_size: *size,
-                    kind: OperandKind::Register(*dst_reg),
-                },
-                Operand {
-                    operand_size: *size,
-                    kind: OperandKind::Immediate(*src_imm),
-                },
-            ],
-            origin: *origin,
-        }],
-        (MemoryLocation::Stack(dst_stack), OperandKind::Register(src_reg)) => vec![Instruction {
-            kind: InstructionKind::Mov_RM_R,
-            operands: vec![
-                Operand {
-                    operand_size: *size,
-                    kind: OperandKind::Stack(*dst_stack),
-                },
-                Operand {
-                    operand_size: *size,
-                    kind: OperandKind::Register(*src_reg),
-                },
-            ],
-            origin: *origin,
-        }],
-        (MemoryLocation::Stack(_), OperandKind::Immediate(_)) => todo!(),
-        (MemoryLocation::Register(dst_reg), OperandKind::Stack(_)) => {
-            vec![Instruction {
-                kind: InstructionKind::Mov_R_RM,
-                operands: vec![
-                    Operand {
-                        operand_size: *size,
-                        kind: OperandKind::Register(*dst_reg),
-                    },
-                    Operand {
-                        operand_size: *size,
-                        kind: *src,
-                    },
-                ],
-                origin: *origin,
-            }]
+    }
+
+    #[warn(unused_results)]
+    pub(crate) fn emit_store(
+        &mut self,
+        dst: &MemoryLocation,
+        src: &OperandKind,
+        size: &OperandSize,
+        origin: &Origin,
+    ) {
+        match (dst, src) {
+            (MemoryLocation::Register(dst_reg), OperandKind::Register(src_reg)) => {
+                self.asm.push(Instruction {
+                    kind: InstructionKind::Mov_R_RM,
+                    operands: vec![
+                        Operand {
+                            operand_size: *size,
+                            kind: OperandKind::Register(*dst_reg),
+                        },
+                        Operand {
+                            operand_size: *size,
+                            kind: OperandKind::Register(*src_reg),
+                        },
+                    ],
+                    origin: *origin,
+                });
+            }
+            (MemoryLocation::Register(dst_reg), OperandKind::Immediate(src_imm)) => {
+                self.asm.push(Instruction {
+                    kind: InstructionKind::Mov_R_Imm,
+                    operands: vec![
+                        Operand {
+                            operand_size: *size,
+                            kind: OperandKind::Register(*dst_reg),
+                        },
+                        Operand {
+                            operand_size: *size,
+                            kind: OperandKind::Immediate(*src_imm),
+                        },
+                    ],
+                    origin: *origin,
+                });
+            }
+            (MemoryLocation::Stack(dst_stack), OperandKind::Register(src_reg)) => {
+                self.asm.push(Instruction {
+                    kind: InstructionKind::Mov_RM_R,
+                    operands: vec![
+                        Operand {
+                            operand_size: *size,
+                            kind: OperandKind::Stack(*dst_stack),
+                        },
+                        Operand {
+                            operand_size: *size,
+                            kind: OperandKind::Register(*src_reg),
+                        },
+                    ],
+                    origin: *origin,
+                });
+            }
+            (MemoryLocation::Stack(_), OperandKind::Immediate(_)) => todo!(),
+            (MemoryLocation::Register(dst_reg), OperandKind::Stack(_)) => {
+                self.asm.push(Instruction {
+                    kind: InstructionKind::Mov_R_RM,
+                    operands: vec![
+                        Operand {
+                            operand_size: *size,
+                            kind: OperandKind::Register(*dst_reg),
+                        },
+                        Operand {
+                            operand_size: *size,
+                            kind: *src,
+                        },
+                    ],
+                    origin: *origin,
+                });
+            }
+            (MemoryLocation::Stack(_), OperandKind::Stack(_)) => todo!(),
         }
-        (MemoryLocation::Stack(_), OperandKind::Stack(_)) => todo!(),
     }
 }
 

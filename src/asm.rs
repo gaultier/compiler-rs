@@ -197,7 +197,23 @@ pub(crate) fn emit(
     target_arch: &ArchKind,
 ) -> (Vec<Instruction>, Stack) {
     match target_arch {
-        ArchKind::Amd64 => amd64::emit(irs, vreg_to_memory_location),
+        ArchKind::Amd64 => {
+            let mut emitter = amd64::Emitter::new();
+            emitter.emit(irs, vreg_to_memory_location);
+
+            (
+                emitter
+                    .asm
+                    .into_iter()
+                    .map(|x| Instruction {
+                        kind: InstructionKind::Amd64(x.kind),
+                        operands: x.operands,
+                        origin: x.origin,
+                    })
+                    .collect(),
+                emitter.stack,
+            )
+        }
     }
 }
 
