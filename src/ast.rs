@@ -11,6 +11,7 @@ use serde::Serialize;
 #[derive(Serialize, Copy, Clone, PartialEq, Eq, Debug)]
 pub enum NodeKind {
     Number,
+    Bool,
     Add,
     Multiply,
     Divide,
@@ -19,6 +20,7 @@ pub enum NodeKind {
 #[derive(Serialize, Copy, Clone, Debug)]
 pub enum NodeData {
     Num(u64),
+    Bool(bool),
 }
 
 #[derive(Serialize, Copy, Clone, Debug)]
@@ -133,6 +135,20 @@ impl<'a> Parser<'a> {
                 data: Some(NodeData::Num(num)),
                 origin: token.origin,
                 typ: Type::u64(),
+            };
+            self.nodes.push(node);
+            return true;
+        }
+        if let Some(token) = self.match_kind(TokenKind::LiteralBool) {
+            let src = &self.input[token.origin.offset as usize..][..token.origin.len as usize];
+
+            assert!(src == "true" || src == "false");
+
+            let node = Node {
+                kind: NodeKind::Bool,
+                data: Some(NodeData::Bool(if src == "true" { true } else { false })),
+                origin: token.origin,
+                typ: Type::bool(),
             };
             self.nodes.push(node);
             return true;

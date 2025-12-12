@@ -9,6 +9,7 @@ pub enum TypeKind {
     Unknown,
     Void,
     Number,
+    Bool,
 }
 
 #[derive(Serialize, Copy, Clone, PartialEq, Eq, Debug, PartialOrd, Ord)]
@@ -34,6 +35,7 @@ impl Display for Type {
             TypeKind::Unknown => f.write_str("any"),
             TypeKind::Void => f.write_str("void"),
             TypeKind::Number => f.write_str("u64"), // FIXME
+            TypeKind::Bool => f.write_str("bool"),
         }?;
 
         Ok(())
@@ -54,6 +56,7 @@ impl Type {
             (TypeKind::Unknown, _) => Ok(*self),
             (_, TypeKind::Unknown) => Ok(*other),
             (TypeKind::Void, TypeKind::Void) => Ok(*self),
+            (TypeKind::Bool, TypeKind::Bool) => Ok(*self),
             (TypeKind::Number, TypeKind::Number) => {
                 if self.size == other.size {
                     Ok(*self)
@@ -62,14 +65,19 @@ impl Type {
                 }
             }
 
-            (TypeKind::Void, _) | (_, TypeKind::Void) => {
-                Err(Error::new_incompatible_types(&self.origin, self, other))
-            }
+            (TypeKind::Void, _)
+            | (_, TypeKind::Void)
+            | (TypeKind::Bool, _)
+            | (_, TypeKind::Bool) => Err(Error::new_incompatible_types(&self.origin, self, other)),
         }
     }
 
     pub(crate) fn u64() -> Self {
         Type::new(&TypeKind::Number, 8, &Origin::default())
+    }
+
+    pub(crate) fn bool() -> Self {
+        Type::new(&TypeKind::Bool, 4, &Origin::default())
     }
 
     pub(crate) fn void() -> Self {
@@ -106,6 +114,12 @@ impl Checker {
             match node.kind {
                 crate::ast::NodeKind::Number => {
                     assert_eq!(node.typ.kind, TypeKind::Number);
+                    assert_ne!(node.typ.size, 0);
+
+                    stack.push(node);
+                }
+                crate::ast::NodeKind::Bool => {
+                    assert_eq!(node.typ.kind, TypeKind::Bool);
                     assert_ne!(node.typ.size, 0);
 
                     stack.push(node);

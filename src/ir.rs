@@ -31,6 +31,7 @@ pub struct Instruction {
 #[derive(Serialize, Debug, Clone, Copy)]
 pub enum Operand {
     Num(u64),
+    Bool(bool),
     VirtualRegister(VirtualRegister),
 }
 
@@ -84,6 +85,23 @@ impl Emitter {
                         kind: InstructionKind::Set,
                         args_count: 1,
                         lhs: Some(Operand::Num(num)),
+                        rhs: None,
+                        origin: node.origin,
+                        res_vreg: Some(res_vreg),
+                    };
+                    self.instructions.push(ins);
+                    stack.push(res_vreg);
+                }
+                crate::ast::NodeKind::Bool => {
+                    let b = match node.data {
+                        Some(NodeData::Bool(b)) => b,
+                        _ => panic!("expected boolean but was not present"),
+                    };
+                    let res_vreg = self.make_vreg();
+                    let ins = Instruction {
+                        kind: InstructionKind::Set,
+                        args_count: 1,
+                        lhs: Some(Operand::Bool(b)),
                         rhs: None,
                         origin: node.origin,
                         res_vreg: Some(res_vreg),
@@ -195,9 +213,12 @@ impl Operand {
     pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
         match self {
             Operand::Num(n) => {
-                write!(w, "(u64.const {})", n)
+                write!(w, "{}", n)
             }
-            Operand::VirtualRegister(r) => write!(w, "(v{})", r.0),
+            Operand::Bool(b) => {
+                write!(w, "{}", b)
+            }
+            Operand::VirtualRegister(r) => write!(w, "v{}", r.0),
         }
     }
 }
@@ -240,6 +261,7 @@ impl Instruction {
 #[derive(Serialize, Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum EvalValue {
     Num(u64),
+    Bool(bool),
 }
 
 pub type EvalResult = BTreeMap<VirtualRegister, EvalValue>;
@@ -248,6 +270,7 @@ impl EvalValue {
     pub(crate) fn as_num(&self) -> u64 {
         match self {
             EvalValue::Num(num) => *num,
+            _ => panic!("not a number"),
         }
     }
 }
@@ -260,10 +283,12 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
             InstructionKind::IAdd => {
                 let lhs = match ir.lhs.as_ref().unwrap() {
                     Operand::Num(num) => EvalValue::Num(*num),
+                    Operand::Bool(_) => panic!("incompatible operands"),
                     Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
                 };
                 let rhs = match ir.rhs.as_ref().unwrap() {
                     Operand::Num(num) => EvalValue::Num(*num),
+                    Operand::Bool(_) => panic!("incompatible operands"),
                     Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
                 };
                 let sum = EvalValue::Num(lhs.as_num() + rhs.as_num());
@@ -272,36 +297,41 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
             InstructionKind::IMultiply => {
                 let lhs = match ir.lhs.as_ref().unwrap() {
                     Operand::Num(num) => EvalValue::Num(*num),
+                    Operand::Bool(_) => panic!("incompatible operands"),
                     Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
                 };
                 let rhs = match ir.rhs.as_ref().unwrap() {
                     Operand::Num(num) => EvalValue::Num(*num),
+                    Operand::Bool(_) => panic!("incompatible operands"),
                     Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
                 };
                 let mul = match (lhs, rhs) {
                     (EvalValue::Num(lhs), EvalValue::Num(rhs)) => EvalValue::Num(lhs * rhs),
-                    //_ => panic!("unexpected values, not numerical"),
+                    _ => panic!("unexpected values, not numerical"),
                 };
                 res.insert(ir.res_vreg.unwrap(), mul);
             }
             InstructionKind::IDivide => {
                 let lhs = match ir.lhs.as_ref().unwrap() {
                     Operand::Num(num) => EvalValue::Num(*num),
+                    Operand::Bool(_) => panic!("incompatible operands"),
                     Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
                 };
                 let rhs = match ir.rhs.as_ref().unwrap() {
                     Operand::Num(num) => EvalValue::Num(*num),
+                    Operand::Bool(_) => panic!("incompatible operands"),
                     Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
                 };
                 let mul = match (lhs, rhs) {
                     (EvalValue::Num(lhs), EvalValue::Num(rhs)) => EvalValue::Num(lhs / rhs),
-                    //_ => panic!("unexpected values, not numerical"),
+                    _ => panic!("unexpected values, not numerical"),
                 };
                 res.insert(ir.res_vreg.unwrap(), mul);
             }
             InstructionKind::Set => {
                 let value = match ir.lhs.as_ref().unwrap() {
                     Operand::Num(num) => EvalValue::Num(*num),
+                    Operand::Bool(b) => EvalValue::Bool(*b),
                     Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
                 };
                 assert!(ir.rhs.is_none());

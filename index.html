@@ -115,8 +115,11 @@
                 const node_dom = document.createElement("span");
                 node_dom.classList.add("ast_node");
                 node_dom.innerText = node.kind;
-                if (node.data && node.data.Num) {
+                if (node.data && node.data.Num != null) {
                     node_dom.innerText += `(${node.data.Num})`;
+                }
+                if (node.data && node.data.Bool != null) {
+                    node_dom.innerText += `(${node.data.Bool})`;
                 }
                 parse_dom.appendChild(node_dom);
             }
