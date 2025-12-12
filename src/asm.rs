@@ -175,10 +175,17 @@ impl Stack {
         Self { offset: 0 }
     }
 
+    // Intended to be used with `rbp` indexing i.e.: `mov [rbp-8], 1`.
     pub(crate) fn new_slot(&mut self, size: usize, align: usize) -> usize {
+        assert_ne!(size, 0);
+        assert_ne!(align, 0);
+
         let padding = (0usize).wrapping_sub(self.offset) & (align - 1);
+        assert!(padding <= align);
 
         self.offset += size + padding;
+
+        assert_ne!(self.offset, 0);
 
         self.offset
     }
@@ -211,5 +218,22 @@ impl OperandSize {
             OperandSize::_32 => w.write_all(b"DWORD PTR"),
             OperandSize::_64 => w.write_all(b"QWORD PTR"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_stack() {
+        let mut stack = Stack::new();
+        let off1 = stack.new_slot(1, 1); // byte.
+        assert_eq!(off1, 1);
+        assert_eq!(stack.offset, 1);
+
+        let off2 = stack.new_slot(16, 8); // 2 qwords.
+        assert_eq!(stack.offset, 24);
+        assert_eq!(off2, 24);
     }
 }
