@@ -207,37 +207,42 @@ fn instruction_selection(
                 ));
                 trace!("spill rdx before idiv: spill_slot={:#?}", spill_slot);
 
-                Some(spill_slot)
+                spill_slot
+            };
+            let rax_spill_slot = {
+                let spill_slot = find_free_spill_slot(stack, &OperandSize::Eight);
+                res.extend(emit_store(
+                    &spill_slot,
+                    &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rax))).into(),
+                    &OperandSize::Eight,
+                    &Origin::default(),
+                ));
+                trace!("spill rax before idiv: spill_slot={:#?}", spill_slot);
+
+                spill_slot
             };
 
             let lhs = vreg_to_memory_location.get(lhs).unwrap();
-            // If `lhs` is already in `rax`, nothing to do.
-            // Otherwise: need to spill what's in `rax` and move `lhs` to it.
-            let lhs_spill_slot =
-                if lhs != &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)) {
-                    let spill_slot = find_free_spill_slot(stack, &OperandSize::Eight);
-                    res.extend(emit_store(
-                        &spill_slot,
-                        &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rax))).into(),
-                        &OperandSize::Eight,
-                        &Origin::default(),
-                    ));
-                    res.extend(emit_store(
-                        &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)),
-                        &lhs.into(),
-                        &OperandSize::Eight,
-                        &Origin::default(),
-                    ));
-                    trace!(
-                        "spill rax before idiv: src={:#?} spill_slot={:#?}",
-                        lhs, spill_slot
-                    );
+            res.extend(emit_store(
+                &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)),
+                &lhs.into(),
+                &OperandSize::Eight,
+                &Origin::default(),
+            ));
 
-                    Some(spill_slot)
-                } else {
-                    None
-                };
-
+            // `idiv` technically divides the 128 bit `rdx:rax` value. Thus, `rdx` is zeroed
+            // first to only divide `rax`.
+            res.push(Instruction {
+                kind: InstructionKind::Mov_R_Imm,
+                operands: vec![
+                    Operand::new(
+                        &OperandSize::Eight,
+                        &OperandKind::Register(asm::Register::Amd64(Register::Rdx)),
+                    ),
+                    Operand::new(&OperandSize::Eight, &OperandKind::Immediate(0)),
+                ],
+                origin: ins.origin,
+            });
             res.push(Instruction {
                 kind: InstructionKind::IDiv,
                 operands: vec![Operand::from_memory_location(
@@ -260,30 +265,23 @@ fn instruction_selection(
                 ));
             }
 
-            // Finally: if we did a spill in the beginning, then we need to restore `lhs`
-            // to its original place, i.e. : `mov lhs, spill_slot`.
-            if let Some(slot) = &lhs_spill_slot {
-                res.extend(emit_store(
-                    lhs,
-                    &slot.into(),
-                    &OperandSize::Eight,
-                    &Origin::default(),
-                ));
-                trace!(
-                    "unspill rax after idiv: dst={:#?} spill_slot={:#?}",
-                    lhs, slot
-                );
-            }
-
-            // Finally #2: restore rdx.
-            if let Some(slot) = &rdx_spill_slot {
+            // Finally: restore rax & rdx.
+            {
                 res.extend(emit_store(
                     &MemoryLocation::Register(asm::Register::Amd64(Register::Rdx)),
-                    &slot.into(),
+                    &(&rdx_spill_slot).into(),
                     &OperandSize::Eight,
                     &Origin::default(),
                 ));
-                trace!("unspill rdx after idiv: spill_slot={:#?}", slot);
+                trace!("unspill rdx after idiv: spill_slot={:#?}", rdx_spill_slot);
+
+                res.extend(emit_store(
+                    &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)),
+                    &(&rax_spill_slot).into(),
+                    &OperandSize::Eight,
+                    &Origin::default(),
+                ));
+                trace!("unspill rax after idiv: spill_slot={:#?}", rax_spill_slot);
             }
 
             res
@@ -569,14 +567,14 @@ impl Interpreter {
                 InstructionKind::IDiv => {
                     assert_eq!(ins.operands.len(), 1);
 
-                    let dst_reg = asm::Register::Amd64(Register::Rax);
-
                     match ins.operands[0].kind {
                         asm::OperandKind::Register(op) => {
                             let divisor = *self.state.get(&MemoryLocation::Register(op)).unwrap();
                             let quotient = self
                                 .state
-                                .get_mut(&MemoryLocation::Register(dst_reg))
+                                .get_mut(&MemoryLocation::Register(asm::Register::Amd64(
+                                    Register::Rax,
+                                )))
                                 .unwrap();
 
                             let rem = Value::Num(quotient.as_num() % divisor.as_num());
