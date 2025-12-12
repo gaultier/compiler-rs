@@ -95,9 +95,17 @@ pub enum InstructionKind {
     Lea,
 }
 
+// TODO: Use a free register if possible.
+fn find_free_spill_slot(stack: &mut Stack, op_size: &OperandSize) -> MemoryLocation {
+    let (size, align) = (op_size.as_usize(), 8); // TODO: Improve.
+    let offset = stack.new_slot(size, align);
+    MemoryLocation::Stack(offset)
+}
+
 fn instruction_selection(
     ins: &ir::Instruction,
     vreg_to_memory_location: &RegisterMapping,
+    stack: &mut Stack,
 ) -> Vec<Instruction> {
     match (&ins.kind, &ins.lhs, &ins.rhs) {
         (
@@ -172,22 +180,39 @@ fn instruction_selection(
             ir::InstructionKind::IDivide,
             Some(ir::Operand::VirtualRegister(lhs)),
             Some(ir::Operand::VirtualRegister(rhs)),
-        ) => vec![
-            Instruction {
-                kind: InstructionKind::Mov_R_RM,
-                operands: vec![
-                    Operand::from_memory_location(
+        ) => {
+            // `dst = lhs / rhs`
+            // =>
+            // `mov rax, lhs`
+            // with: dst in rax.
+            // then:
+            // `idiv rhs`
+            // with: dst in rax.
+            let mut res = Vec::with_capacity(2);
+
+            let lhs = vreg_to_memory_location.get(lhs).unwrap();
+            // If `lhs` is already in `rax`, nothing to do.
+            // Otherwise: need to spill what's in `rax` and move `lhs` to it.
+            let lhs_spill_slot =
+                if lhs != &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)) {
+                    let spill_slot = find_free_spill_slot(stack, &OperandSize::Eight);
+                    res.extend(emit_store(
+                        &spill_slot,
+                        &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rax))).into(),
                         &OperandSize::Eight,
-                        vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
-                    ),
-                    Operand::from_memory_location(
+                    ));
+                    res.extend(emit_store(
+                        &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)),
+                        &lhs.into(),
                         &OperandSize::Eight,
-                        vreg_to_memory_location.get(lhs).unwrap(),
-                    ),
-                ],
-                origin: ins.origin,
-            },
-            Instruction {
+                    ));
+
+                    Some(spill_slot)
+                } else {
+                    None
+                };
+
+            res.push(Instruction {
                 kind: InstructionKind::IDiv,
                 operands: vec![
                     Operand::from_memory_location(
@@ -200,8 +225,28 @@ fn instruction_selection(
                     ),
                 ],
                 origin: ins.origin,
-            },
-        ],
+            });
+
+            let dst = vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap();
+            // The quotient is now in `rax`.
+            // If `dst` should be in `rax`, then nothing to do.
+            // Otherwise: need to `mov dst, rax`.
+            if dst != &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)) {
+                emit_store(
+                    &dst,
+                    &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rax))).into(),
+                    &OperandSize::Eight,
+                );
+            }
+
+            // Finally: if we did a spill in the beginning, then we need to restore `lhs`
+            // to its original place, i.e. : `mov lhs, spill_slot`.
+            if let Some(slot) = &lhs_spill_slot {
+                emit_store(lhs, &slot.into(), &OperandSize::Eight);
+            }
+
+            res
+        }
         (ir::InstructionKind::Set, Some(ir::Operand::VirtualRegister(lhs)), None) => {
             vec![Instruction {
                 kind: InstructionKind::Mov_R_RM,
@@ -238,10 +283,14 @@ pub(crate) fn emit(
     vreg_to_memory_location: &RegisterMapping,
 ) -> (Vec<asm::Instruction>, Stack) {
     let mut asm = Vec::with_capacity(irs.len() * 2);
-    let mut _stack = Stack::new();
+    let mut stack = Stack::new();
 
     for ir in irs {
-        asm.extend(instruction_selection(ir, vreg_to_memory_location));
+        asm.extend(instruction_selection(
+            ir,
+            vreg_to_memory_location,
+            &mut stack,
+        ));
     }
 
     (

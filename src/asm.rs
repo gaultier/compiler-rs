@@ -180,3 +180,14 @@ pub(crate) fn emit(
         ArchKind::Amd64 => amd64::emit(irs, vreg_to_memory_location),
     }
 }
+
+impl OperandSize {
+    pub(crate) fn as_usize(&self) -> usize {
+        match self {
+            OperandSize::One => 1,
+            OperandSize::Two => 2,
+            OperandSize::Four => 4,
+            OperandSize::Eight => 8,
+        }
+    }
+}
