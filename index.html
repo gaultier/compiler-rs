@@ -131,7 +131,12 @@
             ir_eval_dom.innerText = '';
             for (const [vreg, val] of Object.entries(res.ir_eval)) {
                 const item = document.createElement("span");
-                item.innerText = `v${vreg}: ${val.Num}`;
+                item.innerText = `v${vreg}: `
+                if (val.Num != null) {
+                    item.innerText += `${val.Num}`;
+                } else if (val.Bool != null) {
+                    item.innerText += `${val.Bool}`;
+                }
 
                 ir_eval_dom.appendChild(item);
             }
@@ -158,7 +163,7 @@
             asm_eval_dom.innerText = "";
             for (const [mem_loc, val] of res.asm_eval) {
                 const item = document.createElement("span");
-                if (mem_loc.Register && mem_loc.Register.Amd64) {
+                if (mem_loc.Register != null && mem_loc.Register.Amd64 != null) {
                     item.innerText = `${mem_loc.Register.Amd64}: ${val.Num}`;
                 } else if (mem_loc.Stack != null) {
                     item.innerText = `stack ${mem_loc.Stack}: ${val.Num}`;
