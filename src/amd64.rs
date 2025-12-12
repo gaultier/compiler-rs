@@ -192,6 +192,24 @@ fn instruction_selection(
             // with: dst in rax.
             let mut res = Vec::with_capacity(2);
 
+            // `rdx` gets overwritten by `idiv`. So before issuing `idiv`, spill `rdx`.
+            // At the end, we restore it.
+            // TODO: Could be done conditionally by checking if `rdx` contains a meaningful value.
+            // TODO: There is a case where `rdx_spill_slot` and `lhs_spill_slot` could be merged
+            // into one.
+            let rdx_spill_slot = {
+                let spill_slot = find_free_spill_slot(stack, &OperandSize::Eight);
+                res.extend(emit_store(
+                    &spill_slot,
+                    &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rdx))).into(),
+                    &OperandSize::Eight,
+                    &Origin::default(),
+                ));
+                trace!("spill rdx before idiv: spill_slot={:#?}", spill_slot);
+
+                Some(spill_slot)
+            };
+
             let lhs = vreg_to_memory_location.get(lhs).unwrap();
             // If `lhs` is already in `rax`, nothing to do.
             // Otherwise: need to spill what's in `rax` and move `lhs` to it.
@@ -211,7 +229,7 @@ fn instruction_selection(
                         &Origin::default(),
                     ));
                     trace!(
-                        "spill before idiv: src={:#?} spill_slot={:#?}",
+                        "spill rax before idiv: src={:#?} spill_slot={:#?}",
                         lhs, spill_slot
                     );
 
@@ -251,7 +269,21 @@ fn instruction_selection(
                     &OperandSize::Eight,
                     &Origin::default(),
                 ));
-                trace!("unspill after idiv: dst={:#?} spill_slot={:#?}", lhs, slot);
+                trace!(
+                    "unspill rax after idiv: dst={:#?} spill_slot={:#?}",
+                    lhs, slot
+                );
+            }
+
+            // Finally #2: restore rdx.
+            if let Some(slot) = &rdx_spill_slot {
+                res.extend(emit_store(
+                    &MemoryLocation::Register(asm::Register::Amd64(Register::Rdx)),
+                    &slot.into(),
+                    &OperandSize::Eight,
+                    &Origin::default(),
+                ));
+                trace!("unspill rdx after idiv: spill_slot={:#?}", slot);
             }
 
             res
