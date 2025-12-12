@@ -214,16 +214,10 @@ fn instruction_selection(
 
             res.push(Instruction {
                 kind: InstructionKind::IDiv,
-                operands: vec![
-                    Operand::from_memory_location(
-                        &OperandSize::Eight,
-                        vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
-                    ),
-                    Operand::from_memory_location(
-                        &OperandSize::Eight,
-                        vreg_to_memory_location.get(rhs).unwrap(),
-                    ),
-                ],
+                operands: vec![Operand::from_memory_location(
+                    &OperandSize::Eight,
+                    vreg_to_memory_location.get(rhs).unwrap(),
+                )],
                 origin: ins.origin,
             });
 
@@ -356,7 +350,22 @@ pub(crate) fn emit_store(
             origin: Origin::default(),
         }],
         (MemoryLocation::Stack(_), OperandKind::Immediate(_)) => todo!(),
-        (MemoryLocation::Register(_register), OperandKind::Stack(_)) => todo!(),
+        (MemoryLocation::Register(dst_reg), OperandKind::Stack(_)) => {
+            vec![Instruction {
+                kind: InstructionKind::Mov_R_RM,
+                operands: vec![
+                    Operand {
+                        operand_size: *size,
+                        kind: OperandKind::Register(*dst_reg),
+                    },
+                    Operand {
+                        operand_size: *size,
+                        kind: *src,
+                    },
+                ],
+                origin: Origin::default(),
+            }]
+        }
         (MemoryLocation::Stack(_), OperandKind::Stack(_)) => todo!(),
     }
 }
@@ -508,23 +517,16 @@ impl Interpreter {
                     };
                 }
                 InstructionKind::IDiv => {
-                    assert_eq!(ins.operands.len(), 2);
+                    assert_eq!(ins.operands.len(), 1);
 
-                    let dst_reg = match &ins.operands[0] {
-                        Operand {
-                            kind: OperandKind::Register(reg),
-                            ..
-                        } => reg,
-                        _ => panic!("invalid dst"),
-                    };
-                    assert_eq!(dst_reg, &asm::Register::Amd64(Register::Rax));
+                    let dst_reg = asm::Register::Amd64(Register::Rax);
 
-                    match ins.operands[1].kind {
+                    match ins.operands[0].kind {
                         asm::OperandKind::Register(op) => {
                             let divisor = *self.state.get(&MemoryLocation::Register(op)).unwrap();
                             let quotient = self
                                 .state
-                                .get_mut(&MemoryLocation::Register(*dst_reg))
+                                .get_mut(&MemoryLocation::Register(dst_reg))
                                 .unwrap();
 
                             let rem = Value::Num(quotient.as_num() % divisor.as_num());
