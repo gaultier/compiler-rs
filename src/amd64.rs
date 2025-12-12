@@ -2,8 +2,8 @@ use serde::Serialize;
 
 use crate::{
     asm::{
-        self, Abi, EvalResult, Instruction, Mutability, Operand, OperandKind, OperandSize,
-        VInstruction,
+        self, Abi, EvalResult, Instruction, Instruction, Mutability, Operand, OperandKind,
+        OperandSize, Stack,
     },
     ir::{self, Value},
     origin::Origin,
@@ -91,14 +91,14 @@ pub enum InstructionKind {
     Lea,
 }
 
-fn instruction_selection(ins: &ir::Instruction) -> Vec<VInstruction> {
+fn instruction_selection(ins: &ir::Instruction) -> Vec<Instruction> {
     match (&ins.kind, &ins.lhs, &ins.rhs) {
         (
             ir::InstructionKind::IAdd,
             Some(ir::Operand::VirtualRegister(lhs)),
             Some(ir::Operand::VirtualRegister(rhs)),
         ) => vec![
-            VInstruction {
+            Instruction {
                 kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
                 operands: vec![
                     ir::Operand::VirtualRegister(ins.res_vreg.unwrap()),
@@ -106,7 +106,7 @@ fn instruction_selection(ins: &ir::Instruction) -> Vec<VInstruction> {
                 ],
                 origin: ins.origin,
             },
-            VInstruction {
+            Instruction {
                 kind: asm::InstructionKind::Amd64(InstructionKind::Add_R_RM),
                 operands: vec![
                     ir::Operand::VirtualRegister(ins.res_vreg.unwrap()),
@@ -120,7 +120,7 @@ fn instruction_selection(ins: &ir::Instruction) -> Vec<VInstruction> {
             Some(ir::Operand::VirtualRegister(lhs)),
             Some(ir::Operand::VirtualRegister(rhs)),
         ) => vec![
-            VInstruction {
+            Instruction {
                 kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
                 operands: vec![
                     ir::Operand::VirtualRegister(ins.res_vreg.unwrap()),
@@ -128,7 +128,7 @@ fn instruction_selection(ins: &ir::Instruction) -> Vec<VInstruction> {
                 ],
                 origin: ins.origin,
             },
-            VInstruction {
+            Instruction {
                 kind: asm::InstructionKind::Amd64(InstructionKind::IMul_R_RM),
                 operands: vec![
                     ir::Operand::VirtualRegister(ins.res_vreg.unwrap()),
@@ -142,7 +142,7 @@ fn instruction_selection(ins: &ir::Instruction) -> Vec<VInstruction> {
             Some(ir::Operand::VirtualRegister(lhs)),
             Some(ir::Operand::VirtualRegister(rhs)),
         ) => vec![
-            VInstruction {
+            Instruction {
                 kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
                 operands: vec![
                     ir::Operand::VirtualRegister(ins.res_vreg.unwrap()),
@@ -150,7 +150,7 @@ fn instruction_selection(ins: &ir::Instruction) -> Vec<VInstruction> {
                 ],
                 origin: ins.origin,
             },
-            VInstruction {
+            Instruction {
                 kind: asm::InstructionKind::Amd64(InstructionKind::IDiv),
                 operands: vec![
                     ir::Operand::VirtualRegister(ins.res_vreg.unwrap()),
@@ -160,7 +160,7 @@ fn instruction_selection(ins: &ir::Instruction) -> Vec<VInstruction> {
             },
         ],
         (ir::InstructionKind::Set, Some(ir::Operand::VirtualRegister(lhs)), None) => {
-            vec![VInstruction {
+            vec![Instruction {
                 kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_RM),
                 operands: vec![
                     ir::Operand::VirtualRegister(ins.res_vreg.unwrap()),
@@ -169,7 +169,7 @@ fn instruction_selection(ins: &ir::Instruction) -> Vec<VInstruction> {
                 origin: ins.origin,
             }]
         }
-        (ir::InstructionKind::Set, Some(ir::Operand::Num(num)), None) => vec![VInstruction {
+        (ir::InstructionKind::Set, Some(ir::Operand::Num(num)), None) => vec![Instruction {
             kind: asm::InstructionKind::Amd64(InstructionKind::Mov_R_Imm),
             operands: vec![
                 ir::Operand::VirtualRegister(ins.res_vreg.unwrap()),
@@ -181,14 +181,15 @@ fn instruction_selection(ins: &ir::Instruction) -> Vec<VInstruction> {
     }
 }
 
-pub fn ir_to_vcode(irs: &[ir::Instruction]) -> Vec<VInstruction> {
-    let mut res = Vec::with_capacity(irs.len());
+pub(crate) fn emit(irs: &[ir::Instruction]) -> (Vec<Instruction>, Stack) {
+    let mut asm = Vec::with_capacity(irs.len() * 2);
+    let mut stack = Stack::new();
 
     for ir in irs {
-        res.extend(instruction_selection(ir));
+        asm.extend(ir.instruction_selection(&mut stack));
     }
 
-    res
+    (asm, stack)
 }
 
 pub(crate) fn emit_store(
@@ -256,122 +257,6 @@ pub(crate) fn emit_store(
         (MemoryLocation::Stack(_), OperandKind::Immediate(_)) => todo!(),
         (MemoryLocation::Register(_register), OperandKind::Stack(_)) => todo!(),
         (MemoryLocation::Stack(_), OperandKind::Stack(_)) => todo!(),
-    }
-}
-
-impl InstructionKind {
-    pub(crate) fn get_in_out(&self) -> Vec<asm::format::Operand> {
-        match self {
-            InstructionKind::Mov_R_RM => {
-                vec![
-                    asm::format::Operand {
-                        implicit: false,
-                        mutability: asm::Mutability::Write,
-                        location: asm::format::Location::R64,
-                    },
-                    asm::format::Operand {
-                        implicit: false,
-                        mutability: asm::Mutability::Read,
-                        location: asm::format::Location::Rm64,
-                    },
-                ]
-            }
-            InstructionKind::Mov_RM_R => {
-                vec![
-                    asm::format::Operand {
-                        implicit: false,
-                        mutability: asm::Mutability::Write,
-                        location: asm::format::Location::Rm64,
-                    },
-                    asm::format::Operand {
-                        implicit: false,
-                        mutability: asm::Mutability::Read,
-                        location: asm::format::Location::R64,
-                    },
-                ]
-            }
-            InstructionKind::Mov_R_Imm => {
-                vec![
-                    asm::format::Operand {
-                        implicit: false,
-                        mutability: asm::Mutability::Write,
-                        location: asm::format::Location::R64,
-                    },
-                    asm::format::Operand {
-                        implicit: false,
-                        mutability: asm::Mutability::Read,
-                        location: asm::format::Location::Imm64,
-                    },
-                ]
-            }
-
-            InstructionKind::Lea => {
-                vec![
-                    asm::format::Operand {
-                        implicit: false,
-                        mutability: asm::Mutability::Write,
-                        location: asm::format::Location::R64,
-                    },
-                    asm::format::Operand {
-                        implicit: false,
-                        mutability: asm::Mutability::Read,
-                        location: asm::format::Location::Memory,
-                    },
-                ]
-            }
-
-            InstructionKind::Add_R_RM => {
-                vec![
-                    asm::format::Operand {
-                        implicit: false,
-                        mutability: asm::Mutability::Write,
-                        location: asm::format::Location::R64,
-                    },
-                    asm::format::Operand {
-                        implicit: false,
-                        mutability: asm::Mutability::Read,
-                        location: asm::format::Location::Rm64,
-                    },
-                ]
-            }
-            InstructionKind::IMul_R_RM => {
-                vec![
-                    asm::format::Operand {
-                        implicit: false,
-                        mutability: asm::Mutability::Write,
-                        location: asm::format::Location::R64,
-                    },
-                    asm::format::Operand {
-                        implicit: false,
-                        mutability: asm::Mutability::Read,
-                        location: asm::format::Location::Rm64,
-                    },
-                ]
-            }
-            InstructionKind::IDiv => {
-                vec![
-                    asm::format::Operand {
-                        implicit: true,
-                        mutability: asm::Mutability::ReadWrite,
-                        location: asm::format::Location::FixedRegister(asm::Register::Amd64(
-                            Register::Rax,
-                        )),
-                    },
-                    asm::format::Operand {
-                        implicit: true,
-                        mutability: asm::Mutability::ReadWrite,
-                        location: asm::format::Location::FixedRegister(asm::Register::Amd64(
-                            Register::Rdx,
-                        )),
-                    },
-                    asm::format::Operand {
-                        implicit: false,
-                        mutability: asm::Mutability::Read,
-                        location: asm::format::Location::Rm64,
-                    },
-                ]
-            }
-        }
     }
 }
 

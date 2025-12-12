@@ -38,13 +38,6 @@ pub enum Register {
     Amd64(amd64::Register),
 }
 
-#[derive(Serialize, Debug)]
-pub struct VInstruction {
-    pub kind: InstructionKind,
-    pub operands: Vec<ir::Operand>,
-    pub origin: Origin,
-}
-
 #[derive(Serialize, Debug, Clone, Copy)]
 pub enum Mutability {
     Read,
@@ -84,12 +77,6 @@ pub fn eval(instructions: &[Instruction]) -> EvalResult {
             interpreter.state
         }
         _ => EvalResult::new(),
-    }
-}
-
-pub(crate) fn ir_to_vcode(irs: &[ir::Instruction], target_arch: &ArchKind) -> Vec<VInstruction> {
-    match target_arch {
-        ArchKind::Amd64 => amd64::ir_to_vcode(irs),
     }
 }
 
@@ -142,12 +129,6 @@ impl InstructionKind {
             InstructionKind::Amd64(instruction_kind) => instruction_kind.to_str(),
         }
     }
-
-    pub(crate) fn get_in_out(&self) -> Vec<format::Operand> {
-        match self {
-            InstructionKind::Amd64(k) => k.get_in_out(),
-        }
-    }
 }
 
 impl From<&MemoryLocation> for OperandKind {
@@ -177,28 +158,15 @@ impl Register {
     }
 }
 
-impl VInstruction {
-    pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
-        w.write_all(self.kind.to_str().as_bytes())?;
-
-        for op in &self.operands {
-            write!(w, " ")?;
-            op.write(w)?;
-        }
-
-        writeln!(w)
-    }
-}
-
 pub(crate) struct Stack {
     pub(crate) offset: usize,
 }
 
-pub(crate) struct Emitter {
-    stack: Stack,
-}
-
 impl Stack {
+    pub(crate) fn new() -> Self {
+        Self { offset: 0 }
+    }
+
     pub(crate) fn new_slot(&mut self, size: usize, align: usize) -> usize {
         let padding = (0usize).wrapping_sub(self.offset) & (align - 1);
         let res = self.offset + padding;
@@ -220,117 +188,8 @@ pub(crate) fn emit_store(
     }
 }
 
-impl Emitter {
-    pub(crate) fn new() -> Self {
-        Self {
-            stack: Stack { offset: 0 },
-        }
-    }
-
-    pub(crate) fn vcode_to_asm(
-        &mut self,
-        vcode: &[VInstruction],
-        vreg_to_memory_location: &mut RegisterMapping,
-    ) -> Vec<Instruction> {
-        let mut instructions = Vec::with_capacity(vcode.len());
-        let mut spills = RegisterMapping::new();
-
-        for vins in vcode {
-            let in_out = vins.kind.get_in_out();
-            for (i, fmt_op) in in_out.iter().enumerate() {
-                if let format::Operand {
-                    location: format::Location::FixedRegister(fixed_preg),
-                    //mutability: Mutability::Write | Mutability::ReadWrite,
-                    ..
-                } = fmt_op
-                {
-                    let op = vins.operands[i];
-                    if let ir::Operand::VirtualRegister(vreg) = op {
-                        match vreg_to_memory_location.get(&vreg).unwrap() {
-                            MemoryLocation::Register(preg) if preg == fixed_preg => {
-                                // No need to shuffle things around, already in the right place.
-                                continue;
-                            }
-                            src => {
-                                let stack_offset = self.stack.new_slot(8, 8); // FIXME
-                                let store = emit_store(
-                                    &MemoryLocation::Stack(stack_offset),
-                                    &(src.into()),
-                                    &vins.kind.arch(),
-                                    &OperandSize::Eight,
-                                );
-                                instructions.extend(store);
-                                spills.insert(vreg, MemoryLocation::Stack(stack_offset));
-                                trace!("spill: vreg={:?} sp={}", vreg, stack_offset);
-
-                                let load = emit_store(
-                                    &MemoryLocation::Register(*fixed_preg),
-                                    &(src.into()),
-                                    &vins.kind.arch(),
-                                    &OperandSize::Eight,
-                                );
-                                instructions.extend(load);
-                                trace!("shuffle: dst_preg={:?} src={:#?}", fixed_preg, src);
-                                vreg_to_memory_location
-                                    .insert(vreg, MemoryLocation::Register(*fixed_preg));
-                            }
-                        }
-                    }
-                }
-            }
-
-            let operands = vins
-                .operands
-                .iter()
-                .map(|op| match op {
-                    ir::Operand::VirtualRegister(vreg) => {
-                        let loc = vreg_to_memory_location.get(vreg).unwrap();
-                        Operand {
-                            operand_size: OperandSize::Eight,
-                            kind: loc.into(),
-                            // FIXME: get rid of these fields?
-                            implicit: false,
-                            mutability: Mutability::Read,
-                        }
-                    }
-                    ir::Operand::Num(num) => Operand {
-                        operand_size: OperandSize::Eight,
-                        kind: OperandKind::Immediate(*num),
-                        implicit: false,
-                        mutability: Mutability::Read,
-                    },
-                })
-                .collect::<Vec<Operand>>();
-
-            let ins = Instruction {
-                kind: vins.kind,
-                operands,
-                origin: vins.origin,
-            };
-            instructions.push(ins);
-        }
-
-        instructions
-    }
-}
-
-pub(crate) mod format {
-    use crate::asm::{Mutability, Register};
-
-    pub(crate) enum Location {
-        // Fixed registers.
-        FixedRegister(Register),
-
-        Imm64,
-        Rm64,
-        R64,
-        Memory, // Memory
-    }
-
-    pub(crate) struct Operand {
-        pub(crate) location: Location,
-        pub(crate) mutability: Mutability,
-        pub(crate) implicit: bool,
-        // TODO: extension, align
+pub(crate) fn emit(irs: &[ir::Instruction], target_arch: &ArchKind) -> (Vec<Instruction>, Stack) {
+    match target_arch {
+        ArchKind::Amd64 => amd64::emit(irs),
     }
 }

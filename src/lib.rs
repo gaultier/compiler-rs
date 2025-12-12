@@ -174,15 +174,12 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
     let ir_eval = ir::eval(&ir_emitter.instructions);
     trace!("ir_eval: {:#?}", ir_eval);
 
-    let vcode = asm::ir_to_vcode(&ir_emitter.instructions, &target_arch);
-    trace!("vcode: {:#?}", vcode);
-
     let mut vreg_to_memory_location =
-        register_alloc::regalloc(&vcode, &ir_emitter.live_ranges, &asm::abi(&target_arch));
+        register_alloc::regalloc(&ir_emitter.live_ranges, &asm::abi(&target_arch));
     trace!("vreg_to_memory_location: {:#?}", vreg_to_memory_location);
 
     let mut asm_emitter = asm::Emitter::new();
-    let asm_instructions = asm_emitter.vcode_to_asm(&vcode, &mut vreg_to_memory_location);
+    let asm_instructions = asm_emitter.emit(&ir_emitter.instructions, &mut vreg_to_memory_location);
     trace!("asm_instructions: {:#?}", asm_instructions);
 
     let mut asm_text = Vec::with_capacity(asm_instructions.len() * 8);
