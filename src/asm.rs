@@ -95,7 +95,10 @@ impl Operand {
         match &self.kind {
             OperandKind::Register(register) => w.write_all(register.to_str().as_bytes()),
             OperandKind::Immediate(n) => write!(w, "{}", n),
-            OperandKind::Stack(off) => write!(w, "sp + {}", off),
+            OperandKind::Stack(off) => {
+                self.operand_size.write(w)?;
+                write!(w, " [rbp - {}]", off)
+            }
         }
     }
 }
@@ -115,7 +118,7 @@ impl Instruction {
 
         write!(
             w,
-            "  ; file:{} line:{} column:{} offset:{} len:{} synth:{}",
+            "  // file:{} line:{} column:{} offset:{} len:{} synth:{}",
             self.origin.file_id,
             self.origin.line,
             self.origin.column,
@@ -174,11 +177,10 @@ impl Stack {
 
     pub(crate) fn new_slot(&mut self, size: usize, align: usize) -> usize {
         let padding = (0usize).wrapping_sub(self.offset) & (align - 1);
-        let res = self.offset + padding;
 
-        self.offset += res + size;
+        self.offset += size + padding;
 
-        res
+        self.offset
     }
 }
 
@@ -199,6 +201,15 @@ impl OperandSize {
             OperandSize::_16 => 2,
             OperandSize::_32 => 4,
             OperandSize::_64 => 8,
+        }
+    }
+
+    pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+        match self {
+            OperandSize::_8 => w.write_all(b"BYTE PTR"),
+            OperandSize::_16 => w.write_all(b"WORD PTR"),
+            OperandSize::_32 => w.write_all(b"DWORD PTR"),
+            OperandSize::_64 => w.write_all(b"QWORD PTR"),
         }
     }
 }
