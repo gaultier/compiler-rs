@@ -1,5 +1,3 @@
-use std::alloc::Layout;
-
 pub mod amd64;
 pub mod asm;
 pub mod ast;
@@ -10,7 +8,6 @@ mod origin;
 pub mod register_alloc;
 
 use log::trace;
-use serde::Serialize;
 
 use crate::{
     asm::ArchKind,
@@ -19,11 +16,21 @@ use crate::{
     ir::{Instruction, LiveRanges},
     lex::{Lexer, Token},
     origin::FileId,
-    register_alloc::{MemoryLocation, RegisterMapping},
+    register_alloc::RegisterMapping,
 };
 
 #[cfg(target_arch = "wasm32")]
 mod wasm32 {
+    use crate::{
+        asm::{self, ArchKind},
+        ast::Node,
+        error::Error,
+        ir::{self, Instruction, LiveRanges},
+        lex::Token,
+        origin::FileId,
+        register_alloc::{MemoryLocation, RegisterMapping},
+    };
+    use serde::Serialize;
     use std::alloc::GlobalAlloc;
     use std::alloc::Layout;
 
@@ -86,32 +93,77 @@ mod wasm32 {
     pub extern "C" fn alloc_get_size() -> usize {
         return ALLOCATOR.offset.get();
     }
-}
 
-#[unsafe(no_mangle)]
-pub extern "C" fn dealloc() {
-    todo!()
-}
+    #[unsafe(no_mangle)]
+    pub extern "C" fn dealloc() {
+        todo!()
+    }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn alloc_u8(size: usize) -> usize {
-    let layout = Layout::from_size_align(size, std::mem::align_of::<u8>()).unwrap();
-    let ptr = unsafe { std::alloc::alloc(layout) };
-    ptr as usize
-}
+    #[unsafe(no_mangle)]
+    pub extern "C" fn alloc_u8(size: usize) -> usize {
+        let layout = Layout::from_size_align(size, std::mem::align_of::<u8>()).unwrap();
+        let ptr = unsafe { std::alloc::alloc(layout) };
+        ptr as usize
+    }
 
-#[repr(transparent)]
-pub struct AllocHandle(u64);
+    #[repr(transparent)]
+    pub struct AllocHandle(u64);
 
-impl AllocHandle {
-    pub fn unpack(&self) -> (u32, u32) {
-        let ptr = (self.0 >> 32) as u32;
-        let len = (self.0 & 0xff_ff_ff_ff) as u32;
-        (ptr, len)
+    #[unsafe(no_mangle)]
+    pub extern "C" fn wasm_compile(
+        in_ptr: *const u8,
+        in_len: usize,
+        file_id: FileId,
+        target_arch: ArchKind,
+    ) -> AllocHandle {
+        let input_bytes = unsafe {
+            std::ptr::slice_from_raw_parts(in_ptr, in_len)
+                .as_ref()
+                .unwrap()
+        };
+        let input_str = std::str::from_utf8(input_bytes).unwrap();
+
+        let compiled = super::compile(input_str, file_id, target_arch);
+        let json_compiled = JsonCompileResult {
+            errors: compiled.errors,
+            lex_tokens: compiled.lex_tokens,
+            ast_nodes: compiled.ast_nodes,
+            ir_instructions: compiled.ir_instructions,
+            ir_text: compiled.ir_text,
+            ir_live_ranges: compiled.ir_live_ranges,
+            ir_eval: compiled.ir_eval,
+            vreg_to_memory_location: compiled.vreg_to_memory_location,
+            asm_instructions: compiled.asm_instructions,
+            asm_text: compiled.asm_text,
+            asm_eval: compiled.asm_eval.into_iter().collect(),
+        };
+
+        let json = serde_json::to_string(&json_compiled).unwrap();
+
+        let ptr = json.as_bytes().as_ptr() as u64;
+        let len = json.len() as u32 as u64;
+        println!("ptr={}", ptr);
+
+        AllocHandle(ptr << 32 | len)
+    }
+
+    #[derive(Serialize, Default, Debug)]
+    struct JsonCompileResult {
+        pub errors: Vec<Error>,
+        pub lex_tokens: Vec<Token>,
+        pub ast_nodes: Vec<Node>,
+        pub ir_instructions: Vec<Instruction>,
+        pub ir_text: String,
+        pub ir_live_ranges: LiveRanges,
+        pub ir_eval: ir::EvalResult,
+        pub vreg_to_memory_location: RegisterMapping,
+        pub asm_instructions: Vec<asm::Instruction>,
+        pub asm_text: String,
+        pub asm_eval: Vec<(MemoryLocation, ir::EvalValue)>,
     }
 }
 
-#[derive(Serialize, Default, Debug)]
+#[derive(Default, Debug)]
 pub struct CompileResult {
     pub errors: Vec<Error>,
     pub lex_tokens: Vec<Token>,
@@ -124,21 +176,6 @@ pub struct CompileResult {
     pub asm_instructions: Vec<asm::Instruction>,
     pub asm_text: String,
     pub asm_eval: asm::EvalResult,
-}
-
-#[derive(Serialize, Default, Debug)]
-struct JsonCompileResult {
-    pub errors: Vec<Error>,
-    pub lex_tokens: Vec<Token>,
-    pub ast_nodes: Vec<Node>,
-    pub ir_instructions: Vec<Instruction>,
-    pub ir_text: String,
-    pub ir_live_ranges: LiveRanges,
-    pub ir_eval: ir::EvalResult,
-    pub vreg_to_memory_location: RegisterMapping,
-    pub asm_instructions: Vec<asm::Instruction>,
-    pub asm_text: String,
-    pub asm_eval: Vec<(MemoryLocation, ir::EvalValue)>,
 }
 
 pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileResult {
@@ -209,72 +246,9 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn wasm_compile(
-    in_ptr: *const u8,
-    in_len: usize,
-    file_id: FileId,
-    target_arch: ArchKind,
-) -> AllocHandle {
-    let input_bytes = unsafe {
-        std::ptr::slice_from_raw_parts(in_ptr, in_len)
-            .as_ref()
-            .unwrap()
-    };
-    let input_str = std::str::from_utf8(input_bytes).unwrap();
-
-    let compiled = compile(input_str, file_id, target_arch);
-    let json_compiled = JsonCompileResult {
-        errors: compiled.errors,
-        lex_tokens: compiled.lex_tokens,
-        ast_nodes: compiled.ast_nodes,
-        ir_instructions: compiled.ir_instructions,
-        ir_text: compiled.ir_text,
-        ir_live_ranges: compiled.ir_live_ranges,
-        ir_eval: compiled.ir_eval,
-        vreg_to_memory_location: compiled.vreg_to_memory_location,
-        asm_instructions: compiled.asm_instructions,
-        asm_text: compiled.asm_text,
-        asm_eval: compiled.asm_eval.into_iter().collect(),
-    };
-
-    let json = serde_json::to_string(&json_compiled).unwrap();
-
-    let ptr = json.as_bytes().as_ptr() as u64;
-    let len = json.len() as u32 as u64;
-    println!("ptr={}", ptr);
-
-    AllocHandle(ptr << 32 | len)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_c_api() {
-        let base = 3;
-        let align = 8;
-        let padding = (0usize).wrapping_sub(base) & (align - 1);
-        assert_eq!(padding + base, align);
-
-        let input = "123 +1+32444444444444444";
-        let input_alloc = alloc_u8(input.len()) as *mut u8;
-        let input_slice = unsafe { std::slice::from_raw_parts_mut(input_alloc, input.len()) };
-        input_slice.copy_from_slice(input.as_bytes());
-
-        let handle = wasm_compile(input_slice.as_ptr(), input_slice.len(), 1, ArchKind::Amd64);
-        let (ptr, len) = handle.unpack();
-        println!("handle={} ptr={} len={}", handle.0, ptr, len);
-        assert!(ptr > 0);
-        assert!(len > 0);
-
-        //let bytes = unsafe { std::slice::from_raw_parts(ptr as usize as *const u8, len as usize) };
-        //let s = std::str::from_utf8(bytes).unwrap();
-        //assert!(s.len() > 0);
-        //
-        //dealloc(handle);
-    }
 
     #[test]
     fn test_api() {
