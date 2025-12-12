@@ -233,7 +233,7 @@ fn instruction_selection(
             // Otherwise: need to `mov dst, rax`.
             if dst != &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)) {
                 emit_store(
-                    &dst,
+                    dst,
                     &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rax))).into(),
                     &OperandSize::Eight,
                 );
