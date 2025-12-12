@@ -15,7 +15,6 @@ pub enum MemoryLocation {
 
 pub type RegisterMapping = BTreeMap<VirtualRegister, MemoryLocation>;
 
-// TODO: Constraints.
 pub(crate) fn regalloc(live_ranges: &LiveRanges, abi: &Abi) -> RegisterMapping {
     let mut vreg_to_memory_location = RegisterMapping::new();
 

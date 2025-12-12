@@ -98,7 +98,7 @@ pub enum InstructionKind {
 
 // TODO: Use a free register if possible.
 fn find_free_spill_slot(stack: &mut Stack, op_size: &OperandSize) -> MemoryLocation {
-    let (size, align) = (op_size.as_usize(), 8); // TODO: Improve.
+    let (size, align) = (op_size.as_bytes(), 8); // TODO: Improve.
     let offset = stack.new_slot(size, align);
     MemoryLocation::Stack(offset)
 }
@@ -119,11 +119,11 @@ fn instruction_selection(
                 kind: InstructionKind::Mov_R_RM,
                 operands: vec![
                     Operand::from_memory_location(
-                        &OperandSize::Eight,
+                        &OperandSize::_64,
                         vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                     ),
                     Operand::from_memory_location(
-                        &OperandSize::Eight,
+                        &OperandSize::_64,
                         vreg_to_memory_location.get(lhs).unwrap(),
                     ),
                 ],
@@ -133,11 +133,11 @@ fn instruction_selection(
                 kind: InstructionKind::Add_R_RM,
                 operands: vec![
                     Operand::from_memory_location(
-                        &OperandSize::Eight,
+                        &OperandSize::_64,
                         vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                     ),
                     Operand::from_memory_location(
-                        &OperandSize::Eight,
+                        &OperandSize::_64,
                         vreg_to_memory_location.get(rhs).unwrap(),
                     ),
                 ],
@@ -153,11 +153,11 @@ fn instruction_selection(
                 kind: InstructionKind::Mov_R_RM,
                 operands: vec![
                     Operand::from_memory_location(
-                        &OperandSize::Eight,
+                        &OperandSize::_64,
                         vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                     ),
                     Operand::from_memory_location(
-                        &OperandSize::Eight,
+                        &OperandSize::_64,
                         vreg_to_memory_location.get(lhs).unwrap(),
                     ),
                 ],
@@ -167,11 +167,11 @@ fn instruction_selection(
                 kind: InstructionKind::IMul_R_RM,
                 operands: vec![
                     Operand::from_memory_location(
-                        &OperandSize::Eight,
+                        &OperandSize::_64,
                         vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                     ),
                     Operand::from_memory_location(
-                        &OperandSize::Eight,
+                        &OperandSize::_64,
                         vreg_to_memory_location.get(rhs).unwrap(),
                     ),
                 ],
@@ -198,11 +198,11 @@ fn instruction_selection(
             // TODO: There is a case where `rdx_spill_slot` and `lhs_spill_slot` could be merged
             // into one.
             let rdx_spill_slot = {
-                let spill_slot = find_free_spill_slot(stack, &OperandSize::Eight);
+                let spill_slot = find_free_spill_slot(stack, &OperandSize::_64);
                 res.extend(emit_store(
                     &spill_slot,
                     &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rdx))).into(),
-                    &OperandSize::Eight,
+                    &OperandSize::_64,
                     &Origin::default(),
                 ));
                 trace!("spill rdx before idiv: spill_slot={:#?}", spill_slot);
@@ -210,11 +210,11 @@ fn instruction_selection(
                 spill_slot
             };
             let rax_spill_slot = {
-                let spill_slot = find_free_spill_slot(stack, &OperandSize::Eight);
+                let spill_slot = find_free_spill_slot(stack, &OperandSize::_64);
                 res.extend(emit_store(
                     &spill_slot,
                     &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rax))).into(),
-                    &OperandSize::Eight,
+                    &OperandSize::_64,
                     &Origin::default(),
                 ));
                 trace!("spill rax before idiv: spill_slot={:#?}", spill_slot);
@@ -226,7 +226,7 @@ fn instruction_selection(
             res.extend(emit_store(
                 &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)),
                 &lhs.into(),
-                &OperandSize::Eight,
+                &OperandSize::_64,
                 &Origin::default(),
             ));
 
@@ -236,17 +236,17 @@ fn instruction_selection(
                 kind: InstructionKind::Mov_R_Imm,
                 operands: vec![
                     Operand::new(
-                        &OperandSize::Eight,
+                        &OperandSize::_64,
                         &OperandKind::Register(asm::Register::Amd64(Register::Rdx)),
                     ),
-                    Operand::new(&OperandSize::Eight, &OperandKind::Immediate(0)),
+                    Operand::new(&OperandSize::_64, &OperandKind::Immediate(0)),
                 ],
                 origin: ins.origin,
             });
             res.push(Instruction {
                 kind: InstructionKind::IDiv,
                 operands: vec![Operand::from_memory_location(
-                    &OperandSize::Eight,
+                    &OperandSize::_64,
                     vreg_to_memory_location.get(rhs).unwrap(),
                 )],
                 origin: ins.origin,
@@ -260,7 +260,7 @@ fn instruction_selection(
                 res.extend(emit_store(
                     dst,
                     &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rax))).into(),
-                    &OperandSize::Eight,
+                    &OperandSize::_64,
                     &ins.origin,
                 ));
             }
@@ -270,7 +270,7 @@ fn instruction_selection(
                 res.extend(emit_store(
                     &MemoryLocation::Register(asm::Register::Amd64(Register::Rdx)),
                     &(&rdx_spill_slot).into(),
-                    &OperandSize::Eight,
+                    &OperandSize::_64,
                     &Origin::default(),
                 ));
                 trace!("unspill rdx after idiv: spill_slot={:#?}", rdx_spill_slot);
@@ -278,7 +278,7 @@ fn instruction_selection(
                 res.extend(emit_store(
                     &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)),
                     &(&rax_spill_slot).into(),
-                    &OperandSize::Eight,
+                    &OperandSize::_64,
                     &Origin::default(),
                 ));
                 trace!("unspill rax after idiv: spill_slot={:#?}", rax_spill_slot);
@@ -291,11 +291,11 @@ fn instruction_selection(
                 kind: InstructionKind::Mov_R_RM,
                 operands: vec![
                     Operand::from_memory_location(
-                        &OperandSize::Eight,
+                        &OperandSize::_64,
                         vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                     ),
                     Operand::from_memory_location(
-                        &OperandSize::Eight,
+                        &OperandSize::_64,
                         vreg_to_memory_location.get(lhs).unwrap(),
                     ),
                 ],
@@ -306,10 +306,10 @@ fn instruction_selection(
             kind: InstructionKind::Mov_R_Imm,
             operands: vec![
                 Operand::from_memory_location(
-                    &OperandSize::Eight,
+                    &OperandSize::_64,
                     vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                 ),
-                Operand::new(&OperandSize::Eight, &OperandKind::Immediate(*num)),
+                Operand::new(&OperandSize::_64, &OperandKind::Immediate(*num)),
             ],
             origin: ins.origin,
         }],

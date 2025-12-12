@@ -21,10 +21,10 @@ pub(crate) struct Abi {
 
 #[derive(Serialize, Debug, Clone, Copy)]
 pub enum OperandSize {
-    One = 1,
-    Two = 2,
-    Four = 4,
-    Eight = 8,
+    _8 = 1,
+    _16 = 2,
+    _32 = 4,
+    _64 = 8,
 }
 
 #[derive(Serialize, Debug, Clone, Copy)]
@@ -193,12 +193,12 @@ pub(crate) fn emit(
 }
 
 impl OperandSize {
-    pub(crate) fn as_usize(&self) -> usize {
+    pub(crate) fn as_bytes(&self) -> usize {
         match self {
-            OperandSize::One => 1,
-            OperandSize::Two => 2,
-            OperandSize::Four => 4,
-            OperandSize::Eight => 8,
+            OperandSize::_8 => 1,
+            OperandSize::_16 => 2,
+            OperandSize::_32 => 4,
+            OperandSize::_64 => 8,
         }
     }
 }
