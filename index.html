@@ -157,7 +157,7 @@
                 const item = document.createElement("span");
                 if (mem_loc.Register && mem_loc.Register.Amd64) {
                     item.innerText = `${mem_loc.Register.Amd64}: ${val.Num}`;
-                } else if (mem_loc.Stack) {
+                } else if (mem_loc.Stack != null) {
                     item.innerText = `stack ${mem_loc.Stack}: ${val.Num}`;
                 }
 
