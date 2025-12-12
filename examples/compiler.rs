@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    io::{stderr, stdout},
-};
+use std::{collections::HashMap, io::stdout};
 
 use compiler_rs_lib::{asm, compile};
 use log::{LevelFilter, Log};

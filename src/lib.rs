@@ -172,7 +172,7 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
     let ir_eval = ir::eval(&ir_emitter.instructions);
     trace!("ir_eval: {:#?}", ir_eval);
 
-    let mut vreg_to_memory_location =
+    let vreg_to_memory_location =
         register_alloc::regalloc(&ir_emitter.live_ranges, &asm::abi(&target_arch));
     trace!("vreg_to_memory_location: {:#?}", vreg_to_memory_location);
 

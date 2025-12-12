@@ -118,12 +118,6 @@ impl Instruction {
 }
 
 impl InstructionKind {
-    pub(crate) fn arch(&self) -> ArchKind {
-        match self {
-            InstructionKind::Amd64(_) => ArchKind::Amd64,
-        }
-    }
-
     pub(crate) fn to_str(self) -> &'static str {
         match self {
             InstructionKind::Amd64(instruction_kind) => instruction_kind.to_str(),
