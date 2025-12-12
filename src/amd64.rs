@@ -1,3 +1,4 @@
+use log::trace;
 use serde::Serialize;
 
 use crate::{
@@ -200,12 +201,18 @@ fn instruction_selection(
                         &spill_slot,
                         &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rax))).into(),
                         &OperandSize::Eight,
+                        &Origin::default(),
                     ));
                     res.extend(emit_store(
                         &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)),
                         &lhs.into(),
                         &OperandSize::Eight,
+                        &Origin::default(),
                     ));
+                    trace!(
+                        "spill before idiv: src={:#?} spill_slot={:#?}",
+                        lhs, spill_slot
+                    );
 
                     Some(spill_slot)
                 } else {
@@ -230,13 +237,15 @@ fn instruction_selection(
                     dst,
                     &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rax))).into(),
                     &OperandSize::Eight,
+                    &ins.origin,
                 );
             }
 
             // Finally: if we did a spill in the beginning, then we need to restore `lhs`
             // to its original place, i.e. : `mov lhs, spill_slot`.
             if let Some(slot) = &lhs_spill_slot {
-                emit_store(lhs, &slot.into(), &OperandSize::Eight);
+                emit_store(lhs, &slot.into(), &OperandSize::Eight, &Origin::default());
+                trace!("unspill after idiv: dst={:#?} spill_slot={:#?}", lhs, slot);
             }
 
             res
@@ -303,6 +312,7 @@ pub(crate) fn emit_store(
     dst: &MemoryLocation,
     src: &OperandKind,
     size: &OperandSize,
+    origin: &Origin,
 ) -> Vec<Instruction> {
     match (dst, src) {
         (MemoryLocation::Register(dst_reg), OperandKind::Register(src_reg)) => {
@@ -318,7 +328,7 @@ pub(crate) fn emit_store(
                         kind: OperandKind::Register(*src_reg),
                     },
                 ],
-                origin: Origin::default(),
+                origin: *origin,
             }]
         }
         (MemoryLocation::Register(dst_reg), OperandKind::Immediate(src_imm)) => vec![Instruction {
@@ -333,7 +343,7 @@ pub(crate) fn emit_store(
                     kind: OperandKind::Immediate(*src_imm),
                 },
             ],
-            origin: Origin::default(),
+            origin: *origin,
         }],
         (MemoryLocation::Stack(dst_stack), OperandKind::Register(src_reg)) => vec![Instruction {
             kind: InstructionKind::Mov_RM_R,
@@ -347,7 +357,7 @@ pub(crate) fn emit_store(
                     kind: OperandKind::Register(*src_reg),
                 },
             ],
-            origin: Origin::default(),
+            origin: *origin,
         }],
         (MemoryLocation::Stack(_), OperandKind::Immediate(_)) => todo!(),
         (MemoryLocation::Register(dst_reg), OperandKind::Stack(_)) => {
@@ -363,7 +373,7 @@ pub(crate) fn emit_store(
                         kind: *src,
                     },
                 ],
-                origin: Origin::default(),
+                origin: *origin,
             }]
         }
         (MemoryLocation::Stack(_), OperandKind::Stack(_)) => todo!(),
