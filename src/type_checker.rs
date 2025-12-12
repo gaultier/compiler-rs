@@ -2,7 +2,7 @@ use std::{collections::BTreeSet, fmt::Display};
 
 use serde::Serialize;
 
-use crate::{error::Error, origin::Origin};
+use crate::{ast::Node, error::Error, origin::Origin};
 
 #[derive(Serialize, Copy, Clone, PartialEq, Eq, Debug, PartialOrd, Ord)]
 pub enum TypeKind {
@@ -74,5 +74,62 @@ impl Type {
 
     pub(crate) fn void() -> Self {
         Type::new(&TypeKind::Void, 0, &Origin::default())
+    }
+}
+
+pub struct Checker {
+    //types: BTreeSet<Type>,
+}
+
+impl Checker {
+    pub fn new() -> Self {
+        Self {
+            //types: Self::builtin(),
+        }
+    }
+
+    //fn builtin() -> BTreeSet<Type> {
+    //    let mut res = BTreeSet::<Type>::new();
+    //
+    //    res.insert(Type::u64());
+    //    res.insert(Type::void());
+    //
+    //    res
+    //}
+
+    pub fn check(&mut self, nodes: &mut [Node]) -> Vec<Error> {
+        let mut errs = Vec::new();
+
+        let mut stack = Vec::new();
+
+        for node in nodes {
+            match node.kind {
+                crate::ast::NodeKind::Number => {
+                    assert_eq!(node.typ.kind, TypeKind::Number);
+                    assert_ne!(node.typ.size, 0);
+
+                    stack.push(node);
+                }
+                crate::ast::NodeKind::Add
+                | crate::ast::NodeKind::Multiply
+                | crate::ast::NodeKind::Divide => {
+                    let rhs = stack.pop().unwrap();
+                    let lhs = stack.pop().unwrap();
+
+                    let typ = lhs.typ.merge(&rhs.typ);
+                    match typ {
+                        Ok(typ) => node.typ = typ,
+                        Err(err) => {
+                            errs.push(err);
+                            // To avoid cascading errors, pretend the type is fine.
+                            node.typ = Type::u64();
+                        }
+                    }
+                    stack.push(node);
+                }
+            }
+        }
+
+        errs
     }
 }

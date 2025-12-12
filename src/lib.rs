@@ -188,6 +188,11 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
     parser.parse();
     trace!("parser: {:#?}", parser);
 
+    let mut type_checker = type_checker::Checker::new();
+    // TODO: ugly.
+    parser.errors.extend(type_checker.check(&mut parser.nodes));
+    trace!("after type checking: {:#?}", parser);
+
     if !parser.errors.is_empty() {
         return CompileResult {
             lex_tokens: parser.tokens,
