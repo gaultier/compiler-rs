@@ -1,2 +1,2 @@
-println
+println(1)
 

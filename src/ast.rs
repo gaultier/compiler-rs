@@ -16,6 +16,7 @@ pub enum NodeKind {
     Multiply,
     Divide,
     BuiltinPrintln,
+    FnCall,
 }
 
 #[derive(Serialize, Copy, Clone, Debug)]
@@ -309,13 +310,12 @@ impl<'a> Parser<'a> {
             return true;
         };
 
+        let args_count = 1;
         if !self.parse_expr() {
             self.errors.push(Error {
                 kind: ErrorKind::ParseCallMissingArgument,
                 origin: lparen.origin,
-                explanation: String::from(
-                    "missing argument in function call, should be: expression",
-                ),
+                explanation: String::from("missing argument in function call, expected expression"),
             });
         }
 
@@ -327,6 +327,14 @@ impl<'a> Parser<'a> {
             );
             return false;
         }
+
+        let node = Node {
+            kind: NodeKind::FnCall,
+            data: Some(NodeData::Num(args_count)),
+            origin: lparen.origin,
+            typ: Type::default(),
+        };
+        self.nodes.push(node);
 
         return true;
     }

@@ -106,9 +106,7 @@ impl Type {
     }
 }
 
-pub struct Checker {
-    //types: BTreeSet<Type>,
-}
+pub struct Checker {}
 
 impl Default for Checker {
     fn default() -> Self {
@@ -118,19 +116,8 @@ impl Default for Checker {
 
 impl Checker {
     pub fn new() -> Self {
-        Self {
-            //types: Self::builtin(),
-        }
+        Self {}
     }
-
-    //fn builtin() -> BTreeSet<Type> {
-    //    let mut res = BTreeSet::<Type>::new();
-    //
-    //    res.insert(Type::u64());
-    //    res.insert(Type::void());
-    //
-    //    res
-    //}
 
     pub fn check(&mut self, nodes: &mut [Node]) -> Vec<Error> {
         let mut errs = Vec::new();
@@ -182,6 +169,7 @@ impl Checker {
                         }
                     }
                 }
+                crate::ast::NodeKind::FnCall => todo!(),
                 crate::ast::NodeKind::Add
                 | crate::ast::NodeKind::Multiply
                 | crate::ast::NodeKind::Divide => {

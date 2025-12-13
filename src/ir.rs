@@ -112,6 +112,9 @@ impl Emitter {
                 crate::ast::NodeKind::BuiltinPrintln => {
                     todo!();
                 }
+                crate::ast::NodeKind::FnCall => {
+                    todo!();
+                }
                 crate::ast::NodeKind::Add => {
                     // TODO: Checks.
                     let rhs = stack.pop().unwrap();
