@@ -17,6 +17,7 @@ pub enum InstructionKind {
     IMultiply,
     IDivide,
     Set, // Set virtual register.
+         //FnCall,
 }
 
 #[derive(Serialize, Debug)]
@@ -123,6 +124,23 @@ impl Emitter {
                             "invalid AST: node data for FnCall (i.e. the argument count) should be a number"
                         ),
                     };
+                    let mut args = Vec::with_capacity(args_count);
+                    for _ in 0..args_count {
+                        args.push(stack.pop().unwrap());
+                    }
+                    let f = stack.pop().unwrap();
+
+                    //let res_vreg = self.make_vreg();
+                    //let ins = Instruction {
+                    //    kind: InstructionKind::FnCall,
+                    //    args_count,
+                    //    lhs: Some(Operand::Bool(b)),
+                    //    rhs: None,
+                    //    origin: node.origin,
+                    //    res_vreg: Some(res_vreg),
+                    //};
+                    //self.instructions.push(ins);
+                    //stack.push(res_vreg);
                     todo!();
                 }
                 crate::ast::NodeKind::Add => {
