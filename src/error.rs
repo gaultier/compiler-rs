@@ -18,6 +18,7 @@ pub enum ErrorKind {
     ParseCallMissingRightParen,
     ParseCallMissingArgument,
     IncompatibleTypes,
+    IncompatibleArgumentsCount,
     NotImplementedYet,
 }
 
@@ -42,6 +43,21 @@ impl Error {
             kind: crate::error::ErrorKind::IncompatibleTypes,
             origin: *origin,
             explanation: format!("incompatible types: {} vs {}", a, b),
+        }
+    }
+
+    pub(crate) fn new_incompatible_arguments_count(
+        origin: &Origin,
+        expected: usize,
+        found: usize,
+    ) -> Self {
+        Self {
+            kind: crate::error::ErrorKind::IncompatibleArgumentsCount,
+            origin: *origin,
+            explanation: format!(
+                "incompatible arguments count: expected {}, got {}",
+                expected, found
+            ),
         }
     }
 

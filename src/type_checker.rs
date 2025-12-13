@@ -139,7 +139,7 @@ impl Checker {
                     stack.push(node);
                 }
                 crate::ast::NodeKind::BuiltinPrintln => {
-                    let expected_arg_type = match &*node.typ.kind {
+                    match &*node.typ.kind {
                         TypeKind::Function(_, args) => {
                             assert_eq!(args.len(), 1);
                             &args[0]
@@ -147,29 +147,55 @@ impl Checker {
                         _ => panic!("unexpected println type"),
                     };
 
-                    let arg = stack.pop();
-                    if arg.is_none() {
-                        errs.push(Error::new_not_implemented_yet(
+                    stack.push(node);
+                }
+                crate::ast::NodeKind::FnCall => {
+                    let args_count = match node.data.unwrap() {
+                        crate::ast::NodeData::Num(n) => n as usize,
+                        _ => panic!(
+                            "invalid AST: node data for FnCall (i.e. the argument count) should be a number"
+                        ),
+                    };
+
+                    let mut args = Vec::with_capacity(args_count);
+                    for _ in 0..args_count {
+                        args.push(stack.pop().unwrap());
+                    }
+                    let f = stack.pop().unwrap();
+
+                    let (ret_type, args_type) = match &*f.typ.kind {
+                        TypeKind::Function(ret_type, args_type) => {
+                            assert_eq!(args_type.len(), 1);
+                            (ret_type, args_type)
+                        }
+                        _ => panic!("unexpected function type: {:#?}", node.typ),
+                    };
+
+                    if args_count != args_type.len() {
+                        errs.push(Error::new_incompatible_arguments_count(
                             &node.origin,
-                            String::from("function pointers are not supported yet"),
+                            args_type.len(),
+                            args_count,
                         ));
+
                         continue;
                     }
-                    let arg = arg.unwrap();
 
-                    match *arg.typ.kind {
-                        TypeKind::Number => todo!(),
-                        TypeKind::Bool => todo!(),
-                        _ => {
-                            errs.push(Error::new_incompatible_types(
-                                &arg.origin,
-                                expected_arg_type,
-                                &arg.typ,
-                            ));
-                        }
+                    for (i, arg) in args.iter().enumerate() {
+                        let _typ = match arg.typ.merge(&args_type[i]) {
+                            Err(err) => {
+                                errs.push(err);
+                                continue;
+                            }
+                            Ok(t) => t,
+                        };
+                    }
+
+                    if *ret_type.kind != TypeKind::Void {
+                        //stack.push(ret_type);
+                        todo!();
                     }
                 }
-                crate::ast::NodeKind::FnCall => todo!(),
                 crate::ast::NodeKind::Add
                 | crate::ast::NodeKind::Multiply
                 | crate::ast::NodeKind::Divide => {
