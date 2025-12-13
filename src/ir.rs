@@ -1,4 +1,8 @@
-use std::{collections::BTreeMap, io::Write, panic};
+use std::{
+    collections::BTreeMap,
+    io::{Write, stdout},
+    panic,
+};
 
 use serde::Serialize;
 
@@ -342,6 +346,14 @@ impl EvalValue {
             _ => panic!("not a number"),
         }
     }
+
+    pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+        match self {
+            EvalValue::Num(n) => write!(w, "{}", n),
+            EvalValue::Bool(b) => write!(w, "{}", b),
+            EvalValue::Fn(name) => w.write_all(name.as_bytes()),
+        }
+    }
 }
 
 pub fn eval(irs: &[Instruction]) -> EvalResult {
@@ -351,10 +363,25 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
         match ir.kind {
             InstructionKind::FnCall => {
                 let fn_name = match ir.operands.first().unwrap() {
-                    Operand::Fn(name) => name,
-                    _ => panic!("invalid FnCall IR"),
+                    Operand::VirtualRegister(vreg) => match res.get(vreg).unwrap() {
+                        EvalValue::Fn(name) => name,
+                        x => panic!("invalid FnCall IR: {:#?}", x),
+                    },
+                    _ => panic!("invalid FnCall IR: {:#?}", ir.operands.first()),
                 };
-                todo!();
+                match fn_name.as_str() {
+                    "println" => {
+                        for op in &ir.operands[1..] {
+                            let val = match op {
+                                Operand::VirtualRegister(vreg) => res.get(vreg).unwrap(),
+                                _ => panic!("unexpected fn call operand: {:#?}", op),
+                            };
+                            val.write(&mut stdout()).unwrap();
+                            writeln!(&mut stdout(), "").unwrap();
+                        }
+                    }
+                    _ => unimplemented!(),
+                }
             }
             InstructionKind::IAdd => {
                 let lhs = match ir.operands.first().as_ref().unwrap() {
