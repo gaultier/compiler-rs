@@ -504,7 +504,7 @@ impl Interpreter {
             (OperandKind::Register(_), OperandKind::Register(_))
             | (OperandKind::Stack(_), OperandKind::Register(_))
             | (OperandKind::Register(_), OperandKind::Stack(_)) => {
-                let value = *self.state.get(&(&src.kind).into()).unwrap();
+                let value = self.state.get(&(&src.kind).into()).unwrap().clone();
                 self.state.insert((&dst.kind).into(), value);
             }
             (OperandKind::Register(_), OperandKind::Immediate(imm))
@@ -519,7 +519,7 @@ impl Interpreter {
     fn load(&mut self, dst: &Operand, src: &Operand) {
         match (dst.kind, src.kind) {
             (OperandKind::Register(_), OperandKind::Stack(_)) => {
-                let value = *self.state.get(&(&src.kind).into()).unwrap();
+                let value = self.state.get(&(&src.kind).into()).unwrap().clone();
                 self.state.insert((&dst.kind).into(), value);
             }
             _ => panic!("unsupported load"),
@@ -550,10 +550,11 @@ impl Interpreter {
 
                     match ins.operands[1].kind {
                         asm::OperandKind::Register(op) => {
-                            let op_value = *self
+                            let op_value = self
                                 .state
                                 .get(&MemoryLocation::Register(op))
-                                .unwrap_or(&EvalValue::Num(0));
+                                .unwrap_or(&EvalValue::Num(0))
+                                .clone();
 
                             self.state
                                 .entry(MemoryLocation::Register(*dst_reg))
@@ -578,10 +579,11 @@ impl Interpreter {
 
                     match ins.operands[1].kind {
                         asm::OperandKind::Register(op) => {
-                            let op_value = *self
+                            let op_value = self
                                 .state
                                 .get(&MemoryLocation::Register(op))
-                                .unwrap_or(&EvalValue::Num(0));
+                                .unwrap_or(&EvalValue::Num(0))
+                                .clone();
 
                             self.state
                                 .entry(MemoryLocation::Register(*dst_reg))
@@ -598,7 +600,11 @@ impl Interpreter {
 
                     match ins.operands[0].kind {
                         asm::OperandKind::Register(op) => {
-                            let divisor = *self.state.get(&MemoryLocation::Register(op)).unwrap();
+                            let divisor = self
+                                .state
+                                .get(&MemoryLocation::Register(op))
+                                .unwrap()
+                                .clone();
                             let quotient = self
                                 .state
                                 .get_mut(&MemoryLocation::Register(asm::Register::Amd64(

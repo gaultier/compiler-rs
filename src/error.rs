@@ -19,7 +19,6 @@ pub enum ErrorKind {
     ParseCallMissingArgument,
     IncompatibleTypes,
     IncompatibleArgumentsCount,
-    NotImplementedYet,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -58,14 +57,6 @@ impl Error {
                 "incompatible arguments count: expected {}, got {}",
                 expected, found
             ),
-        }
-    }
-
-    pub(crate) fn new_not_implemented_yet(origin: &Origin, explanation: String) -> Self {
-        Self {
-            kind: crate::error::ErrorKind::NotImplementedYet,
-            origin: *origin,
-            explanation,
         }
     }
 

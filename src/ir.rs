@@ -29,10 +29,11 @@ pub struct Instruction {
     pub res_vreg: Option<VirtualRegister>,
 }
 
-#[derive(Serialize, Debug, Clone, Copy)]
+#[derive(Serialize, Debug, Clone)]
 pub enum Operand {
     Num(u64),
     Bool(bool),
+    Fn(String),
     VirtualRegister(VirtualRegister),
 }
 
@@ -113,6 +114,17 @@ impl Emitter {
                         TypeKind::Function(_, args) if args.len() == 1 => {}
                         _ => panic!("unexpected println type"),
                     };
+
+                    let res_vreg = self.make_vreg();
+                    let ins = Instruction {
+                        kind: InstructionKind::Set,
+                        args_count: 1,
+                        operands: vec![Operand::Fn(String::from("println"))],
+                        origin: node.origin,
+                        res_vreg: Some(res_vreg),
+                    };
+                    self.instructions.push(ins);
+                    stack.push(res_vreg);
                 }
                 crate::ast::NodeKind::FnCall => {
                     let args_count = match node.data.unwrap() {
@@ -127,7 +139,15 @@ impl Emitter {
                     }
                     let f = stack.pop().unwrap();
 
-                    //let res_vreg = self.make_vreg();
+                    match &*node.typ.kind {
+                        TypeKind::Function(ret_type, _) if *ret_type.kind == TypeKind::Void => {}
+                        TypeKind::Function(_, _) => {
+                            let res_vreg = self.make_vreg();
+                            stack.push(res_vreg);
+                        }
+                        _ => panic!("not a function type"),
+                    };
+
                     //let ins = Instruction {
                     //    kind: InstructionKind::FnCall,
                     //    args_count,
@@ -137,8 +157,6 @@ impl Emitter {
                     //    res_vreg: Some(res_vreg),
                     //};
                     //self.instructions.push(ins);
-                    //stack.push(res_vreg);
-                    todo!();
                 }
                 crate::ast::NodeKind::Add => {
                     // TODO: Checks.
@@ -256,6 +274,7 @@ impl Operand {
                 write!(w, "{}", b)
             }
             Operand::VirtualRegister(r) => write!(w, "v{}", r.0),
+            Operand::Fn(name) => w.write_all(&name.as_bytes()),
         }
     }
 }
@@ -291,10 +310,11 @@ impl Instruction {
     }
 }
 
-#[derive(Serialize, Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Serialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum EvalValue {
     Num(u64),
     Bool(bool),
+    Fn(String),
 }
 
 pub type EvalResult = BTreeMap<VirtualRegister, EvalValue>;
@@ -315,28 +335,28 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
         match ir.kind {
             InstructionKind::IAdd => {
                 let lhs = match ir.operands.first().as_ref().unwrap() {
-                    Operand::Num(num) => EvalValue::Num(*num),
-                    Operand::Bool(_) => panic!("incompatible operands"),
-                    Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
+                    Operand::Num(num) => &EvalValue::Num(*num),
+                    Operand::VirtualRegister(vreg) => res.get(vreg).unwrap(),
+                    _ => panic!("incompatible operands"),
                 };
                 let rhs = match ir.operands.iter().nth(1).as_ref().unwrap() {
-                    Operand::Num(num) => EvalValue::Num(*num),
-                    Operand::Bool(_) => panic!("incompatible operands"),
-                    Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
+                    Operand::Num(num) => &EvalValue::Num(*num),
+                    Operand::VirtualRegister(vreg) => res.get(vreg).unwrap(),
+                    _ => panic!("incompatible operands"),
                 };
                 let sum = EvalValue::Num(lhs.as_num() + rhs.as_num());
                 res.insert(ir.res_vreg.unwrap(), sum);
             }
             InstructionKind::IMultiply => {
                 let lhs = match ir.operands.first().as_ref().unwrap() {
-                    Operand::Num(num) => EvalValue::Num(*num),
-                    Operand::Bool(_) => panic!("incompatible operands"),
-                    Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
+                    Operand::Num(num) => &EvalValue::Num(*num),
+                    Operand::VirtualRegister(vreg) => res.get(vreg).unwrap(),
+                    _ => panic!("incompatible operands"),
                 };
                 let rhs = match ir.operands.iter().nth(1).as_ref().unwrap() {
-                    Operand::Num(num) => EvalValue::Num(*num),
-                    Operand::Bool(_) => panic!("incompatible operands"),
-                    Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
+                    Operand::Num(num) => &EvalValue::Num(*num),
+                    Operand::VirtualRegister(vreg) => res.get(vreg).unwrap(),
+                    _ => panic!("incompatible operands"),
                 };
                 let mul = match (lhs, rhs) {
                     (EvalValue::Num(lhs), EvalValue::Num(rhs)) => EvalValue::Num(lhs * rhs),
@@ -346,14 +366,14 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
             }
             InstructionKind::IDivide => {
                 let lhs = match ir.operands.first().as_ref().unwrap() {
-                    Operand::Num(num) => EvalValue::Num(*num),
-                    Operand::Bool(_) => panic!("incompatible operands"),
-                    Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
+                    Operand::Num(num) => &EvalValue::Num(*num),
+                    Operand::VirtualRegister(vreg) => res.get(vreg).unwrap(),
+                    _ => panic!("incompatible operands"),
                 };
                 let rhs = match ir.operands.iter().nth(1).as_ref().unwrap() {
-                    Operand::Num(num) => EvalValue::Num(*num),
-                    Operand::Bool(_) => panic!("incompatible operands"),
-                    Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
+                    Operand::Num(num) => &EvalValue::Num(*num),
+                    Operand::VirtualRegister(vreg) => res.get(vreg).unwrap(),
+                    _ => panic!("incompatible operands"),
                 };
                 let mul = match (lhs, rhs) {
                     (EvalValue::Num(lhs), EvalValue::Num(rhs)) => EvalValue::Num(lhs / rhs),
@@ -365,7 +385,8 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                 let value = match ir.operands.first().as_ref().unwrap() {
                     Operand::Num(num) => EvalValue::Num(*num),
                     Operand::Bool(b) => EvalValue::Bool(*b),
-                    Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
+                    Operand::VirtualRegister(vreg) => res.get(vreg).unwrap().clone(),
+                    Operand::Fn(name) => EvalValue::Fn(name.to_owned()),
                 };
                 assert!(ir.operands.iter().nth(1).is_none());
 
