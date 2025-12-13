@@ -24,8 +24,7 @@ pub enum InstructionKind {
 pub struct Instruction {
     pub kind: InstructionKind,
     pub args_count: u8,
-    pub lhs: Option<Operand>,
-    pub rhs: Option<Operand>,
+    pub operands: Vec<Operand>,
     pub origin: Origin,
     pub res_vreg: Option<VirtualRegister>,
 }
@@ -86,8 +85,7 @@ impl Emitter {
                     let ins = Instruction {
                         kind: InstructionKind::Set,
                         args_count: 1,
-                        lhs: Some(Operand::Num(num)),
-                        rhs: None,
+                        operands: vec![Operand::Num(num)],
                         origin: node.origin,
                         res_vreg: Some(res_vreg),
                     };
@@ -103,8 +101,7 @@ impl Emitter {
                     let ins = Instruction {
                         kind: InstructionKind::Set,
                         args_count: 1,
-                        lhs: Some(Operand::Bool(b)),
-                        rhs: None,
+                        operands: vec![Operand::Bool(b)],
                         origin: node.origin,
                         res_vreg: Some(res_vreg),
                     };
@@ -153,8 +150,10 @@ impl Emitter {
                     let ins = Instruction {
                         kind: InstructionKind::IAdd,
                         args_count: 2,
-                        lhs: Some(Operand::VirtualRegister(lhs)),
-                        rhs: Some(Operand::VirtualRegister(rhs)),
+                        operands: vec![
+                            Operand::VirtualRegister(lhs),
+                            Operand::VirtualRegister(rhs),
+                        ],
                         origin: node.origin,
                         res_vreg: Some(res_vreg),
                     };
@@ -171,8 +170,10 @@ impl Emitter {
                     let ins = Instruction {
                         kind: InstructionKind::IMultiply,
                         args_count: 2,
-                        lhs: Some(Operand::VirtualRegister(lhs)),
-                        rhs: Some(Operand::VirtualRegister(rhs)),
+                        operands: vec![
+                            Operand::VirtualRegister(lhs),
+                            Operand::VirtualRegister(rhs),
+                        ],
                         origin: node.origin,
                         res_vreg: Some(res_vreg),
                     };
@@ -189,8 +190,10 @@ impl Emitter {
                     let ins = Instruction {
                         kind: InstructionKind::IDivide,
                         args_count: 2,
-                        lhs: Some(Operand::VirtualRegister(lhs)),
-                        rhs: Some(Operand::VirtualRegister(rhs)),
+                        operands: vec![
+                            Operand::VirtualRegister(lhs),
+                            Operand::VirtualRegister(rhs),
+                        ],
                         origin: node.origin,
                         res_vreg: Some(res_vreg),
                     };
@@ -229,10 +232,10 @@ impl Emitter {
                     };
                     res.insert(res_vreg, live_range);
 
-                    if let Some(Operand::VirtualRegister(vreg)) = &ins.lhs {
+                    if let Some(Operand::VirtualRegister(vreg)) = &ins.operands.first() {
                         Self::extend_live_range_on_use(*vreg, i as u32, &mut res);
                     }
-                    if let Some(Operand::VirtualRegister(vreg)) = &ins.rhs {
+                    if let Some(Operand::VirtualRegister(vreg)) = &ins.operands.iter().nth(1) {
                         Self::extend_live_range_on_use(*vreg, i as u32, &mut res);
                     }
                 }
@@ -279,13 +282,9 @@ impl Instruction {
         };
         write!(w, " ")?;
 
-        if let Some(lhs) = &self.lhs {
-            lhs.write(w)?;
-        }
-        write!(w, " ")?;
-
-        if let Some(rhs) = &self.rhs {
-            rhs.write(w)?;
+        for op in &self.operands {
+            op.write(w)?;
+            write!(w, " ")?;
         }
 
         writeln!(w)
@@ -315,12 +314,12 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
     for ir in irs {
         match ir.kind {
             InstructionKind::IAdd => {
-                let lhs = match ir.lhs.as_ref().unwrap() {
+                let lhs = match ir.operands.first().as_ref().unwrap() {
                     Operand::Num(num) => EvalValue::Num(*num),
                     Operand::Bool(_) => panic!("incompatible operands"),
                     Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
                 };
-                let rhs = match ir.rhs.as_ref().unwrap() {
+                let rhs = match ir.operands.iter().nth(1).as_ref().unwrap() {
                     Operand::Num(num) => EvalValue::Num(*num),
                     Operand::Bool(_) => panic!("incompatible operands"),
                     Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
@@ -329,12 +328,12 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                 res.insert(ir.res_vreg.unwrap(), sum);
             }
             InstructionKind::IMultiply => {
-                let lhs = match ir.lhs.as_ref().unwrap() {
+                let lhs = match ir.operands.first().as_ref().unwrap() {
                     Operand::Num(num) => EvalValue::Num(*num),
                     Operand::Bool(_) => panic!("incompatible operands"),
                     Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
                 };
-                let rhs = match ir.rhs.as_ref().unwrap() {
+                let rhs = match ir.operands.iter().nth(1).as_ref().unwrap() {
                     Operand::Num(num) => EvalValue::Num(*num),
                     Operand::Bool(_) => panic!("incompatible operands"),
                     Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
@@ -346,12 +345,12 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                 res.insert(ir.res_vreg.unwrap(), mul);
             }
             InstructionKind::IDivide => {
-                let lhs = match ir.lhs.as_ref().unwrap() {
+                let lhs = match ir.operands.first().as_ref().unwrap() {
                     Operand::Num(num) => EvalValue::Num(*num),
                     Operand::Bool(_) => panic!("incompatible operands"),
                     Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
                 };
-                let rhs = match ir.rhs.as_ref().unwrap() {
+                let rhs = match ir.operands.iter().nth(1).as_ref().unwrap() {
                     Operand::Num(num) => EvalValue::Num(*num),
                     Operand::Bool(_) => panic!("incompatible operands"),
                     Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
@@ -363,12 +362,12 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                 res.insert(ir.res_vreg.unwrap(), mul);
             }
             InstructionKind::Set => {
-                let value = match ir.lhs.as_ref().unwrap() {
+                let value = match ir.operands.first().as_ref().unwrap() {
                     Operand::Num(num) => EvalValue::Num(*num),
                     Operand::Bool(b) => EvalValue::Bool(*b),
                     Operand::VirtualRegister(vreg) => *res.get(vreg).unwrap(),
                 };
-                assert!(ir.rhs.is_none());
+                assert!(ir.operands.iter().nth(1).is_none());
 
                 res.insert(ir.res_vreg.unwrap(), value);
             }

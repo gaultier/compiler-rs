@@ -128,7 +128,11 @@ impl Emitter {
         ins: &ir::Instruction,
         vreg_to_memory_location: &RegisterMapping,
     ) {
-        match (&ins.kind, &ins.lhs, &ins.rhs) {
+        match (
+            &ins.kind,
+            &ins.operands.iter().nth(0),
+            &ins.operands.iter().nth(1),
+        ) {
             (
                 ir::InstructionKind::IAdd,
                 Some(ir::Operand::VirtualRegister(lhs)),
