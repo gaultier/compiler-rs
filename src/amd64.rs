@@ -1,3 +1,5 @@
+use std::{io::Write, panic};
+
 use log::trace;
 use serde::Serialize;
 
@@ -123,7 +125,6 @@ impl Emitter {
         MemoryLocation::Stack(offset)
     }
 
-    #[warn(unused_results)]
     fn instruction_selection(
         &mut self,
         ins: &ir::Instruction,
@@ -361,12 +362,12 @@ impl Emitter {
                 let spill_slot = self.find_free_spill_slot(&OperandSize::_64);
                 self.emit_store(
                     &spill_slot,
-                    &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rax))).into(),
+                    &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rdi))).into(),
                     &OperandSize::_64,
                     &Origin::default(),
                 );
                 self.emit_store(
-                    &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rax))),
+                    &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rdi))),
                     &arg.kind,
                     &OperandSize::_64,
                     &Origin::default(),
@@ -381,7 +382,7 @@ impl Emitter {
                     origin: ins.origin,
                 });
                 self.emit_store(
-                    &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rax))),
+                    &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rdi))),
                     &(&spill_slot).into(),
                     &OperandSize::_64,
                     &Origin::default(),
@@ -391,7 +392,6 @@ impl Emitter {
         }
     }
 
-    #[warn(unused_results)]
     pub(crate) fn emit(
         &mut self,
         irs: &[ir::Instruction],
@@ -404,7 +404,6 @@ impl Emitter {
         }
     }
 
-    #[warn(unused_results)]
     pub(crate) fn emit_store(
         &mut self,
         dst: &MemoryLocation,
@@ -548,7 +547,11 @@ impl Interpreter {
             (OperandKind::Register(_), OperandKind::Register(_))
             | (OperandKind::Stack(_), OperandKind::Register(_))
             | (OperandKind::Register(_), OperandKind::Stack(_)) => {
-                let value = self.state.get(&(&src.kind).into()).unwrap().clone();
+                let value = self
+                    .state
+                    .get(&(&src.kind).into())
+                    .unwrap_or_else(|| &EvalValue::Num(0))
+                    .clone();
                 self.state.insert((&dst.kind).into(), value);
             }
             (OperandKind::Register(_), OperandKind::Immediate(imm))
@@ -563,7 +566,11 @@ impl Interpreter {
     fn load(&mut self, dst: &Operand, src: &Operand) {
         match (&dst.kind, &src.kind) {
             (OperandKind::Register(_), OperandKind::Stack(_)) => {
-                let value = self.state.get(&(&src.kind).into()).unwrap().clone();
+                let value = self
+                    .state
+                    .get(&(&src.kind).into())
+                    .unwrap_or_else(|| &EvalValue::Num(0))
+                    .clone();
                 self.state.insert((&dst.kind).into(), value);
             }
             _ => panic!("unsupported load"),
@@ -572,6 +579,8 @@ impl Interpreter {
 
     pub fn eval(&mut self, instructions: &[asm::Instruction]) {
         for ins in instructions {
+            trace!("eval: {:#?}", &ins);
+
             let asm::InstructionKind::Amd64(kind) = ins.kind;
 
             match kind {
@@ -672,7 +681,28 @@ impl Interpreter {
                     self.load(&ins.operands[0], &ins.operands[1]);
                 }
                 InstructionKind::Call => {
-                    todo!()
+                    assert_eq!(ins.operands.len(), 1);
+                    let fn_name = match &ins.operands.first().unwrap().kind {
+                        OperandKind::FnName(fn_name) => fn_name,
+                        _ => panic!("invalid call"),
+                    };
+
+                    if fn_name != "println_u64" {
+                        todo!()
+                    }
+
+                    let arg = match self
+                        .state
+                        .get(&MemoryLocation::Register(asm::Register::Amd64(
+                            Register::Rdi,
+                        )))
+                        .unwrap()
+                    {
+                        EvalValue::Num(n) => *n,
+                        _ => panic!("invalid argument"),
+                    };
+
+                    writeln!(&mut std::io::stdout(), "{}", arg).unwrap();
                 }
             }
         }
