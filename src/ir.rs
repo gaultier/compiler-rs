@@ -5,6 +5,7 @@ use serde::Serialize;
 use crate::{
     ast::{Node, NodeData},
     origin::Origin,
+    type_checker::TypeKind,
 };
 
 #[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -110,9 +111,18 @@ impl Emitter {
                     stack.push(res_vreg);
                 }
                 crate::ast::NodeKind::BuiltinPrintln => {
-                    todo!();
+                    match &*node.typ.kind {
+                        TypeKind::Function(_, args) if args.len() == 1 => {}
+                        _ => panic!("unexpected println type"),
+                    };
                 }
                 crate::ast::NodeKind::FnCall => {
+                    let args_count = match node.data.unwrap() {
+                        crate::ast::NodeData::Num(n) => n as usize,
+                        _ => panic!(
+                            "invalid AST: node data for FnCall (i.e. the argument count) should be a number"
+                        ),
+                    };
                     todo!();
                 }
                 crate::ast::NodeKind::Add => {

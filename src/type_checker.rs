@@ -15,9 +15,9 @@ pub enum TypeKind {
 
 #[derive(Serialize, Clone, PartialEq, Eq, Debug, PartialOrd, Ord)]
 pub struct Type {
-    kind: Box<TypeKind>,
-    size: usize,
-    origin: Origin,
+    pub kind: Box<TypeKind>,
+    pub size: usize,
+    pub origin: Origin,
 }
 
 impl Default for Type {
@@ -140,10 +140,7 @@ impl Checker {
                 }
                 crate::ast::NodeKind::BuiltinPrintln => {
                     match &*node.typ.kind {
-                        TypeKind::Function(_, args) => {
-                            assert_eq!(args.len(), 1);
-                            &args[0]
-                        }
+                        TypeKind::Function(_, args) if args.len() == 1 => {}
                         _ => panic!("unexpected println type"),
                     };
 
