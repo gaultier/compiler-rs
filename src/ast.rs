@@ -159,7 +159,7 @@ impl<'a> Parser<'a> {
                 kind: NodeKind::BuiltinPrintln,
                 data: None,
                 origin: token.origin,
-                typ: Type::void(),
+                typ: Type::function(&Type::void(), &[Type::u64()], &Origin::default()),
             };
             self.nodes.push(node);
             return true;
