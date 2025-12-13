@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, io::Write};
+use std::{collections::BTreeMap, io::Write, panic};
 
 use serde::Serialize;
 
@@ -350,7 +350,11 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
     for ir in irs {
         match ir.kind {
             InstructionKind::FnCall => {
-                todo!()
+                let fn_name = match ir.operands.first().unwrap() {
+                    Operand::Fn(name) => name,
+                    _ => panic!("invalid FnCall IR"),
+                };
+                todo!();
             }
             InstructionKind::IAdd => {
                 let lhs = match ir.operands.first().as_ref().unwrap() {
