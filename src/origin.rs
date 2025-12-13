@@ -4,7 +4,7 @@ use serde::Serialize;
 
 pub type FileId = u32;
 
-#[derive(PartialEq, Eq, Debug, Serialize, Copy, Clone, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Debug, Serialize, Copy, Clone, PartialOrd, Ord, Hash)]
 pub struct Origin {
     pub line: u32,
     pub column: u32,

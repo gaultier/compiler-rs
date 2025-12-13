@@ -15,6 +15,7 @@ pub enum NodeKind {
     Add,
     Multiply,
     Divide,
+    BuiltinPrintln,
 }
 
 #[derive(Serialize, Copy, Clone, Debug)]
@@ -23,7 +24,7 @@ pub enum NodeData {
     Bool(bool),
 }
 
-#[derive(Serialize, Copy, Clone, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub struct Node {
     pub kind: NodeKind,
     pub data: Option<NodeData>,
@@ -149,6 +150,16 @@ impl<'a> Parser<'a> {
                 data: Some(NodeData::Bool(src == "true")),
                 origin: token.origin,
                 typ: Type::bool(),
+            };
+            self.nodes.push(node);
+            return true;
+        }
+        if let Some(token) = self.match_kind(TokenKind::BuiltinPrintln) {
+            let node = Node {
+                kind: NodeKind::BuiltinPrintln,
+                data: None,
+                origin: token.origin,
+                typ: Type::void(),
             };
             self.nodes.push(node);
             return true;
@@ -287,6 +298,7 @@ impl<'a> Parser<'a> {
         if self.error_mode {
             return false;
         }
+
         self.parse_primary()
     }
 

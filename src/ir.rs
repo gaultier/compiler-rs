@@ -109,6 +109,9 @@ impl Emitter {
                     self.instructions.push(ins);
                     stack.push(res_vreg);
                 }
+                crate::ast::NodeKind::BuiltinPrintln => {
+                    todo!();
+                }
                 crate::ast::NodeKind::Add => {
                     // TODO: Checks.
                     let rhs = stack.pop().unwrap();
