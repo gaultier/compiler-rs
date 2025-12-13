@@ -191,6 +191,8 @@ impl Checker {
                         };
                     }
 
+                    node.typ = f.typ.clone();
+
                     if *ret_type.kind != TypeKind::Void {
                         //stack.push(ret_type);
                         todo!();
