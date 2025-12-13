@@ -17,13 +17,13 @@ pub enum InstructionKind {
     IMultiply,
     IDivide,
     Set, // Set virtual register.
-         //FnCall,
+    FnCall,
 }
 
 #[derive(Serialize, Debug)]
 pub struct Instruction {
     pub kind: InstructionKind,
-    pub args_count: u8,
+    pub args_count: usize,
     pub operands: Vec<Operand>,
     pub origin: Origin,
     pub res_vreg: Option<VirtualRegister>,
@@ -139,24 +139,27 @@ impl Emitter {
                     }
                     let f = stack.pop().unwrap();
 
-                    match &*node.typ.kind {
-                        TypeKind::Function(ret_type, _) if *ret_type.kind == TypeKind::Void => {}
-                        TypeKind::Function(_, _) => {
-                            let res_vreg = self.make_vreg();
-                            stack.push(res_vreg);
-                        }
+                    let res_vreg = match &*node.typ.kind {
+                        TypeKind::Function(ret_type, _) if *ret_type.kind == TypeKind::Void => None,
+                        TypeKind::Function(_, _) => Some(self.make_vreg()),
                         _ => panic!("not a function type"),
                     };
 
-                    //let ins = Instruction {
-                    //    kind: InstructionKind::FnCall,
-                    //    args_count,
-                    //    lhs: Some(Operand::Bool(b)),
-                    //    rhs: None,
-                    //    origin: node.origin,
-                    //    res_vreg: Some(res_vreg),
-                    //};
-                    //self.instructions.push(ins);
+                    if let Some(res_vreg) = res_vreg {
+                        stack.push(res_vreg);
+                    }
+                    let mut operands = Vec::with_capacity(args.len() + 1);
+                    operands.push(Operand::VirtualRegister(f));
+                    operands.extend(args.iter().map(|x| Operand::VirtualRegister(*x)));
+
+                    let ins = Instruction {
+                        kind: InstructionKind::FnCall,
+                        args_count,
+                        operands,
+                        origin: node.origin,
+                        res_vreg,
+                    };
+                    self.instructions.push(ins);
                 }
                 crate::ast::NodeKind::Add => {
                     // TODO: Checks.
@@ -237,6 +240,16 @@ impl Emitter {
 
         for (i, ins) in self.instructions.iter().enumerate() {
             match ins.kind {
+                InstructionKind::FnCall => {
+                    if let Some(res_vreg) = ins.res_vreg {
+                        assert!(res_vreg.0 > 0);
+                        let live_range = LiveRange {
+                            start: i as u32,
+                            end: i as u32,
+                        };
+                        res.insert(res_vreg, live_range);
+                    }
+                }
                 InstructionKind::IAdd
                 | InstructionKind::IMultiply
                 | InstructionKind::IDivide
@@ -298,6 +311,9 @@ impl Instruction {
             InstructionKind::Set => {
                 write!(w, "set")?;
             }
+            InstructionKind::FnCall => {
+                write!(w, "call")?;
+            }
         };
         write!(w, " ")?;
 
@@ -333,6 +349,9 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
 
     for ir in irs {
         match ir.kind {
+            InstructionKind::FnCall => {
+                todo!()
+            }
             InstructionKind::IAdd => {
                 let lhs = match ir.operands.first().as_ref().unwrap() {
                     Operand::Num(num) => &EvalValue::Num(*num),
