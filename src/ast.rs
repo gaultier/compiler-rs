@@ -299,7 +299,36 @@ impl<'a> Parser<'a> {
             return false;
         }
 
-        self.parse_primary()
+        if !self.parse_primary() {
+            return false;
+        }
+
+        let lparen = if let Some(lparen) = self.match_kind(TokenKind::LeftParen) {
+            lparen
+        } else {
+            return true;
+        };
+
+        if !self.parse_expr() {
+            self.errors.push(Error {
+                kind: ErrorKind::ParseCallMissingArgument,
+                origin: lparen.origin,
+                explanation: String::from(
+                    "missing argument in function call, should be: expression",
+                ),
+            });
+        }
+
+        if self.match_kind(TokenKind::RightParen).is_none() {
+            self.add_error_with_explanation(
+                ErrorKind::ParseCallMissingRightParen,
+                self.current_or_last_token_origin().unwrap(),
+                String::from("missing right parenthesis after call"),
+            );
+            return false;
+        }
+
+        return true;
     }
 
     fn parse_statement(&mut self) -> bool {

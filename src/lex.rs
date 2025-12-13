@@ -25,6 +25,8 @@ pub enum TokenKind {
     Star,
     Slash,
     Newline,
+    LeftParen,
+    RightParen,
     Eof,
     Unknown,
 }
@@ -182,6 +184,32 @@ impl Lexer {
                     };
                     self.tokens.push(Token {
                         kind: TokenKind::Slash,
+                        origin,
+                    });
+                    self.origin.offset += 1;
+                    self.origin.column += 1;
+                    it.next();
+                }
+                '(' => {
+                    let origin = Origin {
+                        len: 1,
+                        ..self.origin
+                    };
+                    self.tokens.push(Token {
+                        kind: TokenKind::LeftParen,
+                        origin,
+                    });
+                    self.origin.offset += 1;
+                    self.origin.column += 1;
+                    it.next();
+                }
+                ')' => {
+                    let origin = Origin {
+                        len: 1,
+                        ..self.origin
+                    };
+                    self.tokens.push(Token {
+                        kind: TokenKind::RightParen,
                         origin,
                     });
                     self.origin.offset += 1;
