@@ -133,7 +133,7 @@ impl Emitter {
                     }
 
                     // FIXME
-                    let fn_name = Operand::Fn(String::from("println"));
+                    let fn_name = Operand::Fn(String::from("println_u64"));
 
                     let res_vreg = match &*node.typ.kind {
                         TypeKind::Function(ret_type, _) if *ret_type.kind == TypeKind::Void => None,
@@ -359,7 +359,7 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                     _ => panic!("invalid FnCall IR: {:#?}", ir.operands.first()),
                 };
                 match fn_name.as_str() {
-                    "println" => {
+                    "println_u64" => {
                         for op in &ir.operands[1..] {
                             let val = match op {
                                 Operand::VirtualRegister(vreg) => res.get(vreg).unwrap(),

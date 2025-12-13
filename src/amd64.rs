@@ -352,7 +352,7 @@ impl Emitter {
                 ir::InstructionKind::FnCall,
                 Some(ir::Operand::Fn(fn_name)),
                 Some(ir::Operand::VirtualRegister(vreg)),
-            ) if fn_name == "println" => {
+            ) if fn_name == "println_u64" => {
                 let arg = Operand::from_memory_location(
                     &OperandSize::_64,
                     vreg_to_memory_location.get(vreg).unwrap(),
