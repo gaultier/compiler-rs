@@ -160,7 +160,16 @@ impl Checker {
                         _ => panic!("unexpected println type"),
                     };
 
-                    let arg = stack.pop().unwrap();
+                    let arg = stack.pop();
+                    if arg.is_none() {
+                        errs.push(Error::new_not_implemented_yet(
+                            &node.origin,
+                            String::from("function pointers are not supported yet"),
+                        ));
+                        continue;
+                    }
+                    let arg = arg.unwrap();
+
                     match *arg.typ.kind {
                         TypeKind::Number => todo!(),
                         TypeKind::Bool => todo!(),

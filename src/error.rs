@@ -15,8 +15,8 @@ pub enum ErrorKind {
     MissingNewline,
     ParseTermMissingRhs,
     ParseFactorMissingRhs,
-
     IncompatibleTypes,
+    NotImplementedYet,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -40,6 +40,14 @@ impl Error {
             kind: crate::error::ErrorKind::IncompatibleTypes,
             origin: *origin,
             explanation: format!("incompatible types: {} vs {}", a, b),
+        }
+    }
+
+    pub(crate) fn new_not_implemented_yet(origin: &Origin, explanation: String) -> Self {
+        Self {
+            kind: crate::error::ErrorKind::NotImplementedYet,
+            origin: *origin,
+            explanation,
         }
     }
 
@@ -88,12 +96,6 @@ impl Error {
             w.write_all(b"\x1B[0m")?;
             w.write_all(excerpt_after.as_bytes())?;
         }
-
-        if !self.explanation.is_empty() {
-            w.write_all(self.explanation.as_bytes())?;
-            w.write_all(b"\n")?;
-        }
-        w.write_all(b"\n")?;
 
         Ok(())
     }

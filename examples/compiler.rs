@@ -1,4 +1,7 @@
-use std::{collections::HashMap, io::stdout};
+use std::{
+    collections::HashMap,
+    io::{Write, stdout},
+};
 
 use compiler_rs_lib::{asm, compile};
 use log::{LevelFilter, Log};
@@ -41,6 +44,7 @@ fn main() {
     for err in &compiled.errors {
         err.write(&mut std::io::stderr(), &file_content, &file_id_to_names)
             .unwrap();
+        std::io::stderr().write_all(b"\n").unwrap();
     }
 
     println!("--- IR ---");
