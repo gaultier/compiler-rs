@@ -78,6 +78,7 @@ impl Emitter {
 
     pub fn emit(&mut self, nodes: &[Node]) {
         let mut stack = Vec::new();
+        //        let mut name_resolutions = BTreeMap::<String, Operand>::new();
 
         for node in nodes {
             match node.kind {
@@ -118,17 +119,6 @@ impl Emitter {
                         TypeKind::Function(_, args) if args.len() == 1 => {}
                         _ => panic!("unexpected println type"),
                     };
-
-                    let res_vreg = self.make_vreg();
-                    let ins = Instruction {
-                        kind: InstructionKind::Set,
-                        args_count: 1,
-                        operands: vec![Operand::Fn(String::from("println"))],
-                        origin: node.origin,
-                        res_vreg: Some(res_vreg),
-                    };
-                    self.instructions.push(ins);
-                    stack.push(res_vreg);
                 }
                 crate::ast::NodeKind::FnCall => {
                     let args_count = match node.data.unwrap() {
@@ -141,7 +131,9 @@ impl Emitter {
                     for _ in 0..args_count {
                         args.push(stack.pop().unwrap());
                     }
-                    let f = stack.pop().unwrap();
+
+                    // FIXME
+                    let fn_name = Operand::Fn(String::from("println"));
 
                     let res_vreg = match &*node.typ.kind {
                         TypeKind::Function(ret_type, _) if *ret_type.kind == TypeKind::Void => None,
@@ -153,7 +145,7 @@ impl Emitter {
                         stack.push(res_vreg);
                     }
                     let mut operands = Vec::with_capacity(args.len() + 1);
-                    operands.push(Operand::VirtualRegister(f));
+                    operands.push(fn_name);
                     operands.extend(args.iter().map(|x| Operand::VirtualRegister(*x)));
 
                     let ins = Instruction {
@@ -363,10 +355,7 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
         match ir.kind {
             InstructionKind::FnCall => {
                 let fn_name = match ir.operands.first().unwrap() {
-                    Operand::VirtualRegister(vreg) => match res.get(vreg).unwrap() {
-                        EvalValue::Fn(name) => name,
-                        x => panic!("invalid FnCall IR: {:#?}", x),
-                    },
+                    Operand::Fn(name) => name,
                     _ => panic!("invalid FnCall IR: {:#?}", ir.operands.first()),
                 };
                 match fn_name.as_str() {

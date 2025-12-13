@@ -94,6 +94,7 @@ pub enum InstructionKind {
     IMul_R_RM,
     IDiv,
     Lea,
+    Call,
 }
 
 pub struct Emitter {
@@ -347,7 +348,46 @@ impl Emitter {
                     origin: ins.origin,
                 });
             }
-            _ => panic!("invalid IR operands"),
+            (
+                ir::InstructionKind::FnCall,
+                Some(ir::Operand::Fn(fn_name)),
+                Some(ir::Operand::VirtualRegister(vreg)),
+            ) if fn_name == "println" => {
+                let arg = Operand::from_memory_location(
+                    &OperandSize::_64,
+                    vreg_to_memory_location.get(vreg).unwrap(),
+                );
+
+                let spill_slot = self.find_free_spill_slot(&OperandSize::_64);
+                self.emit_store(
+                    &spill_slot,
+                    &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rax))).into(),
+                    &OperandSize::_64,
+                    &Origin::default(),
+                );
+                self.emit_store(
+                    &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rax))),
+                    &arg.kind,
+                    &OperandSize::_64,
+                    &Origin::default(),
+                );
+
+                self.asm.push(Instruction {
+                    kind: InstructionKind::Call,
+                    operands: vec![Operand {
+                        operand_size: OperandSize::_64,
+                        kind: OperandKind::FnName(fn_name.clone()),
+                    }],
+                    origin: ins.origin,
+                });
+                self.emit_store(
+                    &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rax))),
+                    &(&spill_slot).into(),
+                    &OperandSize::_64,
+                    &Origin::default(),
+                );
+            }
+            x => panic!("invalid IR operands: {:#?}", x),
         }
     }
 
@@ -373,6 +413,9 @@ impl Emitter {
         origin: &Origin,
     ) {
         match (dst, src) {
+            (_, OperandKind::FnName(_)) => {
+                todo!()
+            }
             (MemoryLocation::Register(dst_reg), OperandKind::Register(src_reg)) => {
                 self.asm.push(Instruction {
                     kind: InstructionKind::Mov_R_RM,
@@ -432,7 +475,7 @@ impl Emitter {
                         },
                         Operand {
                             operand_size: *size,
-                            kind: *src,
+                            kind: src.clone(),
                         },
                     ],
                     origin: *origin,
@@ -474,6 +517,7 @@ impl InstructionKind {
             InstructionKind::IMul_R_RM => "imul",
             InstructionKind::IDiv => "idiv",
             InstructionKind::Lea => "lea",
+            InstructionKind::Call => "call",
         }
     }
 }
@@ -496,7 +540,11 @@ impl Interpreter {
     }
 
     fn store(&mut self, dst: &Operand, src: &Operand) {
-        match (dst.kind, src.kind) {
+        match (&dst.kind, &src.kind) {
+            (OperandKind::FnName(_), _) => panic!("invalid store to fn name"),
+            (_, OperandKind::FnName(_)) => {
+                todo!()
+            }
             (OperandKind::Register(_), OperandKind::Register(_))
             | (OperandKind::Stack(_), OperandKind::Register(_))
             | (OperandKind::Register(_), OperandKind::Stack(_)) => {
@@ -505,7 +553,7 @@ impl Interpreter {
             }
             (OperandKind::Register(_), OperandKind::Immediate(imm))
             | (OperandKind::Stack(_), OperandKind::Immediate(imm)) => {
-                self.state.insert((&dst.kind).into(), EvalValue::Num(imm));
+                self.state.insert((&dst.kind).into(), EvalValue::Num(*imm));
             }
             (OperandKind::Immediate(_), _) => panic!("invalid store destination"),
             (OperandKind::Stack(_), OperandKind::Stack(_)) => panic!("unsupported store"),
@@ -513,7 +561,7 @@ impl Interpreter {
     }
 
     fn load(&mut self, dst: &Operand, src: &Operand) {
-        match (dst.kind, src.kind) {
+        match (&dst.kind, &src.kind) {
             (OperandKind::Register(_), OperandKind::Stack(_)) => {
                 let value = self.state.get(&(&src.kind).into()).unwrap().clone();
                 self.state.insert((&dst.kind).into(), value);
@@ -622,6 +670,9 @@ impl Interpreter {
                 InstructionKind::Lea => {
                     assert_eq!(ins.operands.len(), 2);
                     self.load(&ins.operands[0], &ins.operands[1]);
+                }
+                InstructionKind::Call => {
+                    todo!()
                 }
             }
         }

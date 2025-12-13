@@ -37,17 +37,18 @@ pub enum Register {
     Amd64(amd64::Register),
 }
 
-#[derive(Serialize, Debug, Clone, Copy)]
+#[derive(Serialize, Debug, Clone)]
 pub struct Operand {
     pub operand_size: OperandSize,
     pub kind: OperandKind,
 }
 
-#[derive(Serialize, Debug, Clone, Copy)]
+#[derive(Serialize, Debug, Clone)]
 pub enum OperandKind {
     Register(Register),
     Immediate(u64),
     Stack(usize),
+    FnName(String),
 }
 
 #[derive(Serialize, Debug)]
@@ -80,7 +81,7 @@ impl Operand {
     pub(crate) fn new(operand_size: &OperandSize, kind: &OperandKind) -> Self {
         Self {
             operand_size: *operand_size,
-            kind: *kind,
+            kind: kind.clone(),
         }
     }
 
@@ -95,6 +96,7 @@ impl Operand {
         match &self.kind {
             OperandKind::Register(register) => w.write_all(register.to_str().as_bytes()),
             OperandKind::Immediate(n) => write!(w, "{}", n),
+            OperandKind::FnName(name) => w.write_all(name.as_bytes()),
             OperandKind::Stack(off) => {
                 self.operand_size.write(w)?;
                 write!(w, " [rbp - {}]", off)
@@ -154,6 +156,7 @@ impl From<&OperandKind> for MemoryLocation {
             OperandKind::Register(register) => MemoryLocation::Register(*register),
             OperandKind::Immediate(_imm) => panic!(),
             OperandKind::Stack(off) => MemoryLocation::Stack(*off),
+            OperandKind::FnName(_) => todo!(),
         }
     }
 }
