@@ -336,7 +336,7 @@ impl<'a> Parser<'a> {
         };
         self.nodes.push(node);
 
-        return true;
+        true
     }
 
     fn parse_statement(&mut self) -> bool {

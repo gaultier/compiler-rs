@@ -130,8 +130,8 @@ impl Emitter {
     ) {
         match (
             &ins.kind,
-            &ins.operands.iter().nth(0),
-            &ins.operands.iter().nth(1),
+            &ins.operands.get(0),
+            &ins.operands.get(1),
         ) {
             (
                 ir::InstructionKind::IAdd,

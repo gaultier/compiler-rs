@@ -266,7 +266,7 @@ impl Emitter {
                     if let Some(Operand::VirtualRegister(vreg)) = &ins.operands.first() {
                         Self::extend_live_range_on_use(*vreg, i as u32, &mut res);
                     }
-                    if let Some(Operand::VirtualRegister(vreg)) = &ins.operands.iter().nth(1) {
+                    if let Some(Operand::VirtualRegister(vreg)) = &ins.operands.get(1) {
                         Self::extend_live_range_on_use(*vreg, i as u32, &mut res);
                     }
                 }
@@ -287,7 +287,7 @@ impl Operand {
                 write!(w, "{}", b)
             }
             Operand::VirtualRegister(r) => write!(w, "v{}", r.0),
-            Operand::Fn(name) => w.write_all(&name.as_bytes()),
+            Operand::Fn(name) => w.write_all(name.as_bytes()),
         }
     }
 }
@@ -362,7 +362,7 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                     Operand::VirtualRegister(vreg) => res.get(vreg).unwrap(),
                     _ => panic!("incompatible operands"),
                 };
-                let rhs = match ir.operands.iter().nth(1).as_ref().unwrap() {
+                let rhs = match ir.operands.get(1).as_ref().unwrap() {
                     Operand::Num(num) => &EvalValue::Num(*num),
                     Operand::VirtualRegister(vreg) => res.get(vreg).unwrap(),
                     _ => panic!("incompatible operands"),
@@ -376,7 +376,7 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                     Operand::VirtualRegister(vreg) => res.get(vreg).unwrap(),
                     _ => panic!("incompatible operands"),
                 };
-                let rhs = match ir.operands.iter().nth(1).as_ref().unwrap() {
+                let rhs = match ir.operands.get(1).as_ref().unwrap() {
                     Operand::Num(num) => &EvalValue::Num(*num),
                     Operand::VirtualRegister(vreg) => res.get(vreg).unwrap(),
                     _ => panic!("incompatible operands"),
@@ -393,7 +393,7 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                     Operand::VirtualRegister(vreg) => res.get(vreg).unwrap(),
                     _ => panic!("incompatible operands"),
                 };
-                let rhs = match ir.operands.iter().nth(1).as_ref().unwrap() {
+                let rhs = match ir.operands.get(1).as_ref().unwrap() {
                     Operand::Num(num) => &EvalValue::Num(*num),
                     Operand::VirtualRegister(vreg) => res.get(vreg).unwrap(),
                     _ => panic!("incompatible operands"),
@@ -411,7 +411,7 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                     Operand::VirtualRegister(vreg) => res.get(vreg).unwrap().clone(),
                     Operand::Fn(name) => EvalValue::Fn(name.to_owned()),
                 };
-                assert!(ir.operands.iter().nth(1).is_none());
+                assert!(ir.operands.get(1).is_none());
 
                 res.insert(ir.res_vreg.unwrap(), value);
             }
