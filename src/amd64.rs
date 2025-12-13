@@ -367,7 +367,7 @@ impl Emitter {
                     &Origin::default(),
                 );
                 self.emit_store(
-                    &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rdi))),
+                    (&MemoryLocation::Register(asm::Register::Amd64(Register::Rdi))),
                     &arg.kind,
                     &OperandSize::_64,
                     &Origin::default(),
@@ -382,7 +382,7 @@ impl Emitter {
                     origin: ins.origin,
                 });
                 self.emit_store(
-                    &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rdi))),
+                    (&MemoryLocation::Register(asm::Register::Amd64(Register::Rdi))),
                     &(&spill_slot).into(),
                     &OperandSize::_64,
                     &Origin::default(),
@@ -550,7 +550,7 @@ impl Interpreter {
                 let value = self
                     .state
                     .get(&(&src.kind).into())
-                    .unwrap_or_else(|| &EvalValue::Num(0))
+                    .unwrap_or(&EvalValue::Num(0))
                     .clone();
                 self.state.insert((&dst.kind).into(), value);
             }
@@ -569,7 +569,7 @@ impl Interpreter {
                 let value = self
                     .state
                     .get(&(&src.kind).into())
-                    .unwrap_or_else(|| &EvalValue::Num(0))
+                    .unwrap_or(&EvalValue::Num(0))
                     .clone();
                 self.state.insert((&dst.kind).into(), value);
             }

@@ -366,7 +366,7 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                                 _ => panic!("unexpected fn call operand: {:#?}", op),
                             };
                             val.write(&mut stdout()).unwrap();
-                            writeln!(&mut stdout(), "").unwrap();
+                            writeln!(&mut stdout()).unwrap();
                         }
                     }
                     _ => unimplemented!(),
