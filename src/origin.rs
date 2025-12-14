@@ -45,7 +45,10 @@ impl Origin {
         file_id_to_names: &HashMap<FileId, String>,
     ) -> std::io::Result<()> {
         // TODO: file name.
-        let file_name = &file_id_to_names[&self.file_id];
+        let file_name: &str = file_id_to_names
+            .get(&self.file_id)
+            .map(|s| s.as_str())
+            .unwrap_or_else(|| "<?>");
         write!(
             w,
             "{}:{}:{}:{}",

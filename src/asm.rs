@@ -1,4 +1,7 @@
-use std::{collections::BTreeMap, io::Write};
+use std::{
+    collections::{BTreeMap, HashMap},
+    io::Write,
+};
 
 use serde::Serialize;
 
@@ -111,16 +114,8 @@ impl Instruction {
             o.write(w)
         })?;
 
-        write!(
-            w,
-            "  // file:{} line:{} column:{} offset:{} len:{} synth:{}",
-            self.origin.file_id,
-            self.origin.line,
-            self.origin.column,
-            self.origin.offset,
-            self.origin.len,
-            self.origin.synthetic
-        )?;
+        w.write_all(b" // ")?;
+        self.origin.write(w, &HashMap::new() /* FIXME */)?;
 
         writeln!(w)
     }
