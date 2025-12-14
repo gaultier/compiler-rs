@@ -136,20 +136,12 @@ impl Emitter {
                 Some(ir::Operand::VirtualRegister(lhs)),
                 Some(ir::Operand::VirtualRegister(rhs)),
             ) => {
-                self.asm.push(Instruction {
-                    kind: InstructionKind::Mov_R_RM,
-                    operands: vec![
-                        Operand::from_memory_location(
-                            &OperandSize::_64,
-                            vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
-                        ),
-                        Operand::from_memory_location(
-                            &OperandSize::_64,
-                            vreg_to_memory_location.get(lhs).unwrap(),
-                        ),
-                    ],
-                    origin: ins.origin,
-                });
+                self.emit_store(
+                    &vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
+                    &vreg_to_memory_location.get(lhs).unwrap().into(),
+                    &OperandSize::_64,
+                    &ins.origin,
+                );
                 self.asm.push(Instruction {
                     kind: InstructionKind::Add_R_RM,
                     operands: vec![
@@ -170,20 +162,12 @@ impl Emitter {
                 Some(ir::Operand::VirtualRegister(lhs)),
                 Some(ir::Operand::VirtualRegister(rhs)),
             ) => {
-                self.asm.push(Instruction {
-                    kind: InstructionKind::Mov_R_RM,
-                    operands: vec![
-                        Operand::from_memory_location(
-                            &OperandSize::_64,
-                            vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
-                        ),
-                        Operand::from_memory_location(
-                            &OperandSize::_64,
-                            vreg_to_memory_location.get(lhs).unwrap(),
-                        ),
-                    ],
-                    origin: ins.origin,
-                });
+                self.emit_store(
+                    &vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
+                    &vreg_to_memory_location.get(lhs).unwrap().into(),
+                    &OperandSize::_64,
+                    &ins.origin,
+                );
                 self.asm.push(Instruction {
                     kind: InstructionKind::IMul_R_RM,
                     operands: vec![
@@ -252,17 +236,12 @@ impl Emitter {
 
                 // `idiv` technically divides the 128 bit `rdx:rax` value. Thus, `rdx` is zeroed
                 // first to only divide `rax`.
-                self.asm.push(Instruction {
-                    kind: InstructionKind::Mov_R_Imm,
-                    operands: vec![
-                        Operand::new(
-                            &OperandSize::_64,
-                            &OperandKind::Register(asm::Register::Amd64(Register::Rdx)),
-                        ),
-                        Operand::new(&OperandSize::_64, &OperandKind::Immediate(0)),
-                    ],
-                    origin: ins.origin,
-                });
+                self.emit_store(
+                    &MemoryLocation::Register(asm::Register::Amd64(Register::Rdx)),
+                    &OperandKind::Immediate(0),
+                    &OperandSize::_64,
+                    &ins.origin,
+                );
                 self.asm.push(Instruction {
                     kind: InstructionKind::IDiv,
                     operands: vec![Operand::from_memory_location(
@@ -305,49 +284,28 @@ impl Emitter {
                 }
             }
             (ir::InstructionKind::Set, Some(ir::Operand::VirtualRegister(lhs)), None) => {
-                self.asm.push(Instruction {
-                    kind: InstructionKind::Mov_R_RM,
-                    operands: vec![
-                        Operand::from_memory_location(
-                            &OperandSize::_64,
-                            vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
-                        ),
-                        Operand::from_memory_location(
-                            &OperandSize::_64,
-                            vreg_to_memory_location.get(lhs).unwrap(),
-                        ),
-                    ],
-                    origin: ins.origin,
-                });
+                self.emit_store(
+                    &vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
+                    &vreg_to_memory_location.get(lhs).unwrap().into(),
+                    &OperandSize::_64,
+                    &ins.origin,
+                );
             }
             (ir::InstructionKind::Set, Some(ir::Operand::Num(num)), None) => {
-                self.asm.push(Instruction {
-                    kind: InstructionKind::Mov_R_Imm,
-                    operands: vec![
-                        Operand::from_memory_location(
-                            &OperandSize::_64,
-                            vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
-                        ),
-                        Operand::new(&OperandSize::_64, &OperandKind::Immediate(*num)),
-                    ],
-                    origin: ins.origin,
-                });
+                self.emit_store(
+                    &vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
+                    &OperandKind::Immediate(*num),
+                    &OperandSize::_64,
+                    &ins.origin,
+                );
             }
             (ir::InstructionKind::Set, Some(ir::Operand::Bool(b)), None) => {
-                self.asm.push(Instruction {
-                    kind: InstructionKind::Mov_R_Imm,
-                    operands: vec![
-                        Operand::from_memory_location(
-                            &OperandSize::_64,
-                            vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
-                        ),
-                        Operand::new(
-                            &OperandSize::_64,
-                            &OperandKind::Immediate(if *b { 1 } else { 0 }),
-                        ),
-                    ],
-                    origin: ins.origin,
-                });
+                self.emit_store(
+                    &vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
+                    &OperandKind::Immediate(if *b { 1 } else { 0 }),
+                    &OperandSize::_64,
+                    &ins.origin,
+                );
             }
             (
                 ir::InstructionKind::FnCall,
