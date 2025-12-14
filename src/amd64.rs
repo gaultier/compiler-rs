@@ -34,6 +34,9 @@ pub enum Register {
     R13,
     R14,
     R15,
+
+    Rbp,
+    Rsp,
 }
 
 impl From<&asm::Register> for Register {
@@ -331,6 +334,8 @@ impl Emitter {
                     &Origin::default(),
                 );
 
+                self.align_stack();
+
                 self.asm.push(Instruction {
                     kind: InstructionKind::Call,
                     operands: vec![Operand {
@@ -360,6 +365,30 @@ impl Emitter {
         for ir in irs {
             self.instruction_selection(ir, vreg_to_memory_location);
         }
+    }
+
+    pub(crate) fn align_stack(&mut self) {
+        if self.stack.is_aligned(16) {
+            return;
+        }
+
+        let delta = self.stack.offset % 16;
+        self.stack.offset += delta;
+        self.asm.push(Instruction {
+            kind: InstructionKind::Mov_R_Imm,
+            operands: vec![
+                Operand {
+                    operand_size: OperandSize::_64,
+                    kind: OperandKind::Register(asm::Register::Amd64(Register::Rsp)),
+                },
+                Operand {
+                    operand_size: OperandSize::_64,
+                    kind: OperandKind::Immediate(delta as u64),
+                },
+            ],
+            origin: Origin::default(),
+        });
+        assert!(self.stack.is_aligned(16), "{}", self.stack.offset);
     }
 
     pub(crate) fn emit_store(
@@ -453,6 +482,8 @@ impl Emitter {
 
 impl Register {
     pub(crate) fn to_str(self) -> &'static str {
+        // TODO: size dependent.
+
         match self {
             Register::Rax => "rax",
             Register::Rbx => "rbx",
@@ -468,6 +499,8 @@ impl Register {
             Register::R13 => "r13",
             Register::R14 => "r14",
             Register::R15 => "r15",
+            Register::Rsp => "rsp",
+            Register::Rbp => "rbp",
         }
     }
 }
@@ -489,6 +522,7 @@ impl InstructionKind {
 
 pub struct Interpreter {
     pub state: EvalResult,
+    pub stack_offset: usize,
 }
 
 impl Default for Interpreter {
@@ -501,6 +535,7 @@ impl Interpreter {
     pub fn new() -> Self {
         Self {
             state: EvalResult::new(),
+            stack_offset: 0,
         }
     }
 
@@ -647,6 +682,8 @@ impl Interpreter {
                     self.load(&ins.operands[0], &ins.operands[1]);
                 }
                 InstructionKind::Call => {
+                    assert!(self.stack_offset % 16 == 0);
+
                     assert_eq!(ins.operands.len(), 1);
                     let fn_name = match &ins.operands.first().unwrap().kind {
                         OperandKind::FnName(fn_name) => fn_name,

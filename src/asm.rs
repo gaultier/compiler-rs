@@ -190,6 +190,10 @@ impl Stack {
         Self { offset: 0 }
     }
 
+    pub(crate) fn is_aligned(&self, align: usize) -> bool {
+        self.offset % align == 0
+    }
+
     // Intended to be used with `rbp` indexing i.e.: `mov [rbp-8], 1`.
     pub(crate) fn new_slot(&mut self, size: usize, align: usize) -> usize {
         assert_ne!(size, 0);
