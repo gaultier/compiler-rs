@@ -35,7 +35,7 @@ pub struct Instruction {
 
 #[derive(Serialize, Debug, Clone)]
 pub enum Operand {
-    Num(u64),
+    Num(i64),
     Bool(bool),
     Fn(String),
     VirtualRegister(VirtualRegister),
@@ -91,7 +91,7 @@ impl Emitter {
                     let ins = Instruction {
                         kind: InstructionKind::Set,
                         args_count: 1,
-                        operands: vec![Operand::Num(num)],
+                        operands: vec![Operand::Num(num as i64)],
                         origin: node.origin,
                         res_vreg: Some(res_vreg),
                     };
@@ -324,7 +324,7 @@ impl Instruction {
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum EvalValue {
-    Num(u64),
+    Num(i64),
     Bool(bool),
     Fn(String),
 }
@@ -332,7 +332,7 @@ pub enum EvalValue {
 pub type EvalResult = BTreeMap<VirtualRegister, EvalValue>;
 
 impl EvalValue {
-    pub(crate) fn as_num(&self) -> u64 {
+    pub(crate) fn as_num(&self) -> i64 {
         match self {
             EvalValue::Num(num) => *num,
             _ => panic!("not a number"),

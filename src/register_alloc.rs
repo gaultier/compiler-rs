@@ -10,7 +10,7 @@ use crate::{
 #[derive(Serialize, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MemoryLocation {
     Register(Register),
-    Stack(usize), // Stack offset.
+    Stack(isize), // Stack offset.
 }
 
 pub type RegisterMapping = BTreeMap<VirtualRegister, MemoryLocation>;

@@ -46,8 +46,8 @@ pub struct Operand {
 #[derive(Serialize, Debug, Clone)]
 pub enum OperandKind {
     Register(Register),
-    Immediate(u64),
-    Stack(usize),
+    Immediate(i64),
+    Stack(isize),
     FnName(String),
 }
 
@@ -78,13 +78,6 @@ pub(crate) fn abi(target_arch: &ArchKind) -> Abi {
 }
 
 impl Operand {
-    pub(crate) fn new(operand_size: &OperandSize, kind: &OperandKind) -> Self {
-        Self {
-            operand_size: *operand_size,
-            kind: kind.clone(),
-        }
-    }
-
     pub(crate) fn from_memory_location(operand_size: &OperandSize, loc: &MemoryLocation) -> Self {
         Self {
             operand_size: *operand_size,
@@ -182,7 +175,7 @@ impl Register {
 }
 
 pub(crate) struct Stack {
-    pub(crate) offset: usize,
+    pub(crate) offset: isize,
 }
 
 impl Stack {
@@ -191,18 +184,18 @@ impl Stack {
     }
 
     pub(crate) fn is_aligned(&self, align: usize) -> bool {
-        self.offset % align == 0
+        self.offset as usize % align == 0
     }
 
     // Intended to be used with `rbp` indexing i.e.: `mov [rbp-8], 1`.
-    pub(crate) fn new_slot(&mut self, size: usize, align: usize) -> usize {
+    pub(crate) fn new_slot(&mut self, size: usize, align: usize) -> isize {
         assert_ne!(size, 0);
         assert_ne!(align, 0);
 
-        let padding = (0usize).wrapping_sub(self.offset) & (align - 1);
+        let padding = (0usize).wrapping_sub(self.offset as usize) & (align - 1);
         assert!(padding <= align);
 
-        self.offset += size + padding;
+        self.offset -= (size + padding) as isize;
 
         assert_ne!(self.offset, 0);
 
@@ -237,7 +230,7 @@ pub(crate) fn emit(
 }
 
 impl OperandSize {
-    pub(crate) fn as_bytes(&self) -> usize {
+    pub(crate) fn as_bytes_count(&self) -> usize {
         match self {
             OperandSize::_8 => 1,
             OperandSize::_16 => 2,

@@ -100,6 +100,8 @@ pub enum InstructionKind {
     IDiv,
     Lea,
     Call,
+    Push,
+    Pop,
 }
 
 pub struct Emitter {
@@ -123,7 +125,7 @@ impl Emitter {
 
     // TODO: Use a free register if possible.
     fn find_free_spill_slot(&mut self, op_size: &OperandSize) -> MemoryLocation {
-        let (size, align) = (op_size.as_bytes(), 8); // TODO: Improve.
+        let (size, align) = (op_size.as_bytes_count(), 8); // TODO: Improve.
         let offset = self.stack.new_slot(size, align);
         MemoryLocation::Stack(offset)
     }
@@ -297,7 +299,7 @@ impl Emitter {
             (ir::InstructionKind::Set, Some(ir::Operand::Num(num)), None) => {
                 self.emit_store(
                     vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
-                    &OperandKind::Immediate(*num),
+                    &OperandKind::Immediate(*num as i64),
                     &OperandSize::_64,
                     &ins.origin,
                 );
@@ -334,8 +336,6 @@ impl Emitter {
                     &Origin::default(),
                 );
 
-                self.align_stack();
-
                 self.asm.push(Instruction {
                     kind: InstructionKind::Call,
                     operands: vec![Operand {
@@ -362,33 +362,56 @@ impl Emitter {
     ) {
         self.asm = Vec::with_capacity(irs.len() * 2);
 
+        self.asm.push(Instruction {
+            kind: InstructionKind::Push,
+            operands: vec![Operand {
+                operand_size: OperandSize::_64,
+                kind: OperandKind::Register(asm::Register::Amd64(Register::Rbp)),
+            }],
+            origin: Origin::default(),
+        });
+        self.emit_store(
+            &MemoryLocation::Register(asm::Register::Amd64(Register::Rbp)),
+            &OperandKind::Register(asm::Register::Amd64(Register::Rsp)),
+            &OperandSize::_64,
+            &Origin::default(),
+        );
+
         for ir in irs {
             self.instruction_selection(ir, vreg_to_memory_location);
         }
-    }
 
-    pub(crate) fn align_stack(&mut self) {
-        if self.stack.is_aligned(16) {
-            return;
+        if !self.stack.is_aligned(16) {
+            let delta = self.stack.offset % 16;
+            self.stack.offset += delta;
+            self.asm.insert(
+                2, // Right after: `push rbp; mov rbp, rsp;`.
+                Instruction {
+                    kind: InstructionKind::Mov_R_Imm,
+                    operands: vec![
+                        Operand {
+                            operand_size: OperandSize::_64,
+                            kind: OperandKind::Register(asm::Register::Amd64(Register::Rsp)),
+                        },
+                        Operand {
+                            operand_size: OperandSize::_64,
+                            kind: OperandKind::Immediate(delta as i64),
+                        },
+                    ],
+                    origin: Origin::default(),
+                },
+            );
         }
 
-        let delta = self.stack.offset % 16;
-        self.stack.offset += delta;
+        // Restore stack.
         self.asm.push(Instruction {
-            kind: InstructionKind::Mov_R_Imm,
-            operands: vec![
-                Operand {
-                    operand_size: OperandSize::_64,
-                    kind: OperandKind::Register(asm::Register::Amd64(Register::Rsp)),
-                },
-                Operand {
-                    operand_size: OperandSize::_64,
-                    kind: OperandKind::Immediate(delta as u64),
-                },
-            ],
+            kind: InstructionKind::Pop,
+            operands: vec![Operand {
+                operand_size: OperandSize::_64,
+                kind: OperandKind::Register(asm::Register::Amd64(Register::Rbp)),
+            }],
             origin: Origin::default(),
         });
-        assert!(self.stack.is_aligned(16), "{}", self.stack.offset);
     }
 
     pub(crate) fn emit_store(
@@ -516,13 +539,15 @@ impl InstructionKind {
             InstructionKind::IDiv => "idiv",
             InstructionKind::Lea => "lea",
             InstructionKind::Call => "call",
+            InstructionKind::Push => "push",
+            InstructionKind::Pop => "pop",
         }
     }
 }
 
 pub struct Interpreter {
     pub state: EvalResult,
-    pub stack_offset: usize,
+    pub stack_offset: isize,
 }
 
 impl Default for Interpreter {
@@ -557,7 +582,8 @@ impl Interpreter {
             }
             (OperandKind::Register(_), OperandKind::Immediate(imm))
             | (OperandKind::Stack(_), OperandKind::Immediate(imm)) => {
-                self.state.insert((&dst.kind).into(), EvalValue::Num(*imm));
+                self.state
+                    .insert((&dst.kind).into(), EvalValue::Num(*imm as i64));
             }
             (OperandKind::Immediate(_), _) => panic!("invalid store destination"),
             (OperandKind::Stack(_), OperandKind::Stack(_)) => panic!("unsupported store"),
@@ -682,6 +708,7 @@ impl Interpreter {
                     self.load(&ins.operands[0], &ins.operands[1]);
                 }
                 InstructionKind::Call => {
+                    // SysV ABI.
                     assert!(self.stack_offset % 16 == 0);
 
                     assert_eq!(ins.operands.len(), 1);
@@ -707,7 +734,39 @@ impl Interpreter {
 
                     writeln!(&mut std::io::stdout(), "{}", arg).unwrap();
                 }
+                InstructionKind::Push => {
+                    assert_eq!(ins.operands.len(), 1);
+
+                    let op = ins.operands.first().unwrap();
+                    self.stack_offset -= op.operand_size.as_bytes_count() as isize;
+                    let val = self
+                        .state
+                        .get(&(&op.kind).into())
+                        .unwrap_or(&EvalValue::Num(0))
+                        .clone();
+                    self.state
+                        .insert(MemoryLocation::Stack(self.stack_offset), val);
+                }
+                InstructionKind::Pop => {
+                    assert_eq!(ins.operands.len(), 1);
+
+                    let op = ins.operands.first().unwrap();
+                    match op.kind {
+                        OperandKind::Register(_) | OperandKind::Stack(_) => {}
+                        _ => panic!("invalid push argument"),
+                    };
+                    let val = self
+                        .state
+                        .get(&MemoryLocation::Stack(self.stack_offset))
+                        .unwrap()
+                        .clone();
+                    self.state.insert(op.kind.clone().into(), val);
+                    self.stack_offset += op.operand_size.as_bytes_count() as isize;
+                }
             }
         }
+
+        // Stack properly reset.
+        assert_eq!(self.stack_offset, 0);
     }
 }
