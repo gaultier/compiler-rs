@@ -137,7 +137,7 @@ impl Emitter {
                 Some(ir::Operand::VirtualRegister(rhs)),
             ) => {
                 self.emit_store(
-                    &vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
+                    vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                     &vreg_to_memory_location.get(lhs).unwrap().into(),
                     &OperandSize::_64,
                     &ins.origin,
@@ -163,7 +163,7 @@ impl Emitter {
                 Some(ir::Operand::VirtualRegister(rhs)),
             ) => {
                 self.emit_store(
-                    &vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
+                    vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                     &vreg_to_memory_location.get(lhs).unwrap().into(),
                     &OperandSize::_64,
                     &ins.origin,
@@ -285,7 +285,7 @@ impl Emitter {
             }
             (ir::InstructionKind::Set, Some(ir::Operand::VirtualRegister(lhs)), None) => {
                 self.emit_store(
-                    &vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
+                    vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                     &vreg_to_memory_location.get(lhs).unwrap().into(),
                     &OperandSize::_64,
                     &ins.origin,
@@ -293,7 +293,7 @@ impl Emitter {
             }
             (ir::InstructionKind::Set, Some(ir::Operand::Num(num)), None) => {
                 self.emit_store(
-                    &vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
+                    vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                     &OperandKind::Immediate(*num),
                     &OperandSize::_64,
                     &ins.origin,
@@ -301,7 +301,7 @@ impl Emitter {
             }
             (ir::InstructionKind::Set, Some(ir::Operand::Bool(b)), None) => {
                 self.emit_store(
-                    &vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
+                    vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                     &OperandKind::Immediate(if *b { 1 } else { 0 }),
                     &OperandSize::_64,
                     &ins.origin,
