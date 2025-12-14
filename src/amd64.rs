@@ -102,6 +102,7 @@ pub enum InstructionKind {
     Call,
     Push,
     Pop,
+    Ret,
 }
 
 pub struct Emitter {
@@ -406,6 +407,13 @@ impl Emitter {
             }],
             origin: Origin::default(),
         });
+
+        // Ret
+        self.asm.push(Instruction {
+            kind: InstructionKind::Ret,
+            operands: vec![],
+            origin: Origin::default(),
+        });
     }
 
     pub(crate) fn emit_store(
@@ -524,6 +532,7 @@ impl Register {
 
 impl InstructionKind {
     pub(crate) fn to_str(self) -> &'static str {
+        // TODO: size.
         match self {
             InstructionKind::Mov_RM_R | InstructionKind::Mov_R_RM | InstructionKind::Mov_R_Imm => {
                 "mov"
@@ -532,9 +541,12 @@ impl InstructionKind {
             InstructionKind::IMul_R_RM => "imul",
             InstructionKind::IDiv => "idiv",
             InstructionKind::Lea => "lea",
-            InstructionKind::Call => "call",
             InstructionKind::Push => "push",
             InstructionKind::Pop => "pop",
+
+            // Size independent.
+            InstructionKind::Call => "call",
+            InstructionKind::Ret => "ret",
         }
     }
 }
@@ -787,12 +799,16 @@ impl Interpreter {
                     self.state.insert(op.kind.clone().into(), val);
                     self.set_stack_offset(op.operand_size.as_bytes_count() as isize);
                 }
+                InstructionKind::Ret => {
+                    assert_eq!(ins.operands.len(), 0);
+                    assert_eq!(self.stack_offset() % 16, -8);
+                    self.set_stack_offset(8); // Pop the return address implicitly.
+                }
             }
             trace!("eval end: rsp={}", self.stack_offset());
         }
 
         // Stack properly reset.
-        // Right after `ret`, the return address is popped off the stack and thus `rsp % 16 == 0`.
-        assert_eq!(self.stack_offset() % 16, -8);
+        assert_eq!(self.stack_offset() % 16, 0);
     }
 }
