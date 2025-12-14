@@ -415,6 +415,11 @@ impl Emitter {
             (_, OperandKind::FnName(_)) => {
                 todo!()
             }
+            (MemoryLocation::Register(dst_reg), OperandKind::Register(src_reg))
+                if dst_reg == src_reg =>
+            {
+                // noop.
+            }
             (MemoryLocation::Register(dst_reg), OperandKind::Register(src_reg)) => {
                 self.asm.push(Instruction {
                     kind: InstructionKind::Mov_R_RM,
@@ -479,6 +484,9 @@ impl Emitter {
                     ],
                     origin: *origin,
                 });
+            }
+            (MemoryLocation::Stack(dst), OperandKind::Stack(src)) if dst == src => {
+                // noop.
             }
             (MemoryLocation::Stack(_), OperandKind::Stack(_)) => todo!(),
         }
