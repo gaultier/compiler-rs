@@ -221,7 +221,7 @@ impl Emitter {
                     let spill_slot = self.find_free_spill_slot(&OperandSize::_64);
                     self.emit_store(
                         &spill_slot,
-                        &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rdx))).into(),
+                        &MemoryLocation::Register(asm::Register::Amd64(Register::Rdx)).into(),
                         &OperandSize::_64,
                         &Origin::default(),
                     );
@@ -233,7 +233,7 @@ impl Emitter {
                     let spill_slot = self.find_free_spill_slot(&OperandSize::_64);
                     self.emit_store(
                         &spill_slot,
-                        &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rax))).into(),
+                        &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)).into(),
                         &OperandSize::_64,
                         &Origin::default(),
                     );
@@ -279,7 +279,7 @@ impl Emitter {
                 if dst != &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)) {
                     self.emit_store(
                         dst,
-                        &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rax))).into(),
+                        &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)).into(),
                         &OperandSize::_64,
                         &ins.origin,
                     );
@@ -287,21 +287,21 @@ impl Emitter {
 
                 // Finally: restore rax & rdx.
                 {
+                    trace!("unspill rdx after idiv: spill_slot={:#?}", &rdx_spill_slot);
                     self.emit_store(
                         &MemoryLocation::Register(asm::Register::Amd64(Register::Rdx)),
-                        &(&rdx_spill_slot).into(),
+                        &rdx_spill_slot.into(),
                         &OperandSize::_64,
                         &Origin::default(),
                     );
-                    trace!("unspill rdx after idiv: spill_slot={:#?}", rdx_spill_slot);
 
+                    trace!("unspill rax after idiv: spill_slot={:#?}", rax_spill_slot);
                     self.emit_store(
                         &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)),
-                        &(&rax_spill_slot).into(),
+                        &rax_spill_slot.into(),
                         &OperandSize::_64,
                         &Origin::default(),
                     );
-                    trace!("unspill rax after idiv: spill_slot={:#?}", rax_spill_slot);
                 }
             }
             (ir::InstructionKind::Set, Some(ir::Operand::VirtualRegister(lhs)), None) => {
@@ -362,7 +362,7 @@ impl Emitter {
                 let spill_slot = self.find_free_spill_slot(&OperandSize::_64);
                 self.emit_store(
                     &spill_slot,
-                    &(&MemoryLocation::Register(asm::Register::Amd64(Register::Rdi))).into(),
+                    &MemoryLocation::Register(asm::Register::Amd64(Register::Rdi)).into(),
                     &OperandSize::_64,
                     &Origin::default(),
                 );
@@ -383,7 +383,7 @@ impl Emitter {
                 });
                 self.emit_store(
                     &MemoryLocation::Register(asm::Register::Amd64(Register::Rdi)),
-                    &(&spill_slot).into(),
+                    &spill_slot.into(),
                     &OperandSize::_64,
                     &Origin::default(),
                 );

@@ -150,6 +150,12 @@ impl From<&MemoryLocation> for OperandKind {
     }
 }
 
+impl From<MemoryLocation> for OperandKind {
+    fn from(value: MemoryLocation) -> Self {
+        (&value).into()
+    }
+}
+
 impl From<&OperandKind> for MemoryLocation {
     fn from(value: &OperandKind) -> Self {
         match value {
@@ -158,6 +164,12 @@ impl From<&OperandKind> for MemoryLocation {
             OperandKind::Stack(off) => MemoryLocation::Stack(*off),
             OperandKind::FnName(_) => todo!(),
         }
+    }
+}
+
+impl From<OperandKind> for MemoryLocation {
+    fn from(value: OperandKind) -> Self {
+        (&value).into()
     }
 }
 
