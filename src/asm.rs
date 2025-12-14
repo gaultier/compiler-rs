@@ -179,8 +179,10 @@ pub(crate) struct Stack {
 }
 
 impl Stack {
-    pub(crate) fn new() -> Self {
-        Self { offset: 0 }
+    pub(crate) fn new(initial_stack_value: isize) -> Self {
+        Self {
+            offset: initial_stack_value,
+        }
     }
 
     pub(crate) fn is_aligned(&self, align: usize) -> bool {
@@ -210,7 +212,10 @@ pub(crate) fn emit(
 ) -> (Vec<Instruction>, Stack) {
     match target_arch {
         ArchKind::Amd64 => {
-            let mut emitter = amd64::Emitter::new();
+            // Assume we are always in `main` or one of its callees and thus
+            // `sp % 16 == -8` since a `call` just happened and thus the
+            // return address is on the stack.
+            let mut emitter = amd64::Emitter::new(-8);
             emitter.emit(irs, vreg_to_memory_location);
 
             (
@@ -255,13 +260,13 @@ mod tests {
 
     #[test]
     fn test_stack() {
-        let mut stack = Stack::new();
+        let mut stack = Stack::new(0);
         let off1 = stack.new_slot(1, 1); // byte.
-        assert_eq!(off1, 1);
-        assert_eq!(stack.offset, 1);
+        assert_eq!(off1, -1);
+        assert_eq!(stack.offset, -1);
 
         let off2 = stack.new_slot(16, 8); // 2 qwords.
-        assert_eq!(stack.offset, 24);
-        assert_eq!(off2, 24);
+        assert_eq!(stack.offset, -24);
+        assert_eq!(off2, -24);
     }
 }

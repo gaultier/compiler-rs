@@ -109,16 +109,10 @@ pub struct Emitter {
     pub(crate) asm: Vec<Instruction>,
 }
 
-impl Default for Emitter {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl Emitter {
-    pub fn new() -> Self {
+    pub fn new(initial_stack_offset: isize) -> Self {
         Self {
-            stack: Stack::new(),
+            stack: Stack::new(initial_stack_offset),
             asm: Vec::new(),
         }
     }
@@ -547,7 +541,6 @@ impl InstructionKind {
 
 pub struct Interpreter {
     pub state: EvalResult,
-    pub stack_offset: isize,
 }
 
 impl Default for Interpreter {
@@ -560,8 +553,33 @@ impl Interpreter {
     pub fn new() -> Self {
         Self {
             state: EvalResult::new(),
-            stack_offset: 0,
         }
+    }
+
+    fn stack_offset(&self) -> isize {
+        match self
+            .state
+            .get(&MemoryLocation::Register(asm::Register::Amd64(
+                Register::Rsp,
+            )))
+            .unwrap()
+        {
+            EvalValue::Num(n) => *n as isize,
+            _ => panic!("invalid rsp value"),
+        }
+    }
+
+    fn set_stack_offset(&mut self, delta: isize) {
+        let val = self
+            .state
+            .get_mut(&MemoryLocation::Register(asm::Register::Amd64(
+                Register::Rsp,
+            )))
+            .unwrap();
+        match *val {
+            EvalValue::Num(n) => *val = EvalValue::Num(n + delta as i64),
+            _ => panic!("invalid rsp value"),
+        };
     }
 
     fn store(&mut self, dst: &Operand, src: &Operand) {
@@ -605,8 +623,16 @@ impl Interpreter {
     }
 
     pub fn eval(&mut self, instructions: &[asm::Instruction]) {
+        // Assume we are always in `main` or one of its callees and thus
+        // `rsp % 16 == -8` since a `call` just happened and thus the
+        // return address is on the stack.
+        self.state.insert(
+            MemoryLocation::Register(asm::Register::Amd64(Register::Rsp)),
+            EvalValue::Num(-8),
+        );
+
         for ins in instructions {
-            trace!("eval: {:#?}", &ins);
+            trace!("eval start: {:#?} rsp={}", &ins, self.stack_offset());
 
             let asm::InstructionKind::Amd64(kind) = ins.kind;
 
@@ -709,7 +735,7 @@ impl Interpreter {
                 }
                 InstructionKind::Call => {
                     // SysV ABI.
-                    assert!(self.stack_offset % 16 == 0);
+                    assert!(self.stack_offset() % 16 == 0, "{}", self.stack_offset());
 
                     assert_eq!(ins.operands.len(), 1);
                     let fn_name = match &ins.operands.first().unwrap().kind {
@@ -738,14 +764,15 @@ impl Interpreter {
                     assert_eq!(ins.operands.len(), 1);
 
                     let op = ins.operands.first().unwrap();
-                    self.stack_offset -= op.operand_size.as_bytes_count() as isize;
+
+                    let sp = self.stack_offset();
+                    self.set_stack_offset(-(op.operand_size.as_bytes_count() as isize));
                     let val = self
                         .state
                         .get(&(&op.kind).into())
                         .unwrap_or(&EvalValue::Num(0))
                         .clone();
-                    self.state
-                        .insert(MemoryLocation::Stack(self.stack_offset), val);
+                    self.state.insert(MemoryLocation::Stack(sp), val);
                 }
                 InstructionKind::Pop => {
                     assert_eq!(ins.operands.len(), 1);
@@ -755,18 +782,17 @@ impl Interpreter {
                         OperandKind::Register(_) | OperandKind::Stack(_) => {}
                         _ => panic!("invalid push argument"),
                     };
-                    let val = self
-                        .state
-                        .get(&MemoryLocation::Stack(self.stack_offset))
-                        .unwrap()
-                        .clone();
+                    let sp = self.stack_offset();
+                    let val = self.state.get(&MemoryLocation::Stack(sp)).unwrap().clone();
                     self.state.insert(op.kind.clone().into(), val);
-                    self.stack_offset += op.operand_size.as_bytes_count() as isize;
+                    self.set_stack_offset(op.operand_size.as_bytes_count() as isize);
                 }
             }
+            trace!("eval end: rsp={}", self.stack_offset());
         }
 
         // Stack properly reset.
-        assert_eq!(self.stack_offset, 0);
+        // Right after `ret`, the return address is popped off the stack and thus `rsp % 16 == 0`.
+        assert_eq!(self.stack_offset() % 16, -8);
     }
 }
