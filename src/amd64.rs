@@ -4,10 +4,11 @@ use log::trace;
 use serde::Serialize;
 
 use crate::{
-    asm::{self, Abi, EvalResult, Operand, OperandKind, OperandSize, Stack},
+    asm::{self, Abi, EvalResult, Operand, OperandKind, Stack},
     ir::{self, EvalValue},
     origin::Origin,
     register_alloc::{MemoryLocation, RegisterMapping},
+    type_checker::Size,
 };
 
 #[derive(Serialize, Debug)]
@@ -122,7 +123,7 @@ impl Emitter {
     }
 
     // TODO: Use a free register if possible.
-    fn find_free_spill_slot(&mut self, op_size: &OperandSize) -> MemoryLocation {
+    fn find_free_spill_slot(&mut self, op_size: &Size) -> MemoryLocation {
         let (size, align) = (op_size.as_bytes_count(), 8); // TODO: Improve.
         let offset = self.stack.new_slot(size, align);
         MemoryLocation::Stack(offset)
@@ -145,7 +146,7 @@ impl Emitter {
                 self.emit_store(
                     dst_loc,
                     &vreg_to_memory_location.get(lhs).unwrap().into(),
-                    &OperandSize::_64,
+                    &Size::_64,
                     &ins.origin,
                 );
                 let (kind, rhs_loc) = match (dst_loc, rhs_loc) {
@@ -162,7 +163,7 @@ impl Emitter {
                         self.emit_store(
                             &MemoryLocation::Register(asm::Register::Amd64(Register::R11)),
                             &((*rhs_loc).into()),
-                            &OperandSize::_64,
+                            &Size::_64,
                             &Origin::default(),
                         );
                         (
@@ -176,10 +177,10 @@ impl Emitter {
                     kind,
                     operands: vec![
                         Operand::from_memory_location(
-                            &OperandSize::_64,
+                            &Size::_64,
                             vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                         ),
-                        Operand::from_memory_location(&OperandSize::_64, rhs_loc),
+                        Operand::from_memory_location(&Size::_64, rhs_loc),
                     ],
                     origin: ins.origin,
                 });
@@ -192,18 +193,18 @@ impl Emitter {
                 self.emit_store(
                     vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                     &vreg_to_memory_location.get(lhs).unwrap().into(),
-                    &OperandSize::_64,
+                    &Size::_64,
                     &ins.origin,
                 );
                 self.asm.push(Instruction {
                     kind: InstructionKind::IMul_R_RM,
                     operands: vec![
                         Operand::from_memory_location(
-                            &OperandSize::_64,
+                            &Size::_64,
                             vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                         ),
                         Operand::from_memory_location(
-                            &OperandSize::_64,
+                            &Size::_64,
                             vreg_to_memory_location.get(rhs).unwrap(),
                         ),
                     ],
@@ -229,11 +230,11 @@ impl Emitter {
                 // TODO: There is a case where `rdx_spill_slot` and `lhs_spill_slot` could be merged
                 // into one.
                 let rdx_spill_slot = {
-                    let spill_slot = self.find_free_spill_slot(&OperandSize::_64);
+                    let spill_slot = self.find_free_spill_slot(&Size::_64);
                     self.emit_store(
                         &spill_slot,
                         &MemoryLocation::Register(asm::Register::Amd64(Register::Rdx)).into(),
-                        &OperandSize::_64,
+                        &Size::_64,
                         &Origin::default(),
                     );
                     trace!("spill rdx before idiv: spill_slot={:#?}", spill_slot);
@@ -241,11 +242,11 @@ impl Emitter {
                     spill_slot
                 };
                 let rax_spill_slot = {
-                    let spill_slot = self.find_free_spill_slot(&OperandSize::_64);
+                    let spill_slot = self.find_free_spill_slot(&Size::_64);
                     self.emit_store(
                         &spill_slot,
                         &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)).into(),
-                        &OperandSize::_64,
+                        &Size::_64,
                         &Origin::default(),
                     );
                     trace!("spill rax before idiv: spill_slot={:#?}", spill_slot);
@@ -257,7 +258,7 @@ impl Emitter {
                 self.emit_store(
                     &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)),
                     &lhs.into(),
-                    &OperandSize::_64,
+                    &Size::_64,
                     &Origin::default(),
                 );
 
@@ -266,13 +267,13 @@ impl Emitter {
                 self.emit_store(
                     &MemoryLocation::Register(asm::Register::Amd64(Register::Rdx)),
                     &OperandKind::Immediate(0),
-                    &OperandSize::_64,
+                    &Size::_64,
                     &ins.origin,
                 );
                 self.asm.push(Instruction {
                     kind: InstructionKind::IDiv,
                     operands: vec![Operand::from_memory_location(
-                        &OperandSize::_64,
+                        &Size::_64,
                         vreg_to_memory_location.get(rhs).unwrap(),
                     )],
                     origin: ins.origin,
@@ -286,7 +287,7 @@ impl Emitter {
                     self.emit_store(
                         dst,
                         &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)).into(),
-                        &OperandSize::_64,
+                        &Size::_64,
                         &ins.origin,
                     );
                 }
@@ -297,7 +298,7 @@ impl Emitter {
                     self.emit_store(
                         &MemoryLocation::Register(asm::Register::Amd64(Register::Rdx)),
                         &rdx_spill_slot.into(),
-                        &OperandSize::_64,
+                        &Size::_64,
                         &Origin::default(),
                     );
 
@@ -305,7 +306,7 @@ impl Emitter {
                     self.emit_store(
                         &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)),
                         &rax_spill_slot.into(),
-                        &OperandSize::_64,
+                        &Size::_64,
                         &Origin::default(),
                     );
                 }
@@ -314,15 +315,15 @@ impl Emitter {
                 self.emit_store(
                     vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                     &vreg_to_memory_location.get(lhs).unwrap().into(),
-                    &OperandSize::_64,
+                    &Size::_64,
                     &ins.origin,
                 );
             }
-            (ir::InstructionKind::Set, Some(ir::Operand::Num(num)), None) => {
+            (ir::InstructionKind::Set, Some(ir::Operand::Num(num, size)), None) => {
                 self.emit_store(
                     vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                     &OperandKind::Immediate(*num),
-                    &OperandSize::_64,
+                    size,
                     &ins.origin,
                 );
             }
@@ -330,7 +331,7 @@ impl Emitter {
                 self.emit_store(
                     vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                     &OperandKind::Immediate(if *b { 1 } else { 0 }),
-                    &OperandSize::_64,
+                    &Size::_64,
                     &ins.origin,
                 );
             }
@@ -340,28 +341,28 @@ impl Emitter {
                 Some(ir::Operand::VirtualRegister(vreg)),
             ) if fn_name == "println_u64" => {
                 let arg = Operand::from_memory_location(
-                    &OperandSize::_64,
+                    &Size::_64,
                     vreg_to_memory_location.get(vreg).unwrap(),
                 );
 
-                let spill_slot = self.find_free_spill_slot(&OperandSize::_64);
+                let spill_slot = self.find_free_spill_slot(&Size::_64);
                 self.emit_store(
                     &spill_slot,
                     &MemoryLocation::Register(asm::Register::Amd64(Register::Rdi)).into(),
-                    &OperandSize::_64,
+                    &Size::_64,
                     &Origin::default(),
                 );
                 self.emit_store(
                     &MemoryLocation::Register(asm::Register::Amd64(Register::Rdi)),
                     &arg.kind,
-                    &OperandSize::_64,
+                    &Size::_64,
                     &Origin::default(),
                 );
 
                 self.asm.push(Instruction {
                     kind: InstructionKind::Call,
                     operands: vec![Operand {
-                        operand_size: OperandSize::_64,
+                        size: Size::_64,
                         kind: OperandKind::FnName(fn_name.clone()),
                     }],
                     origin: ins.origin,
@@ -369,7 +370,7 @@ impl Emitter {
                 self.emit_store(
                     &MemoryLocation::Register(asm::Register::Amd64(Register::Rdi)),
                     &spill_slot.into(),
-                    &OperandSize::_64,
+                    &Size::_64,
                     &Origin::default(),
                 );
             }
@@ -387,7 +388,7 @@ impl Emitter {
         self.asm.push(Instruction {
             kind: InstructionKind::Push,
             operands: vec![Operand {
-                operand_size: OperandSize::_64,
+                size: Size::_64,
                 kind: OperandKind::Register(asm::Register::Amd64(Register::Rbp)),
             }],
             origin: Origin::default(),
@@ -395,7 +396,7 @@ impl Emitter {
         self.emit_store(
             &MemoryLocation::Register(asm::Register::Amd64(Register::Rbp)),
             &OperandKind::Register(asm::Register::Amd64(Register::Rsp)),
-            &OperandSize::_64,
+            &Size::_64,
             &Origin::default(),
         );
 
@@ -408,11 +409,11 @@ impl Emitter {
             kind: InstructionKind::Add_RM_Imm,
             operands: vec![
                 Operand {
-                    operand_size: OperandSize::_64,
+                    size: Size::_64,
                     kind: OperandKind::Register(asm::Register::Amd64(Register::Rsp)),
                 },
                 Operand {
-                    operand_size: OperandSize::_64,
+                    size: Size::_64,
                     kind: OperandKind::Immediate(self.stack.offset as i64),
                 },
             ],
@@ -427,7 +428,7 @@ impl Emitter {
         self.asm.push(Instruction {
             kind: InstructionKind::Pop,
             operands: vec![Operand {
-                operand_size: OperandSize::_64,
+                size: Size::_64,
                 kind: OperandKind::Register(asm::Register::Amd64(Register::Rbp)),
             }],
             origin: Origin::default(),
@@ -445,7 +446,7 @@ impl Emitter {
         &mut self,
         dst: &MemoryLocation,
         src: &OperandKind,
-        size: &OperandSize,
+        size: &Size,
         origin: &Origin,
     ) {
         match (dst, src) {
@@ -462,11 +463,11 @@ impl Emitter {
                     kind: InstructionKind::Mov_R_RM,
                     operands: vec![
                         Operand {
-                            operand_size: *size,
+                            size: *size,
                             kind: OperandKind::Register(*dst_reg),
                         },
                         Operand {
-                            operand_size: *size,
+                            size: *size,
                             kind: OperandKind::Register(*src_reg),
                         },
                     ],
@@ -478,11 +479,11 @@ impl Emitter {
                     kind: InstructionKind::Mov_R_Imm,
                     operands: vec![
                         Operand {
-                            operand_size: *size,
+                            size: *size,
                             kind: OperandKind::Register(*dst_reg),
                         },
                         Operand {
-                            operand_size: *size,
+                            size: *size,
                             kind: OperandKind::Immediate(*src_imm),
                         },
                     ],
@@ -494,11 +495,11 @@ impl Emitter {
                     kind: InstructionKind::Mov_RM_R,
                     operands: vec![
                         Operand {
-                            operand_size: *size,
+                            size: *size,
                             kind: OperandKind::Stack(*dst_stack),
                         },
                         Operand {
-                            operand_size: *size,
+                            size: *size,
                             kind: OperandKind::Register(*src_reg),
                         },
                     ],
@@ -514,11 +515,11 @@ impl Emitter {
                     kind: InstructionKind::Mov_RM_Imm,
                     operands: vec![
                         Operand {
-                            operand_size: *size,
+                            size: *size,
                             kind: OperandKind::Stack(*off),
                         },
                         Operand {
-                            operand_size: *size,
+                            size: *size,
                             kind: src.clone(),
                         },
                     ],
@@ -530,11 +531,11 @@ impl Emitter {
                     kind: InstructionKind::Mov_R_RM,
                     operands: vec![
                         Operand {
-                            operand_size: *size,
+                            size: *size,
                             kind: OperandKind::Register(*dst_reg),
                         },
                         Operand {
-                            operand_size: *size,
+                            size: *size,
                             kind: src.clone(),
                         },
                     ],
@@ -629,7 +630,7 @@ impl Interpreter {
             )))
             .unwrap()
         {
-            EvalValue::Num(n) => *n as isize,
+            EvalValue::Num(n, _) => *n as isize,
             _ => panic!("invalid rsp value"),
         }
     }
@@ -642,7 +643,7 @@ impl Interpreter {
             )))
             .unwrap();
         match *val {
-            EvalValue::Num(n) => *val = EvalValue::Num(n + delta as i64),
+            EvalValue::Num(n, size) => *val = EvalValue::Num(n + delta as i64, size),
             _ => panic!("invalid rsp value"),
         };
     }
@@ -659,7 +660,7 @@ impl Interpreter {
                 let value = self
                     .state
                     .get(&(&src.kind).into())
-                    .unwrap_or(&EvalValue::Num(0))
+                    .unwrap_or(&EvalValue::Num(0, todo!()))
                     .clone();
                 self.state.insert((&dst.kind).into(), value);
             }
@@ -860,7 +861,7 @@ impl Interpreter {
                     let op = ins.operands.first().unwrap();
 
                     let sp = self.stack_offset();
-                    self.set_stack_offset(-(op.operand_size.as_bytes_count() as isize));
+                    self.set_stack_offset(-(op.size.as_bytes_count() as isize));
                     let val = self
                         .state
                         .get(&(&op.kind).into())
@@ -883,7 +884,7 @@ impl Interpreter {
                         .unwrap_or(&EvalValue::Num(0))
                         .clone();
                     self.state.insert(op.kind.clone().into(), val);
-                    self.set_stack_offset(op.operand_size.as_bytes_count() as isize);
+                    self.set_stack_offset(op.size.as_bytes_count() as isize);
                 }
                 InstructionKind::Ret => {
                     assert_eq!(ins.operands.len(), 0);

@@ -13,10 +13,19 @@ pub enum TypeKind {
     Function(Type, Vec<Type>),
 }
 
+#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Size {
+    _0,
+    _8,
+    _16,
+    _32,
+    _64,
+}
+
 #[derive(Serialize, Clone, PartialEq, Eq, Debug, PartialOrd, Ord)]
 pub struct Type {
     pub kind: Box<TypeKind>,
-    pub size: usize,
+    pub size: Size,
     pub origin: Origin,
 }
 
@@ -24,7 +33,7 @@ impl Default for Type {
     fn default() -> Self {
         Self {
             kind: Box::new(TypeKind::Unknown),
-            size: 0,
+            size: Size::_0,
             origin: Default::default(),
         }
     }
@@ -52,10 +61,10 @@ impl Display for Type {
 }
 
 impl Type {
-    pub(crate) fn new(kind: &TypeKind, size: usize, origin: &Origin) -> Self {
+    pub(crate) fn new(kind: &TypeKind, size: &Size, origin: &Origin) -> Self {
         Self {
             kind: Box::new(kind.clone()),
-            size,
+            size: *size,
             origin: *origin,
         }
     }
@@ -86,21 +95,21 @@ impl Type {
     }
 
     pub(crate) fn u64() -> Self {
-        Type::new(&TypeKind::Number, 8, &Origin::default())
+        Type::new(&TypeKind::Number, &Size::_64, &Origin::default())
     }
 
     pub(crate) fn bool() -> Self {
-        Type::new(&TypeKind::Bool, 4, &Origin::default())
+        Type::new(&TypeKind::Bool, &Size::_8, &Origin::default())
     }
 
     pub(crate) fn void() -> Self {
-        Type::new(&TypeKind::Void, 0, &Origin::default())
+        Type::new(&TypeKind::Void, &Size::_0, &Origin::default())
     }
 
     pub(crate) fn function(return_type: &Type, args: &[Type], origin: &Origin) -> Self {
         Type::new(
             &TypeKind::Function(return_type.clone(), args.to_owned()),
-            8,
+            &Size::_64,
             origin,
         )
     }
@@ -128,13 +137,13 @@ impl Checker {
             match node.kind {
                 crate::ast::NodeKind::Number => {
                     assert_eq!(*node.typ.kind, TypeKind::Number);
-                    assert_ne!(node.typ.size, 0);
+                    assert_ne!(node.typ.size, Size::_0);
 
                     stack.push(node);
                 }
                 crate::ast::NodeKind::Bool => {
                     assert_eq!(*node.typ.kind, TypeKind::Bool);
-                    assert_ne!(node.typ.size, 0);
+                    assert_eq!(node.typ.size, Size::_8);
 
                     stack.push(node);
                 }
@@ -143,6 +152,7 @@ impl Checker {
                         TypeKind::Function(_, args) if args.len() == 1 => {}
                         _ => panic!("unexpected println type"),
                     };
+                    assert_eq!(node.typ.size, Size::_8);
 
                     stack.push(node);
                 }
@@ -216,5 +226,27 @@ impl Checker {
         }
 
         errs
+    }
+}
+
+impl Size {
+    pub(crate) fn as_bytes_count(&self) -> usize {
+        match self {
+            Size::_0 => 0,
+            Size::_8 => 1,
+            Size::_16 => 2,
+            Size::_32 => 4,
+            Size::_64 => 8,
+        }
+    }
+
+    pub fn as_asm_addressing_str(&self) -> &'static str {
+        match self {
+            Size::_0 => panic!("invalid addressing size"),
+            Size::_8 => "BYTE PTR",
+            Size::_16 => "WORD PTR",
+            Size::_32 => "DWORD PTR",
+            Size::_64 => "QWORD PTR",
+        }
     }
 }

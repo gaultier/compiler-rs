@@ -10,7 +10,7 @@ use serde::Serialize;
 use crate::{
     ast::{Node, NodeData},
     origin::Origin,
-    type_checker::TypeKind,
+    type_checker::{Size, TypeKind},
 };
 
 #[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -36,7 +36,7 @@ pub struct Instruction {
 
 #[derive(Serialize, Debug, Clone)]
 pub enum Operand {
-    Num(i64),
+    Num(i64, Size), // val, size.
     Bool(bool),
     Fn(String),
     VirtualRegister(VirtualRegister),
@@ -104,7 +104,7 @@ impl Emitter {
                     let ins = Instruction {
                         kind: InstructionKind::Set,
                         args_count: 1,
-                        operands: vec![Operand::Num(num as i64)],
+                        operands: vec![Operand::Num(num as i64, node.typ.size)],
                         origin: node.origin,
                         res_vreg: Some(res_vreg),
                     };
@@ -289,8 +289,8 @@ impl Emitter {
 impl Operand {
     pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
         match self {
-            Operand::Num(n) => {
-                write!(w, "{}", n)
+            Operand::Num(n, size) => {
+                write!(w, "{}:i{}", n, size.as_bytes_count())
             }
             Operand::Bool(b) => {
                 write!(w, "{}", b)
@@ -337,7 +337,7 @@ impl Instruction {
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum EvalValue {
-    Num(i64),
+    Num(i64, Size),
     Bool(bool),
     Fn(String),
 }
@@ -347,14 +347,22 @@ pub type EvalResult = BTreeMap<VirtualRegister, EvalValue>;
 impl EvalValue {
     pub(crate) fn as_num(&self) -> i64 {
         match self {
-            EvalValue::Num(num) => *num,
+            EvalValue::Num(num, _) => *num,
             _ => panic!("not a number"),
+        }
+    }
+
+    pub(crate) fn size(&self) -> Size {
+        match self {
+            EvalValue::Num(_, size) => *size,
+            EvalValue::Bool(_) => Size::_8,
+            EvalValue::Fn(_) => Size::_64,
         }
     }
 
     pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
         match self {
-            EvalValue::Num(n) => write!(w, "{}", n),
+            EvalValue::Num(n, size) => write!(w, "{}:i{}", n, size.as_bytes_count()),
             EvalValue::Bool(b) => write!(w, "{}", b),
             EvalValue::Fn(name) => w.write_all(name.as_bytes()),
         }
@@ -387,55 +395,55 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
             }
             InstructionKind::IAdd => {
                 let lhs = match ir.operands.first().as_ref().unwrap() {
-                    Operand::Num(num) => &EvalValue::Num(*num),
+                    Operand::Num(num, size) => &EvalValue::Num(*num, *size),
                     Operand::VirtualRegister(vreg) => res.get(vreg).unwrap(),
                     _ => panic!("incompatible operands"),
                 };
                 let rhs = match ir.operands.get(1).as_ref().unwrap() {
-                    Operand::Num(num) => &EvalValue::Num(*num),
+                    Operand::Num(num, size) => &EvalValue::Num(*num, *size),
                     Operand::VirtualRegister(vreg) => res.get(vreg).unwrap(),
                     _ => panic!("incompatible operands"),
                 };
-                let sum = EvalValue::Num(lhs.as_num() + rhs.as_num());
+                assert_eq!(lhs.size(), rhs.size());
+
+                let sum = EvalValue::Num(lhs.as_num() + rhs.as_num(), lhs.size());
                 res.insert(ir.res_vreg.unwrap(), sum);
             }
             InstructionKind::IMultiply => {
                 let lhs = match ir.operands.first().as_ref().unwrap() {
-                    Operand::Num(num) => &EvalValue::Num(*num),
+                    Operand::Num(num, size) => &EvalValue::Num(*num, *size),
                     Operand::VirtualRegister(vreg) => res.get(vreg).unwrap(),
                     _ => panic!("incompatible operands"),
                 };
                 let rhs = match ir.operands.get(1).as_ref().unwrap() {
-                    Operand::Num(num) => &EvalValue::Num(*num),
+                    Operand::Num(num, size) => &EvalValue::Num(*num, *size),
                     Operand::VirtualRegister(vreg) => res.get(vreg).unwrap(),
                     _ => panic!("incompatible operands"),
                 };
-                let mul = match (lhs, rhs) {
-                    (EvalValue::Num(lhs), EvalValue::Num(rhs)) => EvalValue::Num(lhs * rhs),
-                    _ => panic!("unexpected values, not numerical"),
-                };
+                assert_eq!(lhs.size(), rhs.size());
+
+                let mul = EvalValue::Num(lhs.as_num() * rhs.as_num(), lhs.size());
                 res.insert(ir.res_vreg.unwrap(), mul);
             }
             InstructionKind::IDivide => {
                 let lhs = match ir.operands.first().as_ref().unwrap() {
-                    Operand::Num(num) => &EvalValue::Num(*num),
+                    Operand::Num(num, size) => &EvalValue::Num(*num, *size),
                     Operand::VirtualRegister(vreg) => res.get(vreg).unwrap(),
                     _ => panic!("incompatible operands"),
                 };
                 let rhs = match ir.operands.get(1).as_ref().unwrap() {
-                    Operand::Num(num) => &EvalValue::Num(*num),
+                    Operand::Num(num, size) => &EvalValue::Num(*num, *size),
                     Operand::VirtualRegister(vreg) => res.get(vreg).unwrap(),
                     _ => panic!("incompatible operands"),
                 };
-                let mul = match (lhs, rhs) {
-                    (EvalValue::Num(lhs), EvalValue::Num(rhs)) => EvalValue::Num(lhs / rhs),
-                    _ => panic!("unexpected values, not numerical"),
-                };
-                res.insert(ir.res_vreg.unwrap(), mul);
+                assert_eq!(lhs.size(), rhs.size());
+
+                let div = EvalValue::Num(lhs.as_num() / rhs.as_num(), lhs.size());
+                res.insert(ir.res_vreg.unwrap(), div);
             }
             InstructionKind::Set => {
                 let value = match ir.operands.first().as_ref().unwrap() {
-                    Operand::Num(num) => EvalValue::Num(*num),
+                    Operand::Num(num, size) => EvalValue::Num(*num, *size),
                     Operand::Bool(b) => EvalValue::Bool(*b),
                     Operand::VirtualRegister(vreg) => res.get(vreg).unwrap().clone(),
                     Operand::Fn(name) => EvalValue::Fn(name.to_owned()),

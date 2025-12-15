@@ -12,6 +12,7 @@ use crate::{
     ir::{self},
     origin::Origin,
     register_alloc::{MemoryLocation, RegisterMapping},
+    type_checker::Size,
 };
 
 #[repr(u8)]
@@ -22,14 +23,6 @@ pub enum ArchKind {
 
 pub(crate) struct Abi {
     pub(crate) gprs: Vec<Register>,
-}
-
-#[derive(Serialize, Debug, Clone, Copy)]
-pub enum OperandSize {
-    _8 = 1,
-    _16 = 2,
-    _32 = 4,
-    _64 = 8,
 }
 
 #[derive(Serialize, Debug, Clone, Copy)]
@@ -44,7 +37,7 @@ pub enum Register {
 
 #[derive(Serialize, Debug, Clone)]
 pub struct Operand {
-    pub operand_size: OperandSize,
+    pub size: Size,
     pub kind: OperandKind,
 }
 
@@ -91,9 +84,9 @@ pub(crate) fn abi(target_arch: &ArchKind) -> Abi {
 }
 
 impl Operand {
-    pub(crate) fn from_memory_location(operand_size: &OperandSize, loc: &MemoryLocation) -> Self {
+    pub(crate) fn from_memory_location(size: &Size, loc: &MemoryLocation) -> Self {
         Self {
-            operand_size: *operand_size,
+            size: *size,
             kind: loc.into(),
         }
     }
@@ -104,7 +97,7 @@ impl Operand {
             OperandKind::Immediate(n) => write!(w, "{}", n),
             OperandKind::FnName(name) => w.write_all(name.as_bytes()),
             OperandKind::Stack(off) => {
-                self.operand_size.write(w)?;
+                w.write_all(self.size.as_asm_addressing_str().as_bytes())?;
                 write!(w, " [rbp {:+}]", off)
             }
         }
@@ -272,26 +265,6 @@ pub(crate) fn emit(
                     .collect(),
                 emitter.stack,
             )
-        }
-    }
-}
-
-impl OperandSize {
-    pub(crate) fn as_bytes_count(&self) -> usize {
-        match self {
-            OperandSize::_8 => 1,
-            OperandSize::_16 => 2,
-            OperandSize::_32 => 4,
-            OperandSize::_64 => 8,
-        }
-    }
-
-    pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
-        match self {
-            OperandSize::_8 => w.write_all(b"BYTE PTR"),
-            OperandSize::_16 => w.write_all(b"WORD PTR"),
-            OperandSize::_32 => w.write_all(b"DWORD PTR"),
-            OperandSize::_64 => w.write_all(b"QWORD PTR"),
         }
     }
 }
