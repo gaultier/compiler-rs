@@ -232,7 +232,7 @@ impl Stack {
 
         let old_offset = self.offset;
 
-        self.offset = self.offset & !(align as isize - 1);
+        self.offset &= !(align as isize - 1);
         assert_eq!(self.offset % align as isize, 0);
         assert!(self.offset <= old_offset, "{} {}", self.offset, old_offset);
 
