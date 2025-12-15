@@ -108,6 +108,47 @@ impl Operand {
             }
         }
     }
+
+    pub(crate) fn is_reg(&self) -> bool {
+        matches!(self.kind, OperandKind::Register(_))
+    }
+
+    pub(crate) fn is_imm(&self) -> bool {
+        matches!(self.kind, OperandKind::Immediate(_))
+    }
+
+    pub(crate) fn is_imm32(&self) -> bool {
+        matches!(self.kind, OperandKind::Immediate(imm) if imm <= i32::MAX as i64)
+    }
+
+    pub(crate) fn is_mem(&self) -> bool {
+        matches!(self.kind, OperandKind::Stack(_))
+    }
+
+    pub(crate) fn is_rm(&self) -> bool {
+        self.is_reg() || self.is_mem()
+    }
+
+    pub(crate) fn as_amd64_reg(&self) -> amd64::Register {
+        match self.kind {
+            OperandKind::Register(Register::Amd64(reg)) => reg,
+            _ => panic!("not a register"),
+        }
+    }
+
+    pub(crate) fn as_reg(&self) -> Register {
+        match self.kind {
+            OperandKind::Register(reg) => reg,
+            _ => panic!("not a register"),
+        }
+    }
+
+    pub(crate) fn as_imm(&self) -> i64 {
+        match self.kind {
+            OperandKind::Immediate(imm) => imm,
+            _ => panic!("not an immediate"),
+        }
+    }
 }
 
 impl Instruction {
