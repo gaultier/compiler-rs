@@ -399,30 +399,28 @@ impl Emitter {
             &Origin::default(),
         );
 
+        // Always align stack to 16 bytes so that function calls can be made.
+        // Technically it's not necessary in leaf functions but we do it anyway.
+        let delta = self.stack.offset % 16;
+        self.stack.offset += delta;
+
+        self.asm.push(Instruction {
+            kind: InstructionKind::Add_RM_Imm,
+            operands: vec![
+                Operand {
+                    operand_size: OperandSize::_64,
+                    kind: OperandKind::Register(asm::Register::Amd64(Register::Rsp)),
+                },
+                Operand {
+                    operand_size: OperandSize::_64,
+                    kind: OperandKind::Immediate(self.stack.offset as i64),
+                },
+            ],
+            origin: Origin::default(),
+        });
+
         for ir in irs {
             self.instruction_selection(ir, vreg_to_memory_location);
-        }
-
-        if !self.stack.is_aligned(16) {
-            let delta = self.stack.offset % 16;
-            self.stack.offset += delta;
-            self.asm.insert(
-                2, // Right after: `push rbp; mov rbp, rsp;`.
-                Instruction {
-                    kind: InstructionKind::Mov_R_Imm,
-                    operands: vec![
-                        Operand {
-                            operand_size: OperandSize::_64,
-                            kind: OperandKind::Register(asm::Register::Amd64(Register::Rsp)),
-                        },
-                        Operand {
-                            operand_size: OperandSize::_64,
-                            kind: OperandKind::Immediate(delta as i64),
-                        },
-                    ],
-                    origin: Origin::default(),
-                },
-            );
         }
 
         // Restore stack.

@@ -23,7 +23,7 @@ pub enum Action {
 
 pub type RegisterMapping = BTreeMap<VirtualRegister, MemoryLocation>;
 
-pub(crate) fn regalloc(live_ranges: &LiveRanges, abi: &Abi) -> RegisterMapping {
+pub(crate) fn regalloc(live_ranges: &LiveRanges, abi: &Abi) -> (RegisterMapping, isize) {
     let mut vreg_to_memory_location = RegisterMapping::new();
     let mut stack_offset = 0isize; // Grows downward.
 
@@ -90,7 +90,7 @@ pub(crate) fn regalloc(live_ranges: &LiveRanges, abi: &Abi) -> RegisterMapping {
         }
     }
 
-    vreg_to_memory_location
+    (vreg_to_memory_location, stack_offset)
 }
 
 // ExpireOldIntervals(i)

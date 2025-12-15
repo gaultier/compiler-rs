@@ -215,13 +215,14 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
     let ir_eval = ir::eval(&ir_emitter.instructions);
     trace!("ir_eval: {:#?}", ir_eval);
 
-    let vreg_to_memory_location =
+    let (vreg_to_memory_location, stack_offset) =
         register_alloc::regalloc(&ir_emitter.live_ranges, &asm::abi(&target_arch));
     trace!("vreg_to_memory_location: {:#?}", vreg_to_memory_location);
 
     let (asm_instructions, _) = asm::emit(
         &ir_emitter.instructions,
         &vreg_to_memory_location,
+        stack_offset,
         &target_arch,
     );
     trace!("asm_instructions: {:#?}", asm_instructions);

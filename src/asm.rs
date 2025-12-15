@@ -4,6 +4,7 @@ use std::{
     io::Write,
 };
 
+use log::trace;
 use serde::Serialize;
 
 use crate::{
@@ -253,14 +254,14 @@ impl Stack {
 pub(crate) fn emit(
     irs: &[ir::Instruction],
     vreg_to_memory_location: &RegisterMapping,
+    stack_offset: isize,
     target_arch: &ArchKind,
 ) -> (Vec<Instruction>, Stack) {
+    trace!("asm: stack_offset={}", stack_offset);
+
     match target_arch {
         ArchKind::Amd64 => {
-            // Assume we are always in `main` or one of its callees and thus
-            // `sp % 16 == -8` since a `call` just happened and thus the
-            // return address is on the stack.
-            let mut emitter = amd64::Emitter::new(-8);
+            let mut emitter = amd64::Emitter::new(stack_offset);
             emitter.emit(irs, vreg_to_memory_location);
 
             (
