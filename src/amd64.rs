@@ -294,7 +294,7 @@ impl Emitter {
             (ir::InstructionKind::Set, Some(ir::Operand::Num(num)), None) => {
                 self.emit_store(
                     vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
-                    &OperandKind::Immediate(*num as i64),
+                    &OperandKind::Immediate((*num)),
                     &OperandSize::_64,
                     &ins.origin,
                 );
@@ -613,7 +613,7 @@ impl Interpreter {
             (OperandKind::Register(_), OperandKind::Immediate(imm))
             | (OperandKind::Stack(_), OperandKind::Immediate(imm)) => {
                 self.state
-                    .insert((&dst.kind).into(), EvalValue::Num(*imm as i64));
+                    .insert((&dst.kind).into(), EvalValue::Num((*imm)));
             }
             (OperandKind::Immediate(_), _) => panic!("invalid store destination"),
             (OperandKind::Stack(_), OperandKind::Stack(_)) => panic!("unsupported store"),

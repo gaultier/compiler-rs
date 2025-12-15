@@ -181,7 +181,7 @@ impl Stack {
     }
 
     pub(crate) fn is_aligned(&self, align: usize) -> bool {
-        self.offset as usize % align == 0
+        (self.offset as usize).is_multiple_of(align)
     }
 
     // Intended to be used with `rbp` indexing i.e.: `mov [rbp-8], 1`.

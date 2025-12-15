@@ -59,7 +59,7 @@ pub(crate) fn regalloc(live_ranges: &LiveRanges, abi: &Abi) -> RegisterMapping {
         assert!(active.is_sorted_by(|(_, a), (_, b)| b.end <= a.end));
 
         active = expire_old_intervals(
-            &*live_range,
+            live_range,
             &active,
             &mut free_registers,
             &vreg_to_memory_location,
