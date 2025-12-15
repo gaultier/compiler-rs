@@ -95,6 +95,7 @@ pub enum InstructionKind {
     Mov_R_RM,
     Mov_R_Imm,
     Mov_RM_R,
+    Mov_RM_Imm,
     Add_R_RM,
     IMul_R_RM,
     IDiv,
@@ -480,7 +481,26 @@ impl Emitter {
                     origin: *origin,
                 });
             }
-            (MemoryLocation::Stack(_), OperandKind::Immediate(_)) => todo!(),
+            (MemoryLocation::Stack(off), OperandKind::Immediate(imm)) => {
+                if *imm > i32::MAX as i64 {
+                    todo!();
+                }
+
+                self.asm.push(Instruction {
+                    kind: InstructionKind::Mov_RM_Imm,
+                    operands: vec![
+                        Operand {
+                            operand_size: *size,
+                            kind: OperandKind::Stack(*off),
+                        },
+                        Operand {
+                            operand_size: *size,
+                            kind: src.clone(),
+                        },
+                    ],
+                    origin: *origin,
+                });
+            }
             (MemoryLocation::Register(dst_reg), OperandKind::Stack(_)) => {
                 self.asm.push(Instruction {
                     kind: InstructionKind::Mov_R_RM,
@@ -534,9 +554,10 @@ impl InstructionKind {
     pub(crate) fn to_str(self) -> &'static str {
         // TODO: size.
         match self {
-            InstructionKind::Mov_RM_R | InstructionKind::Mov_R_RM | InstructionKind::Mov_R_Imm => {
-                "mov"
-            }
+            InstructionKind::Mov_RM_R
+            | InstructionKind::Mov_R_RM
+            | InstructionKind::Mov_R_Imm
+            | InstructionKind::Mov_RM_Imm => "mov",
             InstructionKind::Add_R_RM => "add",
             InstructionKind::IMul_R_RM => "imul",
             InstructionKind::IDiv => "idiv",
@@ -650,7 +671,8 @@ impl Interpreter {
             match kind {
                 InstructionKind::Mov_R_Imm
                 | InstructionKind::Mov_R_RM
-                | InstructionKind::Mov_RM_R => {
+                | InstructionKind::Mov_RM_R
+                | InstructionKind::Mov_RM_Imm => {
                     assert_eq!(ins.operands.len(), 2);
                     self.store(&ins.operands[0], &ins.operands[1]);
                 }

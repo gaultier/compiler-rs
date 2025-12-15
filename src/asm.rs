@@ -95,7 +95,7 @@ impl Operand {
             OperandKind::FnName(name) => w.write_all(name.as_bytes()),
             OperandKind::Stack(off) => {
                 self.operand_size.write(w)?;
-                write!(w, " [rbp - {}]", off)
+                write!(w, " [rbp {:+}]", off)
             }
         }
     }
