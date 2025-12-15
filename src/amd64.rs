@@ -694,6 +694,8 @@ impl Interpreter {
             MemoryLocation::Register(asm::Register::Amd64(Register::Rsp)),
             EvalValue::Num(-8),
         );
+        // TODO: Use an 'undefined' value for the default value and treat reading this value as a
+        // fatal error.
 
         for ins in instructions {
             trace!("eval start: {:#?} rsp={}", &ins, self.stack_offset());
@@ -892,7 +894,7 @@ impl Interpreter {
             trace!("eval end: rsp={}", self.stack_offset());
         }
 
-        // Stack properly reset.
+        // Ensure that the stack is properly reset.
         assert_eq!(self.stack_offset() % 16, 0);
     }
 }
