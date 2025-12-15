@@ -143,7 +143,7 @@ impl Emitter {
                 let rhs_loc = vreg_to_memory_location.get(rhs).unwrap();
 
                 self.emit_store(
-                    &dst_loc,
+                    dst_loc,
                     &vreg_to_memory_location.get(lhs).unwrap().into(),
                     &OperandSize::_64,
                     &ins.origin,
