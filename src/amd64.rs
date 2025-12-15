@@ -754,14 +754,13 @@ impl Interpreter {
                     if !ins.operands[1].is_imm32() {
                         todo!();
                     }
-                    let src: MemoryLocation = (&ins.operands[1].kind).into();
-
-                    let op_value = self.state.get(&src).unwrap_or(&EvalValue::Num(0)).clone();
+                    let src = ins.operands[1].as_imm();
+                    assert!(src <= i32::MAX as i64);
 
                     self.state
                         .entry(dst)
                         .and_modify(|e| {
-                            *e = EvalValue::Num(op_value.as_num() + e.as_num());
+                            *e = EvalValue::Num(src + e.as_num());
                         })
                         .or_insert(EvalValue::Num(0));
                 }
@@ -876,7 +875,11 @@ impl Interpreter {
                         _ => panic!("invalid push argument"),
                     };
                     let sp = self.stack_offset();
-                    let val = self.state.get(&MemoryLocation::Stack(sp)).unwrap().clone();
+                    let val = self
+                        .state
+                        .get(&MemoryLocation::Stack(sp))
+                        .unwrap_or(&EvalValue::Num(0))
+                        .clone();
                     self.state.insert(op.kind.clone().into(), val);
                     self.set_stack_offset(op.operand_size.as_bytes_count() as isize);
                 }
