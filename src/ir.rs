@@ -63,6 +63,12 @@ impl Display for VirtualRegister {
     }
 }
 
+impl Display for LiveRange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}, {})", self.start, self.end)
+    }
+}
+
 impl Default for Emitter {
     fn default() -> Self {
         Self::new()

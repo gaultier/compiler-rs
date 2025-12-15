@@ -1,4 +1,4 @@
-use std::{io::Write, panic};
+use std::{fmt::Display, io::Write, panic};
 
 use log::trace;
 use serde::Serialize;
@@ -547,6 +547,12 @@ impl Register {
             Register::Rsp => "rsp",
             Register::Rbp => "rbp",
         }
+    }
+}
+
+impl Display for Register {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.to_str())
     }
 }
 

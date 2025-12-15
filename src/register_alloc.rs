@@ -69,12 +69,6 @@ pub(crate) fn regalloc(live_ranges: &LiveRanges, abi: &Abi) -> RegisterMapping {
         assert!(free_registers.len() <= abi.gprs.len());
         assert!(active.is_sorted_by(|(_, a), (_, b)| b.end <= a.end));
 
-        // Already filled by pre-coloring?
-        if vreg_to_memory_location.contains_key(vreg) {
-            insert_sorted(&mut active, (*vreg, *live_range));
-            continue;
-        }
-
         if active.len() == abi.gprs.len() {
             spill_at_interval(
                 vreg,
@@ -88,6 +82,11 @@ pub(crate) fn regalloc(live_ranges: &LiveRanges, abi: &Abi) -> RegisterMapping {
             let free_register = free_registers.pop_first().unwrap();
             vreg_to_memory_location.insert(*vreg, MemoryLocation::Register(free_register));
             insert_sorted(&mut active, (*vreg, *live_range));
+
+            trace!(
+                "regalloc: msg='alloc preg for vreg' vreg={} live_range={} preg={}",
+                vreg, live_range, free_register
+            );
         }
     }
 
@@ -112,6 +111,10 @@ fn expire_old_intervals(
         if live_range.end >= live_range_at.start {
             break;
         }
+        trace!(
+            "regalloc: msg='expire old intervals' live_range_at={} vreg={} live_range={}",
+            live_range_at, vreg, live_range
+        );
 
         // TODO: Could probably be optimized?
         new_active = new_active
@@ -120,6 +123,10 @@ fn expire_old_intervals(
 
         if let MemoryLocation::Register(preg) = vreg_to_memory_location[vreg] {
             free_registers.insert(preg);
+            trace!(
+                "regalloc: msg='expire old intervals' live_range_at={} vreg={} live_range={} preg={}",
+                live_range_at, vreg, live_range, preg,
+            );
         };
     }
 
