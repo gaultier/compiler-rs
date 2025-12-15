@@ -65,7 +65,7 @@ impl From<Register> for asm::Register {
     }
 }
 
-pub(crate) const GPRS: [Register; 14] = [
+pub(crate) const GPRS: [Register; 13] = [
     Register::Rax,
     Register::Rbx,
     Register::Rcx,
@@ -75,7 +75,7 @@ pub(crate) const GPRS: [Register; 14] = [
     Register::R8,
     Register::R9,
     Register::R10,
-    Register::R11,
+    // Reserve r11 as scratch register.
     Register::R12,
     Register::R13,
     Register::R14,
@@ -140,7 +140,7 @@ impl Emitter {
                 Some(ir::Operand::VirtualRegister(rhs)),
             ) => {
                 let dst_loc = vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap();
-                let rhs_loc = &vreg_to_memory_location.get(rhs).unwrap();
+                let rhs_loc = vreg_to_memory_location.get(rhs).unwrap();
 
                 self.emit_store(
                     &dst_loc,
@@ -148,17 +148,28 @@ impl Emitter {
                     &OperandSize::_64,
                     &ins.origin,
                 );
-                let kind = match (dst_loc, rhs_loc) {
+                let (kind, rhs_loc) = match (dst_loc, rhs_loc) {
                     (MemoryLocation::Register(_), MemoryLocation::Register(_)) => {
-                        InstructionKind::Add_RM_R
+                        (InstructionKind::Add_RM_R, rhs_loc)
                     }
                     (MemoryLocation::Register(_), MemoryLocation::Stack(_)) => {
-                        InstructionKind::Add_R_RM
+                        (InstructionKind::Add_R_RM, rhs_loc)
                     }
                     (MemoryLocation::Stack(_), MemoryLocation::Register(_)) => {
-                        InstructionKind::Add_RM_R
+                        (InstructionKind::Add_RM_R, rhs_loc)
                     }
-                    (MemoryLocation::Stack(_), MemoryLocation::Stack(_)) => todo!(),
+                    (MemoryLocation::Stack(_), MemoryLocation::Stack(_)) => {
+                        self.emit_store(
+                            &MemoryLocation::Register(asm::Register::Amd64(Register::R11)),
+                            &((*rhs_loc).into()),
+                            &OperandSize::_64,
+                            &Origin::default(),
+                        );
+                        (
+                            InstructionKind::Add_RM_R,
+                            &MemoryLocation::Register(asm::Register::Amd64(Register::R11)),
+                        )
+                    }
                 };
 
                 self.asm.push(Instruction {
@@ -168,10 +179,7 @@ impl Emitter {
                             &OperandSize::_64,
                             vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                         ),
-                        Operand::from_memory_location(
-                            &OperandSize::_64,
-                            vreg_to_memory_location.get(rhs).unwrap(),
-                        ),
+                        Operand::from_memory_location(&OperandSize::_64, rhs_loc),
                     ],
                     origin: ins.origin,
                 });
