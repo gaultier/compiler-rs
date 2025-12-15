@@ -175,6 +175,11 @@ fn spill_at_interval(
     } else {
         *stack_offset -= 8; // TODO: correct size.
         vreg_to_memory_location.insert(*vreg_current, MemoryLocation::Stack(*stack_offset));
+
+        trace!(
+            "regalloc: msg='spill new interval' vreg_current={} stack_offset={}",
+            vreg_current, stack_offset
+        );
     }
 }
 
