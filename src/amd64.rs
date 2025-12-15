@@ -1,4 +1,4 @@
-use std::{fmt::Display, io::Write, panic};
+use std::{io::Write, panic};
 
 use log::trace;
 use serde::Serialize;
@@ -124,7 +124,7 @@ impl Emitter {
 
     // TODO: Use a free register if possible.
     fn find_free_spill_slot(&mut self, op_size: &Size) -> MemoryLocation {
-        let (size, align) = (op_size.as_bytes_count(), 8); // TODO: Improve.
+        let (size, align) = (op_size.as_bytes_count(), op_size.as_bytes_count());
         let offset = self.stack.new_slot(size, align);
         MemoryLocation::Stack(offset)
     }
@@ -551,39 +551,79 @@ impl Emitter {
 }
 
 impl Register {
-    pub(crate) fn to_str(self) -> &'static str {
-        // TODO: size dependent.
-
-        match self {
-            Register::Rax => "rax",
-            Register::Rbx => "rbx",
-            Register::Rcx => "rcx",
-            Register::Rdx => "rdx",
-            Register::Rdi => "rdi",
-            Register::Rsi => "rsi",
-            Register::R8 => "r8",
-            Register::R9 => "r9",
-            Register::R10 => "r10",
-            Register::R11 => "r11",
-            Register::R12 => "r12",
-            Register::R13 => "r13",
-            Register::R14 => "r14",
-            Register::R15 => "r15",
-            Register::Rsp => "rsp",
-            Register::Rbp => "rbp",
+    pub(crate) fn to_str(self, size: &Size) -> &'static str {
+        match (self, size) {
+            (Register::Rax, Size::_8) => "al",
+            (Register::Rax, Size::_16) => "ax",
+            (Register::Rax, Size::_32) => "eax",
+            (Register::Rax, Size::_64) => "rax",
+            (Register::Rbx, Size::_8) => "bl",
+            (Register::Rbx, Size::_16) => "bx",
+            (Register::Rbx, Size::_32) => "ebx",
+            (Register::Rbx, Size::_64) => "rbx",
+            (Register::Rcx, Size::_8) => "cl",
+            (Register::Rcx, Size::_16) => "cx",
+            (Register::Rcx, Size::_32) => "ecx",
+            (Register::Rcx, Size::_64) => "rcx",
+            (Register::Rdx, Size::_8) => "dl",
+            (Register::Rdx, Size::_16) => "dx",
+            (Register::Rdx, Size::_32) => "edx",
+            (Register::Rdx, Size::_64) => "rdx",
+            (Register::Rdi, Size::_8) => "dil",
+            (Register::Rdi, Size::_16) => "di",
+            (Register::Rdi, Size::_32) => "edi",
+            (Register::Rdi, Size::_64) => "rdi",
+            (Register::Rsi, Size::_8) => "sil",
+            (Register::Rsi, Size::_16) => "si",
+            (Register::Rsi, Size::_32) => "esi",
+            (Register::Rsi, Size::_64) => "rsi",
+            (Register::R8, Size::_8) => "r8b",
+            (Register::R8, Size::_16) => "r8w",
+            (Register::R8, Size::_32) => "r8d",
+            (Register::R8, Size::_64) => "r8",
+            (Register::R9, Size::_8) => "r9b",
+            (Register::R9, Size::_16) => "r9w",
+            (Register::R9, Size::_32) => "r9d",
+            (Register::R9, Size::_64) => "r9",
+            (Register::R10, Size::_8) => "r10b",
+            (Register::R10, Size::_16) => "r10w",
+            (Register::R10, Size::_32) => "r10d",
+            (Register::R10, Size::_64) => "r10",
+            (Register::R11, Size::_8) => "r11b",
+            (Register::R11, Size::_16) => "r11w",
+            (Register::R11, Size::_32) => "r11d",
+            (Register::R11, Size::_64) => "r11",
+            (Register::R12, Size::_8) => "r12b",
+            (Register::R12, Size::_16) => "r12w",
+            (Register::R12, Size::_32) => "r12d",
+            (Register::R12, Size::_64) => "r12",
+            (Register::R13, Size::_8) => "r13b",
+            (Register::R13, Size::_16) => "r13w",
+            (Register::R13, Size::_32) => "r13d",
+            (Register::R13, Size::_64) => "r13",
+            (Register::R14, Size::_8) => "r14b",
+            (Register::R14, Size::_16) => "r14w",
+            (Register::R14, Size::_32) => "r14d",
+            (Register::R14, Size::_64) => "r14",
+            (Register::R15, Size::_8) => "r15b",
+            (Register::R15, Size::_16) => "r15w",
+            (Register::R15, Size::_32) => "r15d",
+            (Register::R15, Size::_64) => "r15",
+            (Register::Rsp, Size::_8) => "spl",
+            (Register::Rsp, Size::_16) => "sp",
+            (Register::Rsp, Size::_32) => "esp",
+            (Register::Rsp, Size::_64) => "rsp",
+            (Register::Rbp, Size::_8) => "bpl",
+            (Register::Rbp, Size::_16) => "bp",
+            (Register::Rbp, Size::_32) => "ebp",
+            (Register::Rbp, Size::_64) => "rbp",
+            (_, Size::_0) => panic!("zero size for register"),
         }
-    }
-}
-
-impl Display for Register {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.to_str())
     }
 }
 
 impl InstructionKind {
     pub(crate) fn to_str(self) -> &'static str {
-        // TODO: size.
         match self {
             InstructionKind::Mov_RM_R
             | InstructionKind::Mov_R_RM

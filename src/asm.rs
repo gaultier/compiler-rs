@@ -1,6 +1,6 @@
 use std::{
     collections::{BTreeMap, HashMap},
-    fmt::Display,
+    fmt::{Debug, Display},
     io::Write,
 };
 
@@ -93,7 +93,7 @@ impl Operand {
 
     pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
         match &self.kind {
-            OperandKind::Register(register) => w.write_all(register.to_str().as_bytes()),
+            OperandKind::Register(register) => w.write_all(register.to_str(&self.size).as_bytes()),
             OperandKind::Immediate(n) => write!(w, "{}", n),
             OperandKind::FnName(name) => w.write_all(name.as_bytes()),
             OperandKind::Stack(off) => {
@@ -206,9 +206,9 @@ impl From<OperandKind> for MemoryLocation {
 }
 
 impl Register {
-    pub(crate) fn to_str(self) -> &'static str {
+    pub(crate) fn to_str(self, size: &Size) -> &'static str {
         match self {
-            Register::Amd64(r) => r.to_str(),
+            Register::Amd64(r) => r.to_str(size),
         }
     }
 }
