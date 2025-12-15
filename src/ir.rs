@@ -145,7 +145,7 @@ impl Emitter {
                         args.push(stack.pop().unwrap());
                     }
 
-                    // FIXME
+                    // FIXME: Proper name resolution.
                     let fn_name = Operand::Fn(String::from("println_u64"));
 
                     let res_vreg = match &*node.typ.kind {
@@ -191,7 +191,6 @@ impl Emitter {
                     stack.push(res_vreg);
                 }
                 crate::ast::NodeKind::Multiply => {
-                    // TODO: Checks.
                     let rhs = stack.pop().unwrap();
                     let lhs = stack.pop().unwrap();
 
@@ -211,7 +210,6 @@ impl Emitter {
                     stack.push(res_vreg);
                 }
                 crate::ast::NodeKind::Divide => {
-                    // TODO: Checks.
                     let rhs = stack.pop().unwrap();
                     let lhs = stack.pop().unwrap();
 
@@ -290,7 +288,7 @@ impl Operand {
     pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
         match self {
             Operand::Num(n, size) => {
-                write!(w, "{}:i{}", n, size.as_bytes_count())
+                write!(w, "{}:i{}", n, size.as_bits_count())
             }
             Operand::Bool(b) => {
                 write!(w, "{}", b)
@@ -362,7 +360,7 @@ impl EvalValue {
 
     pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
         match self {
-            EvalValue::Num(n, size) => write!(w, "{}:i{}", n, size.as_bytes_count()),
+            EvalValue::Num(n, size) => write!(w, "{}:i{}", n, size.as_bits_count()),
             EvalValue::Bool(b) => write!(w, "{}", b),
             EvalValue::Fn(name) => w.write_all(name.as_bytes()),
         }

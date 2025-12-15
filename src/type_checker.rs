@@ -44,7 +44,7 @@ impl Display for Type {
         match &*self.kind {
             TypeKind::Unknown => f.write_str("any"),
             TypeKind::Void => f.write_str("void"),
-            TypeKind::Number => f.write_str("u64"), // FIXME
+            TypeKind::Number => write!(f, "u{}", self.size.as_bits_count()),
             TypeKind::Bool => f.write_str("bool"),
             TypeKind::Function(ret, args) => {
                 f.write_str("func (")?;
@@ -237,6 +237,16 @@ impl Size {
             Size::_16 => 2,
             Size::_32 => 4,
             Size::_64 => 8,
+        }
+    }
+
+    pub(crate) fn as_bits_count(&self) -> usize {
+        match self {
+            Size::_0 => 0,
+            Size::_8 => 8,
+            Size::_16 => 16,
+            Size::_32 => 32,
+            Size::_64 => 64,
         }
     }
 
