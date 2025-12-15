@@ -1,5 +1,6 @@
 use std::{
     collections::BTreeMap,
+    fmt::Display,
     io::{Write, stdout},
     panic,
 };
@@ -54,6 +55,12 @@ pub struct Emitter {
     pub instructions: Vec<Instruction>,
     vreg: VirtualRegister,
     pub live_ranges: LiveRanges,
+}
+
+impl Display for VirtualRegister {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "v{}", self.0)
+    }
 }
 
 impl Default for Emitter {
