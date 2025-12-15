@@ -251,6 +251,12 @@ impl Lexer {
     }
 }
 
+impl Token {
+    pub(crate) fn is_whitespace(&self) -> bool {
+        self.kind == TokenKind::Whitespace || self.kind == TokenKind::Newline
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

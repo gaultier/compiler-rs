@@ -94,6 +94,10 @@ impl<'a> Parser<'a> {
 
     fn match_kind(&mut self, kind: TokenKind) -> Option<Token> {
         match self.peek_token() {
+            Some(t) if t.is_whitespace() => {
+                self.tokens_consumed += 1;
+                self.match_kind(kind)
+            }
             Some(t) if t.kind == kind => {
                 let res = Some(*t);
                 self.tokens_consumed += 1;
