@@ -331,7 +331,7 @@ impl Emitter {
                 self.emit_store(
                     vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                     &OperandKind::Immediate(if *b { 1 } else { 0 }),
-                    &Size::_64,
+                    &Size::_8,
                     &ins.origin,
                 );
             }
