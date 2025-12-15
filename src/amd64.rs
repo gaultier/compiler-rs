@@ -820,7 +820,6 @@ impl Interpreter {
                 InstructionKind::IDiv => {
                     assert_eq!(ins.operands.len(), 1);
                     let size = ins.operands[0].size;
-                    assert_eq!(size, ins.operands[1].size);
 
                     match ins.operands[0].kind {
                         asm::OperandKind::Register(op) => {
@@ -835,6 +834,8 @@ impl Interpreter {
                                     Register::Rax,
                                 )))
                                 .unwrap();
+
+                            assert_eq!(divisor.size(), quotient.size());
 
                             let rem = EvalValue::Num(quotient.as_num() % divisor.as_num(), size);
                             *quotient = EvalValue::Num(quotient.as_num() / divisor.as_num(), size);

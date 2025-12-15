@@ -228,11 +228,15 @@ impl Stack {
     pub(crate) fn new_slot(&mut self, size: usize, align: usize) -> isize {
         assert_ne!(size, 0);
         assert_ne!(align, 0);
+        assert!(align.is_power_of_two());
 
-        let padding = (0usize).wrapping_sub(self.offset as usize) & (align - 1);
-        assert!(padding <= align);
+        let old_offset = self.offset;
 
-        self.offset -= (size + padding) as isize;
+        self.offset = self.offset & !(align as isize - 1);
+        assert_eq!(self.offset % align as isize, 0);
+        assert!(self.offset <= old_offset, "{} {}", self.offset, old_offset);
+
+        self.offset -= size as isize;
 
         assert_ne!(self.offset, 0);
 
