@@ -45,8 +45,8 @@ pub enum OperandKind {
 
 #[derive(Serialize, Debug, Clone)]
 pub struct Operand {
-    kind: OperandKind,
-    typ: Type,
+    pub kind: OperandKind,
+    pub typ: Type,
 }
 
 #[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq)]
