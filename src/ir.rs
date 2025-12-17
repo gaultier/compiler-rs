@@ -62,6 +62,7 @@ pub struct Emitter {
     pub instructions: Vec<Instruction>,
     vreg: VirtualRegister,
     pub live_ranges: LiveRanges,
+    vreg_to_type: BTreeMap<VirtualRegister, Type>,
 }
 
 impl Display for VirtualRegister {
@@ -88,11 +89,15 @@ impl Emitter {
             instructions: Vec::new(),
             vreg: VirtualRegister(0),
             live_ranges: LiveRanges::new(),
+            vreg_to_type: BTreeMap::new(),
         }
     }
 
-    fn make_vreg(&mut self) -> VirtualRegister {
+    fn make_vreg(&mut self, typ: &Type) -> VirtualRegister {
         self.vreg.0 += 1;
+
+        self.vreg_to_type.insert(self.vreg, typ.clone());
+
         self.vreg
     }
 
@@ -109,7 +114,7 @@ impl Emitter {
                     };
                     assert_eq!(*node.typ.kind, TypeKind::Number);
 
-                    let res_vreg = self.make_vreg();
+                    let res_vreg = self.make_vreg(&node.typ);
                     let ins = Instruction {
                         kind: InstructionKind::Set,
                         args_count: 1,
@@ -128,7 +133,7 @@ impl Emitter {
                     };
                     assert_eq!(*node.typ.kind, TypeKind::Bool);
 
-                    let res_vreg = self.make_vreg();
+                    let res_vreg = self.make_vreg(&node.typ);
                     let ins = Instruction {
                         kind: InstructionKind::Set,
                         args_count: 1,
@@ -170,7 +175,7 @@ impl Emitter {
                             (None, ret_type.clone())
                         }
                         TypeKind::Function(ret_type, _) => {
-                            (Some(self.make_vreg()), ret_type.clone())
+                            (Some(self.make_vreg(&node.typ)), ret_type.clone())
                         }
                         _ => panic!("not a function type"),
                     };
@@ -199,7 +204,7 @@ impl Emitter {
 
                     assert_eq!(*node.typ.kind, TypeKind::Number);
 
-                    let res_vreg = self.make_vreg();
+                    let res_vreg = self.make_vreg(&node.typ);
 
                     let ins = Instruction {
                         kind: InstructionKind::IAdd,
@@ -221,7 +226,7 @@ impl Emitter {
 
                     assert_eq!(*node.typ.kind, TypeKind::Number);
 
-                    let res_vreg = self.make_vreg();
+                    let res_vreg = self.make_vreg(&node.typ);
 
                     let ins = Instruction {
                         kind: InstructionKind::IMultiply,
@@ -243,7 +248,7 @@ impl Emitter {
 
                     assert_eq!(*node.typ.kind, TypeKind::Number);
 
-                    let res_vreg = self.make_vreg();
+                    let res_vreg = self.make_vreg(&node.typ);
 
                     let ins = Instruction {
                         kind: InstructionKind::IDivide,
