@@ -324,7 +324,7 @@ impl Operand {
 impl Instruction {
     pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
         if let Some(vreg) = self.res_vreg {
-            write!(w, "v{} := ", vreg.0)?;
+            write!(w, "v{} {} := ", vreg.0, self.typ)?;
         }
 
         match self.kind {
