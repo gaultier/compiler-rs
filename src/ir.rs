@@ -408,8 +408,8 @@ pub enum EvalValueKind {
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct EvalValue {
-    kind: EvalValueKind,
-    typ: Type,
+    pub kind: EvalValueKind,
+    pub typ: Type,
 }
 
 pub type EvalResult = BTreeMap<VirtualRegister, EvalValue>;
@@ -424,6 +424,20 @@ impl EvalValue {
 
     pub(crate) fn size(&self) -> Size {
         self.typ.size
+    }
+
+    pub(crate) fn new_int(n: i64) -> Self {
+        Self {
+            kind: EvalValueKind::Num(n),
+            typ: Type::make_int(),
+        }
+    }
+
+    pub(crate) fn new_bool(n: bool) -> Self {
+        Self {
+            kind: EvalValueKind::Bool(b),
+            typ: Type::make_bool(),
+        }
     }
 
     pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
@@ -441,7 +455,7 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
     for ir in irs {
         match ir.kind {
             InstructionKind::FnCall => {
-                let fn_name = match ir.operands.first().unwrap().kind {
+                let fn_name = match &ir.operands.first().unwrap().kind {
                     OperandKind::Fn(name) => name,
                     _ => panic!("invalid FnCall IR: {:#?}", ir.operands.first()),
                 };
@@ -460,22 +474,16 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                 }
             }
             InstructionKind::IAdd => {
-                let lhs = ir.operands.first().as_ref().unwrap();
+                let lhs = ir.operands.first().unwrap();
                 let lhs = match lhs.kind {
-                    OperandKind::Num(num) => EvalValue {
-                        kind: EvalValueKind::Num(num),
-                        typ: lhs.typ,
-                    },
+                    OperandKind::Num(num) => EvalValue::new_int(num),
                     OperandKind::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
                     _ => panic!("incompatible operands"),
                 };
 
-                let rhs = ir.operands.get(1).as_ref().unwrap();
+                let rhs = ir.operands.get(1).unwrap();
                 let rhs = match rhs.kind {
-                    OperandKind::Num(num) => EvalValue {
-                        kind: EvalValueKind::Num(num),
-                        typ: rhs.typ,
-                    },
+                    OperandKind::Num(num) => EvalValue::new_int(num),
                     OperandKind::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
                     _ => panic!("incompatible operands"),
                 };
@@ -488,22 +496,16 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                 res.insert(ir.res_vreg.unwrap(), sum);
             }
             InstructionKind::IMultiply => {
-                let lhs = ir.operands.first().as_ref().unwrap();
+                let lhs = ir.operands.first().unwrap();
                 let lhs = match lhs.kind {
-                    OperandKind::Num(num) => EvalValue {
-                        kind: EvalValueKind::Num(num),
-                        typ: lhs.typ,
-                    },
+                    OperandKind::Num(num) => EvalValue::new_int(num),
                     OperandKind::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
                     _ => panic!("incompatible operands"),
                 };
 
-                let rhs = ir.operands.get(1).as_ref().unwrap();
+                let rhs = ir.operands.get(1).unwrap();
                 let rhs = match rhs.kind {
-                    OperandKind::Num(num) => EvalValue {
-                        kind: EvalValueKind::Num(num),
-                        typ: rhs.typ,
-                    },
+                    OperandKind::Num(num) => EvalValue::new_int(num),
                     OperandKind::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
                     _ => panic!("incompatible operands"),
                 };
@@ -516,22 +518,16 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                 res.insert(ir.res_vreg.unwrap(), mul);
             }
             InstructionKind::IDivide => {
-                let lhs = ir.operands.first().as_ref().unwrap();
+                let lhs = ir.operands.first().unwrap();
                 let lhs = match lhs.kind {
-                    OperandKind::Num(num) => EvalValue {
-                        kind: EvalValueKind::Num(num),
-                        typ: lhs.typ,
-                    },
+                    OperandKind::Num(num) => EvalValue::new_int(num),
                     OperandKind::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
                     _ => panic!("incompatible operands"),
                 };
 
-                let rhs = ir.operands.get(1).as_ref().unwrap();
+                let rhs = ir.operands.get(1).unwrap();
                 let rhs = match rhs.kind {
-                    OperandKind::Num(num) => EvalValue {
-                        kind: EvalValueKind::Num(num),
-                        typ: rhs.typ,
-                    },
+                    OperandKind::Num(num) => EvalValue::new_int(num),
                     OperandKind::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
                     _ => panic!("incompatible operands"),
                 };
