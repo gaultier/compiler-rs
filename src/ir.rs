@@ -325,7 +325,7 @@ impl Emitter {
 
 impl Operand {
     pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
-        match self.kind {
+        match &self.kind {
             OperandKind::Num(n) => {
                 write!(w, "{}", n)
             }
@@ -433,7 +433,7 @@ impl EvalValue {
         }
     }
 
-    pub(crate) fn new_bool(n: bool) -> Self {
+    pub(crate) fn new_bool(b: bool) -> Self {
         Self {
             kind: EvalValueKind::Bool(b),
             typ: Type::make_bool(),
