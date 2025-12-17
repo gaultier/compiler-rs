@@ -8,7 +8,7 @@ use crate::{
     ir::{self, EvalValue, EvalValueKind},
     origin::Origin,
     register_alloc::{MemoryLocation, RegisterMapping},
-    type_checker::{Size, Type},
+    type_checker::Size,
 };
 
 #[derive(Serialize, Debug)]
@@ -347,7 +347,7 @@ impl Emitter {
             (
                 ir::InstructionKind::Set,
                 Some(ir::Operand {
-                    kind: ir::OperandKind::Num(num, size),
+                    kind: ir::OperandKind::Num(num),
                     ..
                 }),
                 None,
@@ -355,7 +355,7 @@ impl Emitter {
                 self.emit_store(
                     vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                     &OperandKind::Immediate(*num),
-                    size,
+                    &ins.typ.size,
                     &ins.origin,
                 );
             }
@@ -714,8 +714,9 @@ impl Interpreter {
                 Register::Rsp,
             )))
             .unwrap()
+            .kind
         {
-            EvalValueKind::Num(n) => *n as isize,
+            EvalValueKind::Num(n) => n as isize,
             _ => panic!("invalid rsp value"),
         }
     }
@@ -727,8 +728,11 @@ impl Interpreter {
                 Register::Rsp,
             )))
             .unwrap();
-        match *val {
-            EvalValueKind::Num(n) => *val = EvalValueKind::Num(n + delta as i64),
+        match val {
+            EvalValue {
+                kind: EvalValueKind::Num(n),
+                ..
+            } => *val = EvalValue::new_int(*n + delta as i64),
             _ => panic!("invalid rsp value"),
         };
     }
@@ -747,17 +751,14 @@ impl Interpreter {
                 let value = self
                     .state
                     .get(&(&src.kind).into())
-                    .unwrap_or(&EvalValue {
-                        kind: EvalValueKind::Num(0),
-                        typ: Type::make_int(),
-                    })
+                    .unwrap_or(&EvalValue::new_int(0))
                     .clone();
                 self.state.insert((&dst.kind).into(), value);
             }
             (OperandKind::Register(_), OperandKind::Immediate(imm))
             | (OperandKind::Stack(_), OperandKind::Immediate(imm)) => {
                 self.state
-                    .insert((&dst.kind).into(), EvalValueKind::Num(*imm));
+                    .insert((&dst.kind).into(), EvalValue::new_int(*imm));
             }
             (OperandKind::Immediate(_), _) => panic!("invalid store destination"),
             (OperandKind::Stack(_), OperandKind::Stack(_)) => panic!("unsupported store"),
@@ -772,7 +773,7 @@ impl Interpreter {
                 let value = self
                     .state
                     .get(&(&src.kind).into())
-                    .unwrap_or(&EvalValueKind::Num(0))
+                    .unwrap_or(&EvalValue::new_int(0))
                     .clone();
                 self.state.insert((&dst.kind).into(), value);
             }
@@ -786,7 +787,7 @@ impl Interpreter {
         // return address is on the stack.
         self.state.insert(
             MemoryLocation::Register(asm::Register::Amd64(Register::Rsp)),
-            EvalValueKind::Num(-8),
+            EvalValue::new_int(-8),
         );
         // TODO: Use an 'undefined' value for the default value and treat reading this value as a
         // fatal error.
@@ -818,15 +819,15 @@ impl Interpreter {
                     let op_value = self
                         .state
                         .get(&src)
-                        .unwrap_or(&EvalValueKind::Num(0))
+                        .unwrap_or(&EvalValue::new_int(0))
                         .clone();
 
                     self.state
                         .entry(dst)
                         .and_modify(|e| {
-                            *e = EvalValueKind::Num(op_value.as_num() + e.as_num());
+                            *e = EvalValue::new_int(op_value.as_num() + e.as_num());
                         })
-                        .or_insert(EvalValueKind::Num(0));
+                        .or_insert(EvalValue::new_int(0));
                 }
                 InstructionKind::Add_RM_R => {
                     assert_eq!(ins.operands.len(), 2);
@@ -842,15 +843,15 @@ impl Interpreter {
                     let op_value = self
                         .state
                         .get(&src)
-                        .unwrap_or(&EvalValueKind::Num(0))
+                        .unwrap_or(&EvalValue::new_int(0))
                         .clone();
 
                     self.state
                         .entry(dst)
                         .and_modify(|e| {
-                            *e = EvalValueKind::Num(op_value.as_num() + e.as_num());
+                            *e = EvalValue::new_int(op_value.as_num() + e.as_num());
                         })
-                        .or_insert(EvalValueKind::Num(0));
+                        .or_insert(EvalValue::new_int(0));
                 }
                 InstructionKind::Add_RM_Imm => {
                     assert_eq!(ins.operands.len(), 2);
@@ -870,9 +871,9 @@ impl Interpreter {
                     self.state
                         .entry(dst)
                         .and_modify(|e| {
-                            *e = EvalValueKind::Num(src + e.as_num());
+                            *e = EvalValue::new_int(src + e.as_num());
                         })
-                        .or_insert(EvalValueKind::Num(0));
+                        .or_insert(EvalValue::new_int(0));
                 }
                 InstructionKind::IMul_R_RM => {
                     assert_eq!(ins.operands.len(), 2);
@@ -892,15 +893,15 @@ impl Interpreter {
                             let op_value = self
                                 .state
                                 .get(&MemoryLocation::Register(op))
-                                .unwrap_or(&EvalValueKind::Num(0))
+                                .unwrap_or(&EvalValue::new_int(0))
                                 .clone();
 
                             self.state
                                 .entry(MemoryLocation::Register(*dst_reg))
                                 .and_modify(|e| {
-                                    *e = EvalValueKind::Num(op_value.as_num() * e.as_num());
+                                    *e = EvalValue::new_int(op_value.as_num() * e.as_num());
                                 })
-                                .or_insert(EvalValueKind::Num(0));
+                                .or_insert(EvalValue::new_int(0));
                         }
                         _ => panic!("invalid operand for imul_r_rm instruction"),
                     };
@@ -925,10 +926,8 @@ impl Interpreter {
 
                             assert_eq!(divisor.size(), quotient.size());
 
-                            let rem =
-                                EvalValueKind::Num(quotient.as_num() % divisor.as_num(), size);
-                            *quotient =
-                                EvalValueKind::Num(quotient.as_num() / divisor.as_num(), size);
+                            let rem = EvalValue::new_int(quotient.as_num() % divisor.as_num());
+                            *quotient = EvalValue::new_int(quotient.as_num() / divisor.as_num());
 
                             self.state.insert(
                                 MemoryLocation::Register(asm::Register::Amd64(Register::Rdx)),
@@ -976,7 +975,7 @@ impl Interpreter {
                     let val = self
                         .state
                         .get(&(&op.kind).into())
-                        .unwrap_or(&EvalValueKind::Num(0, Size::_64))
+                        .unwrap_or(&EvalValue::new_int(0))
                         .clone();
                     self.state.insert(MemoryLocation::Stack(sp), val);
                 }
@@ -992,7 +991,7 @@ impl Interpreter {
                     let val = self
                         .state
                         .get(&MemoryLocation::Stack(sp))
-                        .unwrap_or(&EvalValueKind::Num(0, Size::_64))
+                        .unwrap_or(&EvalValue::new_int(0))
                         .clone();
                     self.state.insert(op.kind.clone().into(), val);
                     self.set_stack_offset(op.size.as_bytes_count() as isize);
