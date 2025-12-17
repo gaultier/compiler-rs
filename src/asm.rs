@@ -56,7 +56,7 @@ pub struct Instruction {
     pub origin: Origin,
 }
 
-pub type EvalResult = BTreeMap<MemoryLocation, ir::EvalValue>;
+pub type EvalResult = BTreeMap<MemoryLocation, ir::EvalValueKind>;
 
 impl Display for Register {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

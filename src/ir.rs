@@ -36,11 +36,17 @@ pub struct Instruction {
 }
 
 #[derive(Serialize, Debug, Clone)]
-pub enum Operand {
-    Num(i64, Size), // val, size.
+pub enum OperandKind {
+    Num(i64),
     Bool(bool),
     Fn(String),
     VirtualRegister(VirtualRegister),
+}
+
+#[derive(Serialize, Debug, Clone)]
+pub struct Operand {
+    kind: OperandKind,
+    typ: Type,
 }
 
 #[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq)]
@@ -107,7 +113,7 @@ impl Emitter {
                     let ins = Instruction {
                         kind: InstructionKind::Set,
                         args_count: 1,
-                        operands: vec![Operand::Num(num as i64, node.typ.size)],
+                        operands: vec![Operand::new_int(num as i64)],
                         origin: node.origin,
                         res_vreg: Some(res_vreg),
                         typ: node.typ.clone(),
@@ -126,7 +132,7 @@ impl Emitter {
                     let ins = Instruction {
                         kind: InstructionKind::Set,
                         args_count: 1,
-                        operands: vec![Operand::Bool(b)],
+                        operands: vec![Operand::new_bool(b)],
                         origin: node.origin,
                         res_vreg: Some(res_vreg),
                         typ: node.typ.clone(),
@@ -154,7 +160,10 @@ impl Emitter {
                     }
 
                     // FIXME: Proper name resolution.
-                    let fn_name = Operand::Fn(String::from("println_u64"));
+                    let fn_name = Operand {
+                        kind: OperandKind::Fn(String::from("println_u64")),
+                        typ: node.typ.clone(),
+                    };
 
                     let (res_vreg, ret_type) = match &*node.typ.kind {
                         TypeKind::Function(ret_type, _) if *ret_type.kind == TypeKind::Void => {
@@ -171,7 +180,7 @@ impl Emitter {
                     }
                     let mut operands = Vec::with_capacity(args.len() + 1);
                     operands.push(fn_name);
-                    operands.extend(args.iter().map(|x| Operand::VirtualRegister(*x)));
+                    operands.extend(args.iter().map(|x| Operand::new_vreg(*x, todo!())));
 
                     let ins = Instruction {
                         kind: InstructionKind::FnCall,
@@ -196,8 +205,8 @@ impl Emitter {
                         kind: InstructionKind::IAdd,
                         args_count: 2,
                         operands: vec![
-                            Operand::VirtualRegister(lhs),
-                            Operand::VirtualRegister(rhs),
+                            Operand::new_vreg(lhs, todo!()),
+                            Operand::new_vreg(rhs, todo!()),
                         ],
                         origin: node.origin,
                         res_vreg: Some(res_vreg),
@@ -218,8 +227,8 @@ impl Emitter {
                         kind: InstructionKind::IMultiply,
                         args_count: 2,
                         operands: vec![
-                            Operand::VirtualRegister(lhs),
-                            Operand::VirtualRegister(rhs),
+                            Operand::new_vreg(lhs, todo!()),
+                            Operand::new_vreg(rhs, todo!()),
                         ],
                         origin: node.origin,
                         res_vreg: Some(res_vreg),
@@ -240,8 +249,8 @@ impl Emitter {
                         kind: InstructionKind::IDivide,
                         args_count: 2,
                         operands: vec![
-                            Operand::VirtualRegister(lhs),
-                            Operand::VirtualRegister(rhs),
+                            Operand::new_vreg(lhs, todo!()),
+                            Operand::new_vreg(rhs, todo!()),
                         ],
                         origin: node.origin,
                         res_vreg: Some(res_vreg),
@@ -292,10 +301,18 @@ impl Emitter {
                     };
                     res.insert(res_vreg, live_range);
 
-                    if let Some(Operand::VirtualRegister(vreg)) = &ins.operands.first() {
+                    if let Some(Operand {
+                        kind: OperandKind::VirtualRegister(vreg),
+                        ..
+                    }) = &ins.operands.first()
+                    {
                         Self::extend_live_range_on_use(*vreg, i as u32, &mut res);
                     }
-                    if let Some(Operand::VirtualRegister(vreg)) = &ins.operands.get(1) {
+                    if let Some(Operand {
+                        kind: OperandKind::VirtualRegister(vreg),
+                        ..
+                    }) = &ins.operands.get(1)
+                    {
                         Self::extend_live_range_on_use(*vreg, i as u32, &mut res);
                     }
                 }
@@ -308,15 +325,42 @@ impl Emitter {
 
 impl Operand {
     pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
-        match self {
-            Operand::Num(n, size) => {
-                write!(w, "{}:i{}", n, size.as_bits_count())
+        match self.kind {
+            OperandKind::Num(n) => {
+                write!(w, "{}", n)
             }
-            Operand::Bool(b) => {
+            OperandKind::Bool(b) => {
                 write!(w, "{}", b)
             }
-            Operand::VirtualRegister(r) => write!(w, "v{}", r.0),
-            Operand::Fn(name) => w.write_all(name.as_bytes()),
+            OperandKind::VirtualRegister(r) => write!(w, "v{}", r.0),
+            OperandKind::Fn(name) => w.write_all(name.as_bytes()),
+        }?;
+        w.write_all(b" ")?;
+        Ok(())
+
+        // self.typ.write(w)
+    }
+}
+
+impl Operand {
+    fn new_int(n: i64) -> Self {
+        Self {
+            kind: OperandKind::Num(n),
+            typ: Type::make_int(),
+        }
+    }
+
+    fn new_bool(b: bool) -> Self {
+        Self {
+            kind: OperandKind::Bool(b),
+            typ: Type::make_bool(),
+        }
+    }
+
+    fn new_vreg(vreg: VirtualRegister, typ: &Type) -> Self {
+        Self {
+            kind: OperandKind::VirtualRegister(vreg),
+            typ: typ.clone(),
         }
     }
 }
@@ -356,35 +400,37 @@ impl Instruction {
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum EvalValue {
-    Num(i64, Size),
+pub enum EvalValueKind {
+    Num(i64),
     Bool(bool),
     Fn(String),
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct EvalValue {
+    kind: EvalValueKind,
+    typ: Type,
 }
 
 pub type EvalResult = BTreeMap<VirtualRegister, EvalValue>;
 
 impl EvalValue {
     pub(crate) fn as_num(&self) -> i64 {
-        match self {
-            EvalValue::Num(num, _) => *num,
+        match self.kind {
+            EvalValueKind::Num(num) => num,
             _ => panic!("not a number"),
         }
     }
 
     pub(crate) fn size(&self) -> Size {
-        match self {
-            EvalValue::Num(_, size) => *size,
-            EvalValue::Bool(_) => Size::_8,
-            EvalValue::Fn(_) => Size::_64,
-        }
+        self.typ.size
     }
 
     pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
-        match self {
-            EvalValue::Num(n, size) => write!(w, "{}:i{}", n, size.as_bits_count()),
-            EvalValue::Bool(b) => write!(w, "{}", b),
-            EvalValue::Fn(name) => w.write_all(name.as_bytes()),
+        match &self.kind {
+            EvalValueKind::Num(n) => write!(w, "{}", n),
+            EvalValueKind::Bool(b) => write!(w, "{}", b),
+            EvalValueKind::Fn(name) => w.write_all(name.as_bytes()),
         }
     }
 }
@@ -395,15 +441,15 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
     for ir in irs {
         match ir.kind {
             InstructionKind::FnCall => {
-                let fn_name = match ir.operands.first().unwrap() {
-                    Operand::Fn(name) => name,
+                let fn_name = match ir.operands.first().unwrap().kind {
+                    OperandKind::Fn(name) => name,
                     _ => panic!("invalid FnCall IR: {:#?}", ir.operands.first()),
                 };
                 match fn_name.as_str() {
                     "println_u64" => {
                         for op in &ir.operands[1..] {
-                            let val = match op {
-                                Operand::VirtualRegister(vreg) => res.get(vreg).unwrap(),
+                            let val = match op.kind {
+                                OperandKind::VirtualRegister(vreg) => res.get(&vreg).unwrap(),
                                 _ => panic!("unexpected fn call operand: {:#?}", op),
                             };
                             val.write(&mut stdout()).unwrap();
@@ -414,59 +460,105 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                 }
             }
             InstructionKind::IAdd => {
-                let lhs = match ir.operands.first().as_ref().unwrap() {
-                    Operand::Num(num, size) => &EvalValue::Num(*num, *size),
-                    Operand::VirtualRegister(vreg) => res.get(vreg).unwrap(),
+                let lhs = ir.operands.first().as_ref().unwrap();
+                let lhs = match lhs.kind {
+                    OperandKind::Num(num) => EvalValue {
+                        kind: EvalValueKind::Num(num),
+                        typ: lhs.typ,
+                    },
+                    OperandKind::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
                     _ => panic!("incompatible operands"),
                 };
-                let rhs = match ir.operands.get(1).as_ref().unwrap() {
-                    Operand::Num(num, size) => &EvalValue::Num(*num, *size),
-                    Operand::VirtualRegister(vreg) => res.get(vreg).unwrap(),
+
+                let rhs = ir.operands.get(1).as_ref().unwrap();
+                let rhs = match rhs.kind {
+                    OperandKind::Num(num) => EvalValue {
+                        kind: EvalValueKind::Num(num),
+                        typ: rhs.typ,
+                    },
+                    OperandKind::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
                     _ => panic!("incompatible operands"),
                 };
                 assert_eq!(lhs.size(), rhs.size());
 
-                let sum = EvalValue::Num(lhs.as_num() + rhs.as_num(), lhs.size());
+                let sum = EvalValue {
+                    kind: EvalValueKind::Num(lhs.as_num() + rhs.as_num()),
+                    typ: lhs.typ.clone(),
+                };
                 res.insert(ir.res_vreg.unwrap(), sum);
             }
             InstructionKind::IMultiply => {
-                let lhs = match ir.operands.first().as_ref().unwrap() {
-                    Operand::Num(num, size) => &EvalValue::Num(*num, *size),
-                    Operand::VirtualRegister(vreg) => res.get(vreg).unwrap(),
+                let lhs = ir.operands.first().as_ref().unwrap();
+                let lhs = match lhs.kind {
+                    OperandKind::Num(num) => EvalValue {
+                        kind: EvalValueKind::Num(num),
+                        typ: lhs.typ,
+                    },
+                    OperandKind::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
                     _ => panic!("incompatible operands"),
                 };
-                let rhs = match ir.operands.get(1).as_ref().unwrap() {
-                    Operand::Num(num, size) => &EvalValue::Num(*num, *size),
-                    Operand::VirtualRegister(vreg) => res.get(vreg).unwrap(),
+
+                let rhs = ir.operands.get(1).as_ref().unwrap();
+                let rhs = match rhs.kind {
+                    OperandKind::Num(num) => EvalValue {
+                        kind: EvalValueKind::Num(num),
+                        typ: rhs.typ,
+                    },
+                    OperandKind::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
                     _ => panic!("incompatible operands"),
                 };
                 assert_eq!(lhs.size(), rhs.size());
 
-                let mul = EvalValue::Num(lhs.as_num() * rhs.as_num(), lhs.size());
+                let mul = EvalValue {
+                    kind: EvalValueKind::Num(lhs.as_num() * rhs.as_num()),
+                    typ: lhs.typ.clone(),
+                };
                 res.insert(ir.res_vreg.unwrap(), mul);
             }
             InstructionKind::IDivide => {
-                let lhs = match ir.operands.first().as_ref().unwrap() {
-                    Operand::Num(num, size) => &EvalValue::Num(*num, *size),
-                    Operand::VirtualRegister(vreg) => res.get(vreg).unwrap(),
+                let lhs = ir.operands.first().as_ref().unwrap();
+                let lhs = match lhs.kind {
+                    OperandKind::Num(num) => EvalValue {
+                        kind: EvalValueKind::Num(num),
+                        typ: lhs.typ,
+                    },
+                    OperandKind::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
                     _ => panic!("incompatible operands"),
                 };
-                let rhs = match ir.operands.get(1).as_ref().unwrap() {
-                    Operand::Num(num, size) => &EvalValue::Num(*num, *size),
-                    Operand::VirtualRegister(vreg) => res.get(vreg).unwrap(),
+
+                let rhs = ir.operands.get(1).as_ref().unwrap();
+                let rhs = match rhs.kind {
+                    OperandKind::Num(num) => EvalValue {
+                        kind: EvalValueKind::Num(num),
+                        typ: rhs.typ,
+                    },
+                    OperandKind::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
                     _ => panic!("incompatible operands"),
                 };
                 assert_eq!(lhs.size(), rhs.size());
 
-                let div = EvalValue::Num(lhs.as_num() / rhs.as_num(), lhs.size());
+                let div = EvalValue {
+                    kind: EvalValueKind::Num(lhs.as_num() / rhs.as_num()),
+                    typ: lhs.typ.clone(),
+                };
                 res.insert(ir.res_vreg.unwrap(), div);
             }
             InstructionKind::Set => {
-                let value = match ir.operands.first().as_ref().unwrap() {
-                    Operand::Num(num, size) => EvalValue::Num(*num, *size),
-                    Operand::Bool(b) => EvalValue::Bool(*b),
-                    Operand::VirtualRegister(vreg) => res.get(vreg).unwrap().clone(),
-                    Operand::Fn(name) => EvalValue::Fn(name.to_owned()),
+                let value = ir.operands.first().unwrap();
+                let value = match &value.kind {
+                    OperandKind::Num(num) => EvalValue {
+                        kind: EvalValueKind::Num(*num),
+                        typ: value.typ.clone(),
+                    },
+                    OperandKind::Bool(b) => EvalValue {
+                        kind: EvalValueKind::Bool(*b),
+                        typ: value.typ.clone(),
+                    },
+                    OperandKind::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
+                    OperandKind::Fn(name) => EvalValue {
+                        kind: EvalValueKind::Fn(name.to_owned()),
+                        typ: value.typ.clone(),
+                    },
                 };
                 assert!(ir.operands.get(1).is_none());
 

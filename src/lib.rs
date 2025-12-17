@@ -163,7 +163,7 @@ mod wasm32 {
         pub vreg_to_memory_location: RegisterMapping,
         pub asm_instructions: Vec<asm::Instruction>,
         pub asm_text: String,
-        pub asm_eval: Vec<(MemoryLocation, ir::EvalValue)>,
+        pub asm_eval: Vec<(MemoryLocation, ir::EvalValueKind)>,
     }
 }
 
