@@ -44,7 +44,7 @@ impl Display for Type {
         match &*self.kind {
             TypeKind::Unknown => f.write_str("any"),
             TypeKind::Void => f.write_str("void"),
-            TypeKind::Number => write!(f, "u{}", self.size.as_bits_count()),
+            TypeKind::Number => write!(f, "int"),
             TypeKind::Bool => f.write_str("bool"),
             TypeKind::Function(ret, args) => {
                 f.write_str("func (")?;
@@ -94,19 +94,19 @@ impl Type {
         }
     }
 
-    pub(crate) fn u64() -> Self {
+    pub(crate) fn make_int() -> Self {
         Type::new(&TypeKind::Number, &Size::_64, &Origin::default())
     }
 
-    pub(crate) fn bool() -> Self {
+    pub(crate) fn make_bool() -> Self {
         Type::new(&TypeKind::Bool, &Size::_8, &Origin::default())
     }
 
-    pub(crate) fn void() -> Self {
+    pub(crate) fn make_void() -> Self {
         Type::new(&TypeKind::Void, &Size::_0, &Origin::default())
     }
 
-    pub(crate) fn function(return_type: &Type, args: &[Type], origin: &Origin) -> Self {
+    pub(crate) fn make_function(return_type: &Type, args: &[Type], origin: &Origin) -> Self {
         Type::new(
             &TypeKind::Function(return_type.clone(), args.to_owned()),
             &Size::_64,
@@ -217,7 +217,7 @@ impl Checker {
                         Err(err) => {
                             errs.push(err);
                             // To avoid cascading errors, pretend the type is fine.
-                            node.typ = Type::u64();
+                            node.typ = Type::make_int();
                         }
                     }
                     stack.push(node);

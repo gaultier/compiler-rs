@@ -140,7 +140,7 @@ impl<'a> Parser<'a> {
                 kind: NodeKind::Number,
                 data: Some(NodeData::Num(num)),
                 origin: token.origin,
-                typ: Type::u64(),
+                typ: Type::make_int(),
             };
             self.nodes.push(node);
             return true;
@@ -154,7 +154,7 @@ impl<'a> Parser<'a> {
                 kind: NodeKind::Bool,
                 data: Some(NodeData::Bool(src == "true")),
                 origin: token.origin,
-                typ: Type::bool(),
+                typ: Type::make_bool(),
             };
             self.nodes.push(node);
             return true;
@@ -164,7 +164,11 @@ impl<'a> Parser<'a> {
                 kind: NodeKind::BuiltinPrintln,
                 data: None,
                 origin: token.origin,
-                typ: Type::function(&Type::void(), &[Type::u64()], &Origin::default()),
+                typ: Type::make_function(
+                    &Type::make_void(),
+                    &[Type::make_int()],
+                    &Origin::default(),
+                ),
             };
             self.nodes.push(node);
             return true;
