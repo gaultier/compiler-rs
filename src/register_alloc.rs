@@ -6,6 +6,7 @@ use serde::Serialize;
 use crate::{
     asm::{Abi, Register},
     ir::{LiveRange, LiveRanges, VirtualRegister},
+    type_checker::Size,
 };
 
 #[derive(Serialize, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
@@ -23,7 +24,11 @@ pub enum Action {
 
 pub type RegisterMapping = BTreeMap<VirtualRegister, MemoryLocation>;
 
-pub(crate) fn regalloc(live_ranges: &LiveRanges, abi: &Abi) -> (RegisterMapping, isize) {
+pub(crate) fn regalloc(
+    live_ranges: &LiveRanges,
+    vreg_to_size: &BTreeMap<VirtualRegister, Size>,
+    abi: &Abi,
+) -> (RegisterMapping, isize) {
     let mut vreg_to_memory_location = RegisterMapping::new();
     let mut stack_offset = 0isize; // Grows downward.
 
@@ -75,6 +80,7 @@ pub(crate) fn regalloc(live_ranges: &LiveRanges, abi: &Abi) -> (RegisterMapping,
                 live_range,
                 &mut active,
                 &mut vreg_to_memory_location,
+                vreg_to_size,
                 &mut stack_offset,
             );
         } else {
@@ -156,6 +162,7 @@ fn spill_at_interval(
     live_range_current: &LiveRange,
     active: &mut Vec<(VirtualRegister, LiveRange)>,
     vreg_to_memory_location: &mut RegisterMapping,
+    vreg_to_size: &BTreeMap<VirtualRegister, Size>,
     stack_offset: &mut isize,
 ) {
     let (vreg_last, live_range_last) = *active.last().unwrap();
@@ -165,7 +172,7 @@ fn spill_at_interval(
         vreg_to_memory_location.insert(*vreg_current, memory_location_last);
 
         // location[spill] ← new stack location
-        *stack_offset -= 8; // TODO: correct size.
+        *stack_offset -= vreg_to_size[&vreg_last].as_bytes_count() as isize;
         vreg_to_memory_location.insert(vreg_last, MemoryLocation::Stack(*stack_offset));
 
         // remove spill from active
@@ -180,7 +187,7 @@ fn spill_at_interval(
             vreg_last, vreg_current, memory_location_last, stack_offset
         );
     } else {
-        *stack_offset -= 8; // TODO: correct size.
+        *stack_offset -= vreg_to_size[&vreg_last].as_bytes_count() as isize;
         vreg_to_memory_location.insert(*vreg_current, MemoryLocation::Stack(*stack_offset));
 
         trace!(

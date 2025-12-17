@@ -10,7 +10,7 @@ use serde::Serialize;
 use crate::{
     ast::{Node, NodeData},
     origin::Origin,
-    type_checker::{Size, TypeKind},
+    type_checker::{Size, Type, TypeKind},
 };
 
 #[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -32,6 +32,7 @@ pub struct Instruction {
     pub operands: Vec<Operand>,
     pub origin: Origin,
     pub res_vreg: Option<VirtualRegister>,
+    pub typ: Type,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -100,6 +101,8 @@ impl Emitter {
                         Some(NodeData::Num(n)) => n,
                         _ => panic!("expected number but was not present"),
                     };
+                    assert_eq!(*node.typ.kind, TypeKind::Number);
+
                     let res_vreg = self.make_vreg();
                     let ins = Instruction {
                         kind: InstructionKind::Set,
@@ -107,6 +110,7 @@ impl Emitter {
                         operands: vec![Operand::Num(num as i64, node.typ.size)],
                         origin: node.origin,
                         res_vreg: Some(res_vreg),
+                        typ: node.typ.clone(),
                     };
                     self.instructions.push(ins);
                     stack.push(res_vreg);
@@ -116,6 +120,8 @@ impl Emitter {
                         Some(NodeData::Bool(b)) => b,
                         _ => panic!("expected boolean but was not present"),
                     };
+                    assert_eq!(*node.typ.kind, TypeKind::Bool);
+
                     let res_vreg = self.make_vreg();
                     let ins = Instruction {
                         kind: InstructionKind::Set,
@@ -123,11 +129,13 @@ impl Emitter {
                         operands: vec![Operand::Bool(b)],
                         origin: node.origin,
                         res_vreg: Some(res_vreg),
+                        typ: node.typ.clone(),
                     };
                     self.instructions.push(ins);
                     stack.push(res_vreg);
                 }
                 crate::ast::NodeKind::BuiltinPrintln => {
+                    // Only do checks.
                     match &*node.typ.kind {
                         TypeKind::Function(_, args) if args.len() == 1 => {}
                         _ => panic!("unexpected println type"),
@@ -148,9 +156,13 @@ impl Emitter {
                     // FIXME: Proper name resolution.
                     let fn_name = Operand::Fn(String::from("println_u64"));
 
-                    let res_vreg = match &*node.typ.kind {
-                        TypeKind::Function(ret_type, _) if *ret_type.kind == TypeKind::Void => None,
-                        TypeKind::Function(_, _) => Some(self.make_vreg()),
+                    let (res_vreg, ret_type) = match &*node.typ.kind {
+                        TypeKind::Function(ret_type, _) if *ret_type.kind == TypeKind::Void => {
+                            (None, ret_type.clone())
+                        }
+                        TypeKind::Function(ret_type, _) => {
+                            (Some(self.make_vreg()), ret_type.clone())
+                        }
                         _ => panic!("not a function type"),
                     };
 
@@ -167,6 +179,7 @@ impl Emitter {
                         operands,
                         origin: node.origin,
                         res_vreg,
+                        typ: ret_type,
                     };
                     self.instructions.push(ins);
                 }
@@ -174,6 +187,8 @@ impl Emitter {
                     // TODO: Checks.
                     let rhs = stack.pop().unwrap();
                     let lhs = stack.pop().unwrap();
+
+                    assert_eq!(*node.typ.kind, TypeKind::Number);
 
                     let res_vreg = self.make_vreg();
 
@@ -186,6 +201,7 @@ impl Emitter {
                         ],
                         origin: node.origin,
                         res_vreg: Some(res_vreg),
+                        typ: node.typ.clone(),
                     };
                     self.instructions.push(ins);
                     stack.push(res_vreg);
@@ -193,6 +209,8 @@ impl Emitter {
                 crate::ast::NodeKind::Multiply => {
                     let rhs = stack.pop().unwrap();
                     let lhs = stack.pop().unwrap();
+
+                    assert_eq!(*node.typ.kind, TypeKind::Number);
 
                     let res_vreg = self.make_vreg();
 
@@ -205,6 +223,7 @@ impl Emitter {
                         ],
                         origin: node.origin,
                         res_vreg: Some(res_vreg),
+                        typ: node.typ.clone(),
                     };
                     self.instructions.push(ins);
                     stack.push(res_vreg);
@@ -212,6 +231,8 @@ impl Emitter {
                 crate::ast::NodeKind::Divide => {
                     let rhs = stack.pop().unwrap();
                     let lhs = stack.pop().unwrap();
+
+                    assert_eq!(*node.typ.kind, TypeKind::Number);
 
                     let res_vreg = self.make_vreg();
 
@@ -224,6 +245,7 @@ impl Emitter {
                         ],
                         origin: node.origin,
                         res_vreg: Some(res_vreg),
+                        typ: node.typ.clone(),
                     };
                     self.instructions.push(ins);
                     stack.push(res_vreg);

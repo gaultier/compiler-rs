@@ -8,16 +8,19 @@ mod origin;
 pub mod register_alloc;
 pub mod type_checker;
 
+use std::collections::BTreeMap;
+
 use log::trace;
 
 use crate::{
     asm::ArchKind,
     ast::{Node, Parser},
     error::Error,
-    ir::{Instruction, LiveRanges},
+    ir::{Instruction, LiveRanges, VirtualRegister},
     lex::{Lexer, Token},
     origin::FileId,
     register_alloc::RegisterMapping,
+    type_checker::Size,
 };
 
 #[cfg(target_arch = "wasm32")]
@@ -215,8 +218,23 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
     let ir_eval = ir::eval(&ir_emitter.instructions);
     trace!("ir_eval: {:#?}", ir_eval);
 
-    let (vreg_to_memory_location, stack_offset) =
-        register_alloc::regalloc(&ir_emitter.live_ranges, &asm::abi(&target_arch));
+    let vreg_to_size = ir_emitter
+        .instructions
+        .iter()
+        .filter_map(|x| {
+            if let Some(vreg) = x.res_vreg {
+                Some((vreg, x.typ.size))
+            } else {
+                None
+            }
+        })
+        .collect::<BTreeMap<VirtualRegister, Size>>();
+
+    let (vreg_to_memory_location, stack_offset) = register_alloc::regalloc(
+        &ir_emitter.live_ranges,
+        &vreg_to_size,
+        &asm::abi(&target_arch),
+    );
     trace!("vreg_to_memory_location: {:#?}", vreg_to_memory_location);
 
     let (asm_instructions, _) = asm::emit(
@@ -227,7 +245,7 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
     );
     trace!("asm_instructions: {:#?}", asm_instructions);
 
-    let mut asm_text = Vec::with_capacity(asm_instructions.len() * 8);
+    let mut asm_text = Vec::with_capacity(asm_instructions.len() * 8 /* heuristic */);
     for ins in &asm_instructions {
         ins.write(&mut asm_text).unwrap();
     }
