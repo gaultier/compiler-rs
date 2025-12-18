@@ -1,1 +1,1 @@
-println(true)
+println(1)

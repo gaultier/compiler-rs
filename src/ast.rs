@@ -70,7 +70,7 @@ impl<'a> Parser<'a> {
 
         nodes.push(Node {
             kind: NodeKind::FnDef,
-            data: None,
+            data: Some(NodeData::String(String::from("println"))),
             origin: Origin::default(),
             typ: Type::new_function(&Type::new_void(), &[Type::new_int()], &Origin::default()),
         });
