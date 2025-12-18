@@ -84,7 +84,7 @@ impl OriginKind {
             OriginKind::File(file_id) => {
                 // TODO: file name.
                 let file_name: &str = file_id_to_names
-                    .get(&file_id)
+                    .get(file_id)
                     .map(|s| s.as_str())
                     .unwrap_or_else(|| "<?>");
                 w.write_all(file_name.as_bytes())
