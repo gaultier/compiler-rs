@@ -185,7 +185,10 @@ impl Emitter {
                     }
                     let mut operands = Vec::with_capacity(args.len() + 1);
                     operands.push(fn_name);
-                    operands.extend(args.iter().map(|x| Operand::new_vreg(*x, todo!())));
+                    operands.extend(
+                        args.iter()
+                            .map(|x| Operand::new_vreg(*x, &self.vreg_to_type[x])),
+                    );
 
                     let ins = Instruction {
                         kind: InstructionKind::FnCall,
@@ -210,8 +213,8 @@ impl Emitter {
                         kind: InstructionKind::IAdd,
                         args_count: 2,
                         operands: vec![
-                            Operand::new_vreg(lhs, todo!()),
-                            Operand::new_vreg(rhs, todo!()),
+                            Operand::new_vreg(lhs, &self.vreg_to_type[&lhs]),
+                            Operand::new_vreg(rhs, &self.vreg_to_type[&rhs]),
                         ],
                         origin: node.origin,
                         res_vreg: Some(res_vreg),
@@ -232,8 +235,8 @@ impl Emitter {
                         kind: InstructionKind::IMultiply,
                         args_count: 2,
                         operands: vec![
-                            Operand::new_vreg(lhs, todo!()),
-                            Operand::new_vreg(rhs, todo!()),
+                            Operand::new_vreg(lhs, &self.vreg_to_type[&lhs]),
+                            Operand::new_vreg(rhs, &self.vreg_to_type[&rhs]),
                         ],
                         origin: node.origin,
                         res_vreg: Some(res_vreg),
