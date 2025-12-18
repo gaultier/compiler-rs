@@ -449,27 +449,46 @@ impl Emitter {
         // Technically it's not necessary in leaf functions but we do it anyway.
         let delta = self.stack.offset % 16;
         self.stack.offset += delta;
+        let stack_offset_frame = self.stack.offset as i64;
 
-        self.asm.push(Instruction {
-            kind: InstructionKind::Add_RM_Imm,
-            operands: vec![
-                Operand {
-                    size: Size::_64,
-                    kind: OperandKind::Register(asm::Register::Amd64(Register::Rsp)),
-                },
-                Operand {
-                    size: Size::_64,
-                    kind: OperandKind::Immediate(self.stack.offset as i64),
-                },
-            ],
-            origin: Origin::new_synth_codegen(),
-        });
+        if stack_offset_frame != 0 {
+            self.asm.push(Instruction {
+                kind: InstructionKind::Add_RM_Imm,
+                operands: vec![
+                    Operand {
+                        size: Size::_64,
+                        kind: OperandKind::Register(asm::Register::Amd64(Register::Rsp)),
+                    },
+                    Operand {
+                        size: Size::_64,
+                        kind: OperandKind::Immediate(stack_offset_frame),
+                    },
+                ],
+                origin: Origin::new_synth_codegen(),
+            });
+        }
 
         for ir in irs {
             self.instruction_selection(ir, vreg_to_memory_location);
         }
 
         // Restore stack.
+        if stack_offset_frame != 0 {
+            self.asm.push(Instruction {
+                kind: InstructionKind::Add_RM_Imm,
+                operands: vec![
+                    Operand {
+                        size: Size::_64,
+                        kind: OperandKind::Register(asm::Register::Amd64(Register::Rsp)),
+                    },
+                    Operand {
+                        size: Size::_64,
+                        kind: OperandKind::Immediate(-(stack_offset_frame)),
+                    },
+                ],
+                origin: Origin::new_synth_codegen(),
+            });
+        }
         self.asm.push(Instruction {
             kind: InstructionKind::Pop,
             operands: vec![Operand {
