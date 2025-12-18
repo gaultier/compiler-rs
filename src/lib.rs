@@ -222,11 +222,7 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
         .instructions
         .iter()
         .filter_map(|x| {
-            if let Some(vreg) = x.res_vreg {
-                Some((vreg, x.typ.size))
-            } else {
-                None
-            }
+            x.res_vreg.map(|vreg| (vreg, x.typ.size))
         })
         .collect::<BTreeMap<VirtualRegister, Size>>();
 

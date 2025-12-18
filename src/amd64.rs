@@ -908,8 +908,6 @@ impl Interpreter {
                 }
                 InstructionKind::IDiv => {
                     assert_eq!(ins.operands.len(), 1);
-                    let size = ins.operands[0].size;
-
                     match ins.operands[0].kind {
                         asm::OperandKind::Register(op) => {
                             let divisor = self

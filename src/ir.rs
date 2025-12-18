@@ -552,7 +552,7 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                 let value = match &value.kind {
                     OperandKind::Num(num) => EvalValue::new_int(*num),
                     OperandKind::Bool(b) => EvalValue::new_bool(*b),
-                    OperandKind::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
+                    OperandKind::VirtualRegister(vreg) => res.get(vreg).unwrap().clone(),
                     OperandKind::Fn(name) => EvalValue {
                         kind: EvalValueKind::Fn(name.to_owned()),
                         typ: value.typ.clone(),
