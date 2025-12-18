@@ -1,1 +1,1 @@
-true
+println(true)

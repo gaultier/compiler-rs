@@ -152,7 +152,7 @@ impl Checker {
                         TypeKind::Function(_, args) if args.len() == 1 => {}
                         _ => panic!("unexpected println type"),
                     };
-                    assert_eq!(node.typ.size, Size::_8);
+                    assert_eq!(node.typ.size, Size::_64);
 
                     stack.push(node);
                 }
