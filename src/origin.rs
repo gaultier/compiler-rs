@@ -8,7 +8,6 @@ pub type FileId = u32;
 pub enum OriginKind {
     File(FileId),
     Builtin,
-    SynthFromRegalloc,
     SynthFromCodegen,
     Unknown, // Only used for the 'unknown' type.
 }
@@ -30,16 +29,6 @@ impl Origin {
             offset,
             len,
             kind: OriginKind::File(file_id),
-        }
-    }
-
-    pub(crate) fn new_synth_regalloc() -> Self {
-        Origin {
-            line: 0,
-            column: 0,
-            offset: 0,
-            len: 0,
-            kind: OriginKind::SynthFromRegalloc,
         }
     }
 
@@ -101,7 +90,6 @@ impl OriginKind {
                 w.write_all(file_name.as_bytes())
             }
             OriginKind::Builtin => w.write_all(b"builtin"),
-            OriginKind::SynthFromRegalloc => w.write_all(b"synth_regalloc"),
             OriginKind::SynthFromCodegen => w.write_all(b"synth_codegen"),
             OriginKind::Unknown => w.write_all(b"unknown"),
         }
