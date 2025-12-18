@@ -257,8 +257,8 @@ impl Emitter {
                         kind: InstructionKind::IDivide,
                         args_count: 2,
                         operands: vec![
-                            Operand::new_vreg(lhs, todo!()),
-                            Operand::new_vreg(rhs, todo!()),
+                            Operand::new_vreg(lhs, &self.vreg_to_type[&lhs]),
+                            Operand::new_vreg(rhs, &self.vreg_to_type[&rhs]),
                         ],
                         origin: node.origin,
                         res_vreg: Some(res_vreg),
