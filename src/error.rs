@@ -90,7 +90,6 @@ impl Error {
             while excerpt_end < input.len() {
                 excerpt_end += 1;
                 if input.as_bytes()[excerpt_end] == b'\n' {
-                    excerpt_end -= 1;
                     break;
                 }
             }
