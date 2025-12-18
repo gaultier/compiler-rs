@@ -20,7 +20,6 @@ pub enum TokenKind {
     LiteralNumber,
     LiteralBool,
     Identifier,
-    BuiltinPrintln,
     Plus,
     Star,
     Slash,
@@ -84,7 +83,6 @@ impl Lexer {
         let lit = &input[origin.offset as usize..origin.offset as usize + len as usize];
         let kind = match lit {
             "true" | "false" => TokenKind::LiteralBool,
-            "println" => TokenKind::BuiltinPrintln,
             _ => TokenKind::Identifier,
         };
 

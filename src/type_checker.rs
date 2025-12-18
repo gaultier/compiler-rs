@@ -1,4 +1,4 @@
-use std::{/*collections::BTreeSet,*/ fmt::Display};
+use std::fmt::Display;
 
 use serde::Serialize;
 
@@ -117,12 +117,6 @@ impl Type {
 
 pub struct Checker {}
 
-impl Default for Checker {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl Checker {
     pub fn new() -> Self {
         Self {}
@@ -164,18 +158,14 @@ impl Checker {
 
                     stack.push(node);
                 }
-                crate::ast::NodeKind::BuiltinPrintln => {
-                    match &*node.typ.kind {
-                        TypeKind::Function(_, args) if args.len() == 1 => {}
-                        _ => panic!("unexpected println type"),
-                    };
-                    assert_eq!(node.typ.size, Size::_64);
+                crate::ast::NodeKind::Identifier => {
+                    assert_ne!(&*node.typ.kind, &TypeKind::Unknown);
 
                     stack.push(node);
                 }
                 crate::ast::NodeKind::FnCall => {
-                    let args_count = match node.data.unwrap() {
-                        crate::ast::NodeData::Num(n) => n as usize,
+                    let args_count = match node.data.as_ref().unwrap() {
+                        crate::ast::NodeData::Num(n) => *n as usize,
                         _ => panic!(
                             "invalid AST: node data for FnCall (i.e. the argument count) should be a number"
                         ),

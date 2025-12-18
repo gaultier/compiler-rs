@@ -15,15 +15,16 @@ pub enum NodeKind {
     Add,
     Multiply,
     Divide,
-    BuiltinPrintln,
+    Identifier,
     FnCall,
     FnDef,
 }
 
-#[derive(Serialize, Copy, Clone, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub enum NodeData {
     Num(u64),
     Bool(bool),
+    String(String),
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -34,7 +35,9 @@ pub struct Node {
     pub typ: Type,
 }
 
-type NodeIndex = usize;
+pub type NodeIndex = usize;
+
+pub type NameToNodeDef = BTreeMap<String, NodeIndex>;
 
 #[derive(Debug)]
 pub struct Parser<'a> {
@@ -44,7 +47,7 @@ pub struct Parser<'a> {
     pub errors: Vec<Error>,
     pub nodes: Vec<Node>,
     input: &'a str,
-    identifier_to_node_def: BTreeMap<String, NodeIndex>,
+    pub name_to_node_def: NameToNodeDef,
 }
 
 impl<'a> Parser<'a> {
@@ -57,13 +60,13 @@ impl<'a> Parser<'a> {
             errors: lexer.errors.clone(),
             nodes: builtins_nodes,
             input,
-            identifier_to_node_def: builtin_names,
+            name_to_node_def: builtin_names,
         }
     }
 
-    fn builtins(cap_hint: usize) -> (Vec<Node>, BTreeMap<String, NodeIndex>) {
+    fn builtins(cap_hint: usize) -> (Vec<Node>, NameToNodeDef) {
         let mut nodes = Vec::with_capacity(cap_hint);
-        let mut names = BTreeMap::<String, NodeIndex>::new();
+        let mut names = NameToNodeDef::new();
 
         nodes.push(Node {
             kind: NodeKind::FnDef,
@@ -181,9 +184,9 @@ impl<'a> Parser<'a> {
             return true;
         }
 
-        if let Some(token) = self.match_kind(TokenKind::BuiltinPrintln) {
+        if let Some(token) = self.match_kind(TokenKind::Identifier) {
             let node = Node {
-                kind: NodeKind::BuiltinPrintln,
+                kind: NodeKind::Identifier,
                 data: None,
                 origin: token.origin,
                 typ: Type::new_function(&Type::new_void(), &[Type::new_int()], &Origin::default()),
@@ -444,6 +447,36 @@ impl<'a> Parser<'a> {
                 }
             }
         }
+
+        self.resolve_names();
+    }
+
+    fn resolve_names(&mut self) {
+        let errors = self
+            .nodes
+            .iter()
+            .filter(|n| n.kind == NodeKind::Identifier)
+            .filter_map(|node| {
+                let name = match &node.data {
+                    Some(NodeData::String(s)) => s.as_str(),
+                    _ => {
+                        panic!("missing string node data (name) for identifier");
+                    }
+                };
+
+                if let Some(_def) = self.name_to_node_def.get(name) {
+                    None
+                } else {
+                    Some(Error::new(
+                        ErrorKind::UnknownIdentifier,
+                        node.origin,
+                        format!("unknown identifier: {}", name),
+                    ))
+                }
+            })
+            .collect::<Vec<Error>>();
+
+        self.errors.extend(errors);
     }
 }
 

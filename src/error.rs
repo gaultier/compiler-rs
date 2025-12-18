@@ -19,6 +19,7 @@ pub enum ErrorKind {
     ParseCallMissingArgument,
     IncompatibleTypes,
     IncompatibleArgumentsCount,
+    UnknownIdentifier,
 }
 
 #[derive(Serialize, Debug, Clone)]

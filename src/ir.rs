@@ -148,7 +148,7 @@ impl Emitter {
                     self.instructions.push(ins);
                     stack.push(res_vreg);
                 }
-                crate::ast::NodeKind::BuiltinPrintln => {
+                crate::ast::NodeKind::Identifier => {
                     // Only do checks.
                     match &*node.typ.kind {
                         TypeKind::Function(_, args) if args.len() == 1 => {}
@@ -156,8 +156,8 @@ impl Emitter {
                     };
                 }
                 crate::ast::NodeKind::FnCall => {
-                    let args_count = match node.data.unwrap() {
-                        crate::ast::NodeData::Num(n) => n as usize,
+                    let args_count = match node.data.as_ref().unwrap() {
+                        crate::ast::NodeData::Num(n) => *n as usize,
                         _ => panic!(
                             "invalid AST: node data for FnCall (i.e. the argument count) should be a number"
                         ),
