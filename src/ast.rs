@@ -4,7 +4,7 @@ use crate::{
     error::{Error, ErrorKind},
     lex::{Lexer, Token, TokenKind},
     origin::Origin,
-    type_checker::Type,
+    type_checker::{Type, TypeKind},
 };
 use serde::Serialize;
 
@@ -454,7 +454,7 @@ impl<'a> Parser<'a> {
     fn resolve_names(&mut self) {
         let errors = self
             .nodes
-            .iter()
+            .iter_mut()
             .filter(|n| n.kind == NodeKind::Identifier)
             .filter_map(|node| {
                 let name = match &node.data {
@@ -477,6 +477,28 @@ impl<'a> Parser<'a> {
             .collect::<Vec<Error>>();
 
         self.errors.extend(errors);
+
+        // Second phase: update types of identifiers.
+        let idx_and_types = self
+            .nodes
+            .iter()
+            .enumerate()
+            .filter(|(_, n)| n.kind == NodeKind::Identifier && *n.typ.kind == TypeKind::Unknown)
+            .map(|(i, node)| {
+                let name = match &node.data {
+                    Some(NodeData::String(s)) => s.as_str(),
+                    _ => {
+                        unreachable!()
+                    }
+                };
+
+                let def_idx = *self.name_to_node_def.get(name).unwrap();
+                (i, self.nodes[def_idx].typ.clone())
+            })
+            .collect::<Vec<_>>();
+        for (idx, typ) in idx_and_types {
+            self.nodes[idx].typ = typ;
+        }
     }
 }
 
