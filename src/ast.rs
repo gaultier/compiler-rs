@@ -71,8 +71,12 @@ impl<'a> Parser<'a> {
         nodes.push(Node {
             kind: NodeKind::FnDef,
             data: Some(NodeData::String(String::from("println"))),
-            origin: Origin::default(),
-            typ: Type::new_function(&Type::new_void(), &[Type::new_int()], &Origin::default()),
+            origin: Origin::new_builtin(),
+            typ: Type::new_function(
+                &Type::new_void(),
+                &[Type::new_int()],
+                &Origin::new_builtin(),
+            ),
         });
         names.insert(String::from("println"), nodes.len() - 1);
 
@@ -189,7 +193,11 @@ impl<'a> Parser<'a> {
                 kind: NodeKind::Identifier,
                 data: None,
                 origin: token.origin,
-                typ: Type::new_function(&Type::new_void(), &[Type::new_int()], &Origin::default()),
+                typ: Type::new_function(
+                    &Type::new_void(),
+                    &[Type::new_int()],
+                    &Origin::new_builtin(),
+                ),
             };
             self.nodes.push(node);
             return true;

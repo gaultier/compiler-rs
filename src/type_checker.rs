@@ -34,7 +34,7 @@ impl Default for Type {
         Self {
             kind: Box::new(TypeKind::Unknown),
             size: Size::_0,
-            origin: Default::default(),
+            origin: Origin::new_unknown(),
         }
     }
 }
@@ -95,15 +95,15 @@ impl Type {
     }
 
     pub(crate) fn new_int() -> Self {
-        Type::new(&TypeKind::Number, &Size::_64, &Origin::default())
+        Type::new(&TypeKind::Number, &Size::_64, &Origin::new_builtin())
     }
 
     pub(crate) fn new_bool() -> Self {
-        Type::new(&TypeKind::Bool, &Size::_8, &Origin::default())
+        Type::new(&TypeKind::Bool, &Size::_8, &Origin::new_builtin())
     }
 
     pub(crate) fn new_void() -> Self {
-        Type::new(&TypeKind::Void, &Size::_0, &Origin::default())
+        Type::new(&TypeKind::Void, &Size::_0, &Origin::new_builtin())
     }
 
     pub(crate) fn new_function(return_type: &Type, args: &[Type], origin: &Origin) -> Self {

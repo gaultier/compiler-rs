@@ -170,7 +170,7 @@ impl Emitter {
                             &MemoryLocation::Register(asm::Register::Amd64(Register::R11)),
                             &((*rhs_loc).into()),
                             &Size::_64,
-                            &Origin::default(),
+                            &Origin::new_synth_codegen(),
                         );
                         (
                             InstructionKind::Add_RM_R,
@@ -253,7 +253,7 @@ impl Emitter {
                         &spill_slot,
                         &MemoryLocation::Register(asm::Register::Amd64(Register::Rdx)).into(),
                         &Size::_64,
-                        &Origin::default(),
+                        &Origin::new_synth_codegen(),
                     );
                     trace!("spill rdx before idiv: spill_slot={:#?}", spill_slot);
 
@@ -265,7 +265,7 @@ impl Emitter {
                         &spill_slot,
                         &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)).into(),
                         &Size::_64,
-                        &Origin::default(),
+                        &Origin::new_synth_codegen(),
                     );
                     trace!("spill rax before idiv: spill_slot={:#?}", spill_slot);
 
@@ -277,7 +277,7 @@ impl Emitter {
                     &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)),
                     &lhs.into(),
                     &Size::_64,
-                    &Origin::default(),
+                    &Origin::new_synth_codegen(),
                 );
 
                 // `idiv` technically divides the 128 bit `rdx:rax` value. Thus, `rdx` is zeroed
@@ -317,7 +317,7 @@ impl Emitter {
                         &MemoryLocation::Register(asm::Register::Amd64(Register::Rdx)),
                         &rdx_spill_slot.into(),
                         &Size::_64,
-                        &Origin::default(),
+                        &Origin::new_synth_codegen(),
                     );
 
                     trace!("unspill rax after idiv: spill_slot={:#?}", rax_spill_slot);
@@ -325,7 +325,7 @@ impl Emitter {
                         &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)),
                         &rax_spill_slot.into(),
                         &Size::_64,
-                        &Origin::default(),
+                        &Origin::new_synth_codegen(),
                     );
                 }
             }
@@ -395,13 +395,13 @@ impl Emitter {
                     &spill_slot,
                     &MemoryLocation::Register(asm::Register::Amd64(Register::Rdi)).into(),
                     &Size::_64,
-                    &Origin::default(),
+                    &Origin::new_synth_codegen(),
                 );
                 self.emit_store(
                     &MemoryLocation::Register(asm::Register::Amd64(Register::Rdi)),
                     &arg.kind,
                     &Size::_64,
-                    &Origin::default(),
+                    &Origin::new_synth_codegen(),
                 );
 
                 self.asm.push(Instruction {
@@ -416,7 +416,7 @@ impl Emitter {
                     &MemoryLocation::Register(asm::Register::Amd64(Register::Rdi)),
                     &spill_slot.into(),
                     &Size::_64,
-                    &Origin::default(),
+                    &Origin::new_synth_codegen(),
                 );
             }
             x => panic!("invalid IR operands: {:#?}", x),
@@ -436,13 +436,13 @@ impl Emitter {
                 size: Size::_64,
                 kind: OperandKind::Register(asm::Register::Amd64(Register::Rbp)),
             }],
-            origin: Origin::default(),
+            origin: Origin::new_synth_codegen(),
         });
         self.emit_store(
             &MemoryLocation::Register(asm::Register::Amd64(Register::Rbp)),
             &OperandKind::Register(asm::Register::Amd64(Register::Rsp)),
             &Size::_64,
-            &Origin::default(),
+            &Origin::new_synth_codegen(),
         );
 
         // Always align stack to 16 bytes so that function calls can be made.
@@ -462,7 +462,7 @@ impl Emitter {
                     kind: OperandKind::Immediate(self.stack.offset as i64),
                 },
             ],
-            origin: Origin::default(),
+            origin: Origin::new_synth_codegen(),
         });
 
         for ir in irs {
@@ -476,14 +476,14 @@ impl Emitter {
                 size: Size::_64,
                 kind: OperandKind::Register(asm::Register::Amd64(Register::Rbp)),
             }],
-            origin: Origin::default(),
+            origin: Origin::new_synth_codegen(),
         });
 
         // Ret
         self.asm.push(Instruction {
             kind: InstructionKind::Ret,
             operands: vec![],
-            origin: Origin::default(),
+            origin: Origin::new_synth_codegen(),
         });
     }
 
