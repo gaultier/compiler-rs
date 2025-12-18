@@ -94,19 +94,19 @@ impl Type {
         }
     }
 
-    pub(crate) fn make_int() -> Self {
+    pub(crate) fn new_int() -> Self {
         Type::new(&TypeKind::Number, &Size::_64, &Origin::default())
     }
 
-    pub(crate) fn make_bool() -> Self {
+    pub(crate) fn new_bool() -> Self {
         Type::new(&TypeKind::Bool, &Size::_8, &Origin::default())
     }
 
-    pub(crate) fn make_void() -> Self {
+    pub(crate) fn new_void() -> Self {
         Type::new(&TypeKind::Void, &Size::_0, &Origin::default())
     }
 
-    pub(crate) fn make_function(return_type: &Type, args: &[Type], origin: &Origin) -> Self {
+    pub(crate) fn new_function(return_type: &Type, args: &[Type], origin: &Origin) -> Self {
         Type::new(
             &TypeKind::Function(return_type.clone(), args.to_owned()),
             &Size::_64,
@@ -135,6 +135,23 @@ impl Checker {
 
         for node in nodes {
             match node.kind {
+                crate::ast::NodeKind::FnDef => match &*node.typ.kind {
+                    TypeKind::Function(ret_type, args) => {
+                        assert_ne!(*ret_type.kind, TypeKind::Unknown);
+
+                        if matches!(*ret_type.kind, TypeKind::Function(_, _)) {
+                            unimplemented!();
+                        }
+
+                        for arg in args {
+                            assert_ne!(*arg.kind, TypeKind::Unknown);
+                            if matches!(*arg.kind, TypeKind::Function(_, _)) {
+                                unimplemented!();
+                            }
+                        }
+                    }
+                    _ => panic!("invalid type for function definition"),
+                },
                 crate::ast::NodeKind::Number => {
                     assert_eq!(*node.typ.kind, TypeKind::Number);
                     assert_ne!(node.typ.size, Size::_0);
@@ -217,7 +234,7 @@ impl Checker {
                         Err(err) => {
                             errs.push(err);
                             // To avoid cascading errors, pretend the type is fine.
-                            node.typ = Type::make_int();
+                            node.typ = Type::new_int();
                         }
                     }
                     stack.push(node);

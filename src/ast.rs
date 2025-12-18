@@ -1,4 +1,4 @@
-use std::num::ParseIntError;
+use std::{collections::BTreeMap, num::ParseIntError};
 
 use crate::{
     error::{Error, ErrorKind},
@@ -17,6 +17,7 @@ pub enum NodeKind {
     Divide,
     BuiltinPrintln,
     FnCall,
+    FnDef,
 }
 
 #[derive(Serialize, Copy, Clone, Debug)]
@@ -33,6 +34,8 @@ pub struct Node {
     pub typ: Type,
 }
 
+type NodeIndex = usize;
+
 #[derive(Debug)]
 pub struct Parser<'a> {
     error_mode: bool,
@@ -41,18 +44,36 @@ pub struct Parser<'a> {
     pub errors: Vec<Error>,
     pub nodes: Vec<Node>,
     input: &'a str,
+    identifier_to_node_def: BTreeMap<String, NodeIndex>,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(input: &'a str, lexer: &Lexer) -> Self {
+        let (builtins_nodes, builtin_names) = Self::builtins(lexer.tokens.len());
         Self {
             error_mode: false,
             tokens: lexer.tokens.clone(),
             tokens_consumed: 0,
             errors: lexer.errors.clone(),
-            nodes: Vec::new(),
+            nodes: builtins_nodes,
             input,
+            identifier_to_node_def: builtin_names,
         }
+    }
+
+    fn builtins(cap_hint: usize) -> (Vec<Node>, BTreeMap<String, NodeIndex>) {
+        let mut nodes = Vec::with_capacity(cap_hint);
+        let mut names = BTreeMap::<String, NodeIndex>::new();
+
+        nodes.push(Node {
+            kind: NodeKind::FnDef,
+            data: None,
+            origin: Origin::default(),
+            typ: Type::new_function(&Type::new_void(), &[Type::new_int()], &Origin::default()),
+        });
+        names.insert(String::from("println"), nodes.len() - 1);
+
+        (nodes, names)
     }
 
     fn peek_token(&self) -> Option<&Token> {
@@ -140,7 +161,7 @@ impl<'a> Parser<'a> {
                 kind: NodeKind::Number,
                 data: Some(NodeData::Num(num)),
                 origin: token.origin,
-                typ: Type::make_int(),
+                typ: Type::new_int(),
             };
             self.nodes.push(node);
             return true;
@@ -154,21 +175,18 @@ impl<'a> Parser<'a> {
                 kind: NodeKind::Bool,
                 data: Some(NodeData::Bool(src == "true")),
                 origin: token.origin,
-                typ: Type::make_bool(),
+                typ: Type::new_bool(),
             };
             self.nodes.push(node);
             return true;
         }
+
         if let Some(token) = self.match_kind(TokenKind::BuiltinPrintln) {
             let node = Node {
                 kind: NodeKind::BuiltinPrintln,
                 data: None,
                 origin: token.origin,
-                typ: Type::make_function(
-                    &Type::make_void(),
-                    &[Type::make_int()],
-                    &Origin::default(),
-                ),
+                typ: Type::new_function(&Type::new_void(), &[Type::new_int()], &Origin::default()),
             };
             self.nodes.push(node);
             return true;

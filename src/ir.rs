@@ -107,6 +107,9 @@ impl Emitter {
 
         for node in nodes {
             match node.kind {
+                crate::ast::NodeKind::FnDef => {
+                    // TODO.
+                }
                 crate::ast::NodeKind::Number => {
                     let num = match node.data {
                         Some(NodeData::Num(n)) => n,
@@ -354,14 +357,14 @@ impl Operand {
     fn new_int(n: i64) -> Self {
         Self {
             kind: OperandKind::Num(n),
-            typ: Type::make_int(),
+            typ: Type::new_int(),
         }
     }
 
     fn new_bool(b: bool) -> Self {
         Self {
             kind: OperandKind::Bool(b),
-            typ: Type::make_bool(),
+            typ: Type::new_bool(),
         }
     }
 
@@ -437,14 +440,14 @@ impl EvalValue {
     pub(crate) fn new_int(n: i64) -> Self {
         Self {
             kind: EvalValueKind::Num(n),
-            typ: Type::make_int(),
+            typ: Type::new_int(),
         }
     }
 
     pub(crate) fn new_bool(b: bool) -> Self {
         Self {
             kind: EvalValueKind::Bool(b),
-            typ: Type::make_bool(),
+            typ: Type::new_bool(),
         }
     }
 
