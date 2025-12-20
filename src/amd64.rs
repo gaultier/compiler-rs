@@ -1,4 +1,4 @@
-use std::{io::Write, panic};
+use std::{collections::HashMap, io::Write, panic};
 
 use log::trace;
 use serde::Serialize;
@@ -595,7 +595,7 @@ impl Emitter {
                     origin: *origin,
                 });
             }
-            (MemoryLocation::Stack(dst_stack), OperandKind::Register(src_reg)) => {
+            (MemoryLocation::Stack(_), OperandKind::Register(src_reg)) => {
                 self.asm.push(Instruction {
                     kind: InstructionKind::Mov_RM_R,
                     operands: vec![
@@ -913,9 +913,15 @@ impl Instruction {
         let (mod_, rm): (u8, u8) = match op_rm.kind {
             OperandKind::Register(_) => (0b11, todo!()),
             OperandKind::Immediate(imm) => (0b00, 0b101),
-            OperandKind::Stack(0) => todo!(),
-            OperandKind::Stack(off) if off < u8::MAX as isize => todo!(),
-            OperandKind::Stack(off) => (0b10, todo!()),
+            OperandKind::EffectiveAddress(EffectiveAddress {
+                displacement: 0, ..
+            }) => todo!(),
+            OperandKind::EffectiveAddress(EffectiveAddress { displacement, .. })
+                if displacement < u8::MAX as i32 =>
+            {
+                todo!()
+            }
+            OperandKind::EffectiveAddress(EffectiveAddress { displacement, .. }) => (0b10, todo!()),
             OperandKind::FnName(_) => todo!(),
         };
 
@@ -996,8 +1002,8 @@ impl Interpreter {
                 todo!()
             }
             (OperandKind::Register(_), OperandKind::Register(_))
-            | (OperandKind::Stack(_), OperandKind::Register(_))
-            | (OperandKind::Register(_), OperandKind::Stack(_)) => {
+            | (OperandKind::EffectiveAddress(_), OperandKind::Register(_))
+            | (OperandKind::Register(_), OperandKind::EffectiveAddress(_)) => {
                 let value = self
                     .state
                     .get(&(&src.kind).into())
@@ -1006,12 +1012,14 @@ impl Interpreter {
                 self.state.insert((&dst.kind).into(), value);
             }
             (OperandKind::Register(_), OperandKind::Immediate(imm))
-            | (OperandKind::Stack(_), OperandKind::Immediate(imm)) => {
+            | (OperandKind::EffectiveAddress(_), OperandKind::Immediate(imm)) => {
                 self.state
                     .insert((&dst.kind).into(), EvalValue::new_int(*imm));
             }
             (OperandKind::Immediate(_), _) => panic!("invalid store destination"),
-            (OperandKind::Stack(_), OperandKind::Stack(_)) => panic!("unsupported store"),
+            (OperandKind::EffectiveAddress(_), OperandKind::EffectiveAddress(_)) => {
+                panic!("unsupported store")
+            }
         };
     }
 
@@ -1019,7 +1027,7 @@ impl Interpreter {
         assert_eq!(dst.size, src.size);
 
         match (&dst.kind, &src.kind) {
-            (OperandKind::Register(_), OperandKind::Stack(_)) => {
+            (OperandKind::Register(_), OperandKind::EffectiveAddress(_)) => {
                 let value = self
                     .state
                     .get(&(&src.kind).into())
@@ -1031,7 +1039,7 @@ impl Interpreter {
         };
     }
 
-    pub fn eval(&mut self, instructions: &[asm::Instruction]) {
+    pub fn eval(&mut self, instructions: &[Instruction]) {
         // Assume we are always in `main` or one of its callees and thus
         // `rsp % 16 == -8` since a `call` just happened and thus the
         // return address is on the stack.
@@ -1045,9 +1053,7 @@ impl Interpreter {
         for ins in instructions {
             trace!("eval start: {:#?} rsp={}", &ins, self.stack_offset());
 
-            let asm::InstructionKind::Amd64(kind) = ins.kind;
-
-            match kind {
+            match ins.kind {
                 InstructionKind::Mov_R_Imm
                 | InstructionKind::Mov_R_RM
                 | InstructionKind::Mov_RM_R
@@ -1139,7 +1145,7 @@ impl Interpreter {
                     };
 
                     match ins.operands[1].kind {
-                        asm::OperandKind::Register(op) => {
+                        OperandKind::Register(op) => {
                             let op_value = self
                                 .state
                                 .get(&MemoryLocation::Register(op))
@@ -1159,7 +1165,7 @@ impl Interpreter {
                 InstructionKind::IDiv => {
                     assert_eq!(ins.operands.len(), 1);
                     match ins.operands[0].kind {
-                        asm::OperandKind::Register(op) => {
+                        OperandKind::Register(op) => {
                             let divisor = self
                                 .state
                                 .get(&MemoryLocation::Register(op))
@@ -1232,7 +1238,7 @@ impl Interpreter {
 
                     let op = ins.operands.first().unwrap();
                     match op.kind {
-                        OperandKind::Register(_) | OperandKind::Stack(_) => {}
+                        OperandKind::Register(_) | OperandKind::EffectiveAddress(_) => {}
                         _ => panic!("invalid push argument"),
                     };
                     let sp = self.stack_offset();
@@ -1271,9 +1277,34 @@ impl Operand {
             OperandKind::Register(register) => w.write_all(register.to_str(&self.size).as_bytes()),
             OperandKind::Immediate(n) => write!(w, "{}", n),
             OperandKind::FnName(name) => w.write_all(name.as_bytes()),
-            OperandKind::Stack(off) => {
+            OperandKind::EffectiveAddress(EffectiveAddress {
+                base,
+                index: None,
+                scale: 0,
+                displacement,
+            }) => {
                 w.write_all(self.size.as_asm_addressing_str().as_bytes())?;
-                write!(w, " [rbp {:+}]", off)
+                if displacement > 0 {
+                    write!(w, " [{} + {:+}]", base.to_str(&self.size), displacement)
+                } else {
+                    write!(w, " [{}]", base.to_str(&self.size))
+                }
+            }
+            OperandKind::EffectiveAddress(EffectiveAddress {
+                base,
+                index: Some(index),
+                scale,
+                displacement,
+            }) => {
+                w.write_all(self.size.as_asm_addressing_str().as_bytes())?;
+                write!(
+                    w,
+                    " [{} + {} * {} + {:+}]",
+                    base.to_str(&self.size),
+                    index.to_str(&self.size),
+                    scale,
+                    displacement
+                )
             }
         }
     }
@@ -1290,12 +1321,12 @@ impl Operand {
         matches!(self.kind, OperandKind::Immediate(imm) if imm <= i32::MAX as i64)
     }
 
-    pub(crate) fn is_mem(&self) -> bool {
-        matches!(self.kind, OperandKind::Stack(_))
+    pub(crate) fn is_effective_adddress(&self) -> bool {
+        matches!(self.kind, OperandKind::EffectiveAddress(_))
     }
 
     pub(crate) fn is_rm(&self) -> bool {
-        self.is_reg() || self.is_mem()
+        self.is_reg() || self.is_effective_adddress()
     }
 
     pub(crate) fn as_reg(&self) -> Register {
@@ -1343,7 +1374,6 @@ impl From<&MemoryLocation> for OperandKind {
                 scale: 0,
                 displacement: (*off).try_into().unwrap(), // TODO: handle gracefully,
             }),
-            _ => panic!("invalid value"),
         }
     }
 }
