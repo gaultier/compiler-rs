@@ -62,14 +62,6 @@ pub(crate) fn abi(target_arch: &ArchKind) -> Abi {
     }
 }
 
-impl Register {
-    pub(crate) fn to_str(self, size: &Size) -> &'static str {
-        match self {
-            Register::Amd64(r) => r.to_str(size),
-        }
-    }
-}
-
 pub(crate) struct Stack {
     pub(crate) offset: isize,
 }
@@ -115,11 +107,7 @@ pub(crate) fn emit(
             emitter.emit(irs, vreg_to_memory_location);
 
             (
-                emitter
-                    .asm
-                    .into_iter()
-                    .map(Instruction::Amd64)
-                    .collect(),
+                emitter.asm.into_iter().map(Instruction::Amd64).collect(),
                 emitter.stack,
             )
         }
