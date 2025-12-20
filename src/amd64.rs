@@ -4,13 +4,34 @@ use log::trace;
 use serde::Serialize;
 
 use crate::{
-    amd64,
-    asm::{self, Abi, EvalResult, Operand, OperandKind, Stack},
+    asm::{self, Abi, EvalResult, Stack},
     ir::{self, EvalValue, EvalValueKind},
     origin::Origin,
     register_alloc::{MemoryLocation, RegisterMapping},
     type_checker::Size,
 };
+
+#[derive(Serialize, Debug, Clone)]
+pub struct Operand {
+    pub size: Size,
+    pub kind: OperandKind,
+}
+
+#[derive(Serialize, Debug, Clone, Copy)]
+pub struct EffectiveAddress {
+    base: Register,
+    index: Option<Register>,
+    scale: u8,
+    displacement: i32,
+}
+
+#[derive(Serialize, Debug, Clone)]
+pub enum OperandKind {
+    Register(Register),
+    Immediate(i64),
+    EffectiveAddress(EffectiveAddress),
+    FnName(String),
+}
 
 #[derive(Serialize, Debug)]
 pub(crate) struct Instruction {
@@ -447,13 +468,13 @@ impl Emitter {
             kind: InstructionKind::Push,
             operands: vec![Operand {
                 size: Size::_64,
-                kind: OperandKind::Register(asm::Register::Amd64(Register::Rbp)),
+                kind: OperandKind::Register(Register::Rbp),
             }],
             origin: Origin::new_synth_codegen(),
         });
         self.emit_store(
             &MemoryLocation::Register(asm::Register::Amd64(Register::Rbp)),
-            &OperandKind::Register(asm::Register::Amd64(Register::Rsp)),
+            &OperandKind::Register(Register::Rsp),
             &Size::_64,
             &Origin::new_synth_codegen(),
         );
@@ -470,7 +491,7 @@ impl Emitter {
                 operands: vec![
                     Operand {
                         size: Size::_64,
-                        kind: OperandKind::Register(asm::Register::Amd64(Register::Rsp)),
+                        kind: OperandKind::Register(Register::Rsp),
                     },
                     Operand {
                         size: Size::_64,
@@ -492,7 +513,7 @@ impl Emitter {
                 operands: vec![
                     Operand {
                         size: Size::_64,
-                        kind: OperandKind::Register(asm::Register::Amd64(Register::Rsp)),
+                        kind: OperandKind::Register(Register::Rsp),
                     },
                     Operand {
                         size: Size::_64,
@@ -506,7 +527,7 @@ impl Emitter {
             kind: InstructionKind::Pop,
             operands: vec![Operand {
                 size: Size::_64,
-                kind: OperandKind::Register(asm::Register::Amd64(Register::Rbp)),
+                kind: OperandKind::Register(Register::Rbp),
             }],
             origin: Origin::new_synth_codegen(),
         });
@@ -530,12 +551,16 @@ impl Emitter {
             (_, OperandKind::FnName(_)) => {
                 todo!()
             }
-            (MemoryLocation::Register(dst_reg), OperandKind::Register(src_reg))
-                if dst_reg == src_reg =>
-            {
+            (
+                MemoryLocation::Register(asm::Register::Amd64(dst_reg)),
+                OperandKind::Register(src_reg),
+            ) if dst_reg == src_reg => {
                 // noop.
             }
-            (MemoryLocation::Register(dst_reg), OperandKind::Register(src_reg)) => {
+            (
+                MemoryLocation::Register(asm::Register::Amd64(dst_reg)),
+                OperandKind::Register(src_reg),
+            ) => {
                 self.asm.push(Instruction {
                     kind: InstructionKind::Mov_R_RM,
                     operands: vec![
@@ -551,7 +576,10 @@ impl Emitter {
                     origin: *origin,
                 });
             }
-            (MemoryLocation::Register(dst_reg), OperandKind::Immediate(src_imm)) => {
+            (
+                MemoryLocation::Register(asm::Register::Amd64(dst_reg)),
+                OperandKind::Immediate(src_imm),
+            ) => {
                 self.asm.push(Instruction {
                     kind: InstructionKind::Mov_R_Imm,
                     operands: vec![
@@ -573,7 +601,7 @@ impl Emitter {
                     operands: vec![
                         Operand {
                             size: *size,
-                            kind: OperandKind::Stack(*dst_stack),
+                            kind: dst.into(),
                         },
                         Operand {
                             size: *size,
@@ -593,7 +621,12 @@ impl Emitter {
                     operands: vec![
                         Operand {
                             size: *size,
-                            kind: OperandKind::Stack(*off),
+                            kind: OperandKind::EffectiveAddress(EffectiveAddress {
+                                base: Register::Rsp,
+                                index: None,
+                                scale: 0,
+                                displacement: (*off).try_into().unwrap(),
+                            }),
                         },
                         Operand {
                             size: *size,
@@ -603,7 +636,10 @@ impl Emitter {
                     origin: *origin,
                 });
             }
-            (MemoryLocation::Register(dst_reg), OperandKind::Stack(_)) => {
+            (
+                MemoryLocation::Register(asm::Register::Amd64(dst_reg)),
+                OperandKind::EffectiveAddress(_),
+            ) => {
                 self.asm.push(Instruction {
                     kind: InstructionKind::Mov_R_RM,
                     operands: vec![
@@ -619,10 +655,18 @@ impl Emitter {
                     origin: *origin,
                 });
             }
-            (MemoryLocation::Stack(dst), OperandKind::Stack(src)) if dst == src => {
+            (
+                MemoryLocation::Stack(dst),
+                OperandKind::EffectiveAddress(EffectiveAddress {
+                    base: Register::Rsp,
+                    index: None,
+                    scale: 0,
+                    displacement,
+                }),
+            ) if *dst == (*displacement as isize) => {
                 // noop.
             }
-            (MemoryLocation::Stack(_), OperandKind::Stack(_)) => todo!(),
+            (MemoryLocation::Stack(_), OperandKind::EffectiveAddress(_)) => todo!(),
         }
     }
 }
@@ -766,7 +810,7 @@ impl InstructionKind {
                 let op = ins.operands.first().unwrap();
                 match op.kind {
                     OperandKind::Register(_) => todo!(),
-                    OperandKind::Stack(_) => todo!(),
+                    OperandKind::EffectiveAddress(_) => todo!(),
                     _ => panic!("invalid argument"),
                 }
             }
@@ -776,7 +820,7 @@ impl InstructionKind {
                 let op = ins.operands.first().unwrap();
                 match op.kind {
                     OperandKind::Register(_) => todo!(),
-                    OperandKind::Stack(_) => todo!(),
+                    OperandKind::EffectiveAddress(_) => todo!(),
                     _ => panic!("invalid argument"),
                 }
             }
@@ -792,13 +836,13 @@ impl Instruction {
     // > or uses a 64-bit operand.
     fn is_rex_needed(operands: &[Operand]) -> bool {
         for op in operands {
-            if let OperandKind::Register(asm::Register::Amd64(reg)) = op.kind
+            if let OperandKind::Register(reg) = op.kind
                 && reg.is_extended()
             {
                 return true;
             }
 
-            if let OperandKind::Register(asm::Register::Amd64(reg)) = op.kind
+            if let OperandKind::Register(reg) = op.kind
                 && op.size == Size::_8
                 && (reg == Register::Rsp
                     || reg == Register::Rbp
@@ -1211,5 +1255,101 @@ impl Interpreter {
 
         // Ensure that the stack is properly reset.
         assert_eq!(self.stack_offset() % 16, 0);
+    }
+}
+
+impl Operand {
+    pub(crate) fn from_memory_location(size: &Size, loc: &MemoryLocation) -> Self {
+        Self {
+            size: *size,
+            kind: loc.into(),
+        }
+    }
+
+    pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+        match &self.kind {
+            OperandKind::Register(register) => w.write_all(register.to_str(&self.size).as_bytes()),
+            OperandKind::Immediate(n) => write!(w, "{}", n),
+            OperandKind::FnName(name) => w.write_all(name.as_bytes()),
+            OperandKind::Stack(off) => {
+                w.write_all(self.size.as_asm_addressing_str().as_bytes())?;
+                write!(w, " [rbp {:+}]", off)
+            }
+        }
+    }
+
+    pub(crate) fn is_reg(&self) -> bool {
+        matches!(self.kind, OperandKind::Register(_))
+    }
+
+    pub(crate) fn is_imm(&self) -> bool {
+        matches!(self.kind, OperandKind::Immediate(_))
+    }
+
+    pub(crate) fn is_imm32(&self) -> bool {
+        matches!(self.kind, OperandKind::Immediate(imm) if imm <= i32::MAX as i64)
+    }
+
+    pub(crate) fn is_mem(&self) -> bool {
+        matches!(self.kind, OperandKind::Stack(_))
+    }
+
+    pub(crate) fn is_rm(&self) -> bool {
+        self.is_reg() || self.is_mem()
+    }
+
+    pub(crate) fn as_reg(&self) -> Register {
+        match self.kind {
+            OperandKind::Register(reg) => reg,
+            _ => panic!("not a register"),
+        }
+    }
+
+    pub(crate) fn as_imm(&self) -> i64 {
+        match self.kind {
+            OperandKind::Immediate(imm) => imm,
+            _ => panic!("not an immediate"),
+        }
+    }
+}
+
+impl Instruction {
+    pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+        w.write_all(self.kind.to_str().as_bytes())?;
+
+        self.operands.iter().enumerate().try_for_each(|(i, o)| {
+            if i == 0 {
+                write!(w, " ")?;
+            } else {
+                write!(w, ", ")?;
+            }
+            o.write(w)
+        })?;
+
+        w.write_all(b" // ")?;
+        self.origin.write(w, &HashMap::new() /* FIXME */)?;
+
+        writeln!(w)
+    }
+}
+
+impl From<&MemoryLocation> for OperandKind {
+    fn from(value: &MemoryLocation) -> Self {
+        match value {
+            MemoryLocation::Register(asm::Register::Amd64(reg)) => OperandKind::Register(*reg),
+            MemoryLocation::Stack(off) => OperandKind::EffectiveAddress(EffectiveAddress {
+                base: Register::Rsp,
+                index: None,
+                scale: 0,
+                displacement: (*off).try_into().unwrap(), // TODO: handle gracefully,
+            }),
+            _ => panic!("invalid value"),
+        }
+    }
+}
+
+impl From<MemoryLocation> for OperandKind {
+    fn from(value: MemoryLocation) -> Self {
+        (&value).into()
     }
 }

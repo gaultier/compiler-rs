@@ -25,35 +25,15 @@ pub(crate) struct Abi {
     pub(crate) gprs: Vec<Register>,
 }
 
-#[derive(Serialize, Debug, Clone, Copy)]
-pub enum InstructionKind {
-    Amd64(amd64::InstructionKind),
-}
-
 #[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Register {
     Amd64(amd64::Register),
 }
 
-#[derive(Serialize, Debug, Clone)]
-pub struct Operand {
-    pub size: Size,
-    pub kind: OperandKind,
-}
-
-#[derive(Serialize, Debug, Clone)]
-pub enum OperandKind {
-    Register(Register),
-    Immediate(i64),
-    Stack(isize),
-    FnName(String),
-}
-
 #[derive(Serialize, Debug)]
-pub struct Instruction {
-    pub kind: InstructionKind,
-    pub operands: Vec<Operand>,
-    pub origin: Origin,
+pub enum Instruction {
+    Amd64(amd64::Instruction),
+    // TODO
 }
 
 pub type EvalResult = BTreeMap<MemoryLocation, ir::EvalValue>;
@@ -67,8 +47,8 @@ impl Display for Register {
 }
 
 pub fn eval(instructions: &[Instruction]) -> EvalResult {
-    match instructions.first().map(|ins| ins.kind) {
-        Some(InstructionKind::Amd64(_)) => {
+    match instructions.first() {
+        Some(Instruction::Amd64(_)) => {
             let mut interpreter = amd64::Interpreter::new();
             interpreter.eval(instructions);
             interpreter.state
@@ -80,128 +60,6 @@ pub fn eval(instructions: &[Instruction]) -> EvalResult {
 pub(crate) fn abi(target_arch: &ArchKind) -> Abi {
     match target_arch {
         ArchKind::Amd64 => amd64::abi(),
-    }
-}
-
-impl Operand {
-    pub(crate) fn from_memory_location(size: &Size, loc: &MemoryLocation) -> Self {
-        Self {
-            size: *size,
-            kind: loc.into(),
-        }
-    }
-
-    pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
-        match &self.kind {
-            OperandKind::Register(register) => w.write_all(register.to_str(&self.size).as_bytes()),
-            OperandKind::Immediate(n) => write!(w, "{}", n),
-            OperandKind::FnName(name) => w.write_all(name.as_bytes()),
-            OperandKind::Stack(off) => {
-                w.write_all(self.size.as_asm_addressing_str().as_bytes())?;
-                write!(w, " [rbp {:+}]", off)
-            }
-        }
-    }
-
-    pub(crate) fn is_reg(&self) -> bool {
-        matches!(self.kind, OperandKind::Register(_))
-    }
-
-    pub(crate) fn is_imm(&self) -> bool {
-        matches!(self.kind, OperandKind::Immediate(_))
-    }
-
-    pub(crate) fn is_imm32(&self) -> bool {
-        matches!(self.kind, OperandKind::Immediate(imm) if imm <= i32::MAX as i64)
-    }
-
-    pub(crate) fn is_mem(&self) -> bool {
-        matches!(self.kind, OperandKind::Stack(_))
-    }
-
-    pub(crate) fn is_rm(&self) -> bool {
-        self.is_reg() || self.is_mem()
-    }
-
-    pub(crate) fn as_amd64_reg(&self) -> amd64::Register {
-        match self.kind {
-            OperandKind::Register(Register::Amd64(reg)) => reg,
-            _ => panic!("not a register"),
-        }
-    }
-
-    pub(crate) fn as_reg(&self) -> Register {
-        match self.kind {
-            OperandKind::Register(reg) => reg,
-            _ => panic!("not a register"),
-        }
-    }
-
-    pub(crate) fn as_imm(&self) -> i64 {
-        match self.kind {
-            OperandKind::Immediate(imm) => imm,
-            _ => panic!("not an immediate"),
-        }
-    }
-}
-
-impl Instruction {
-    pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
-        w.write_all(self.kind.to_str().as_bytes())?;
-
-        self.operands.iter().enumerate().try_for_each(|(i, o)| {
-            if i == 0 {
-                write!(w, " ")?;
-            } else {
-                write!(w, ", ")?;
-            }
-            o.write(w)
-        })?;
-
-        w.write_all(b" // ")?;
-        self.origin.write(w, &HashMap::new() /* FIXME */)?;
-
-        writeln!(w)
-    }
-}
-
-impl InstructionKind {
-    pub(crate) fn to_str(self) -> &'static str {
-        match self {
-            InstructionKind::Amd64(instruction_kind) => instruction_kind.to_str(),
-        }
-    }
-}
-
-impl From<&MemoryLocation> for OperandKind {
-    fn from(value: &MemoryLocation) -> Self {
-        match value {
-            MemoryLocation::Register(reg) => OperandKind::Register(*reg),
-            MemoryLocation::Stack(off) => OperandKind::Stack(*off),
-        }
-    }
-}
-
-impl From<MemoryLocation> for OperandKind {
-    fn from(value: MemoryLocation) -> Self {
-        (&value).into()
-    }
-}
-
-impl From<&OperandKind> for MemoryLocation {
-    fn from(value: &OperandKind) -> Self {
-        match value {
-            OperandKind::Register(register) => MemoryLocation::Register(*register),
-            OperandKind::Immediate(_imm) => panic!(),
-            OperandKind::Stack(off) => MemoryLocation::Stack(*off),
-            OperandKind::FnName(_) => todo!(),
-        }
-    }
-}
-
-impl From<OperandKind> for MemoryLocation {
-    fn from(value: OperandKind) -> Self {
-        (&value).into()
     }
 }
 
@@ -261,11 +119,7 @@ pub(crate) fn emit(
                 emitter
                     .asm
                     .into_iter()
-                    .map(|x| Instruction {
-                        kind: InstructionKind::Amd64(x.kind),
-                        operands: x.operands,
-                        origin: x.origin,
-                    })
+                    .map(|x| Instruction::Amd64(x))
                     .collect(),
                 emitter.stack,
             )
