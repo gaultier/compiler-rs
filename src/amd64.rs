@@ -1053,9 +1053,7 @@ impl Interpreter {
         for ins in instructions {
             trace!("eval start: {:#?} rsp={}", &ins, self.stack_offset());
 
-            let ins = match ins {
-                asm::Instruction::Amd64(ins) => ins,
-            };
+            let asm::Instruction::Amd64(ins) = ins;
 
             match ins.kind {
                 InstructionKind::Mov_R_Imm

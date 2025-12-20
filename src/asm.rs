@@ -118,7 +118,7 @@ pub(crate) fn emit(
                 emitter
                     .asm
                     .into_iter()
-                    .map(|x| Instruction::Amd64(x))
+                    .map(Instruction::Amd64)
                     .collect(),
                 emitter.stack,
             )
