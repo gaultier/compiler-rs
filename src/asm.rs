@@ -11,7 +11,6 @@ use crate::{
     amd64,
     ir::{self},
     register_alloc::{MemoryLocation, RegisterMapping},
-    type_checker::Size,
 };
 
 #[repr(u8)]
