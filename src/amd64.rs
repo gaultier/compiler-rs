@@ -4,6 +4,7 @@ use log::trace;
 use serde::Serialize;
 
 use crate::{
+    amd64,
     asm::{self, Abi, EvalResult, Operand, OperandKind, Stack},
     ir::{self, EvalValue, EvalValueKind},
     origin::Origin,
@@ -615,6 +616,27 @@ impl Emitter {
 }
 
 impl Register {
+    pub fn is_extended(&self) -> bool {
+        match self {
+            Register::Rax => false,
+            Register::Rbx => false,
+            Register::Rcx => false,
+            Register::Rdx => false,
+            Register::Rdi => false,
+            Register::Rsi => false,
+            Register::R8 => true,
+            Register::R9 => true,
+            Register::R10 => true,
+            Register::R11 => true,
+            Register::R12 => true,
+            Register::R13 => true,
+            Register::R14 => true,
+            Register::R15 => true,
+            Register::Rbp => true,
+            Register::Rsp => true,
+        }
+    }
+
     pub(crate) fn to_str(self, size: &Size) -> &'static str {
         match (self, size) {
             (Register::Rax, Size::_8) => "al",
@@ -706,6 +728,129 @@ impl InstructionKind {
             InstructionKind::Call => "call",
             InstructionKind::Ret => "ret",
         }
+    }
+
+    pub(crate) fn encode(&self, ins: &Instruction) -> Vec<u8> {
+        match self {
+            InstructionKind::Mov_R_RM => todo!(),
+            InstructionKind::Mov_R_Imm => todo!(),
+            InstructionKind::Mov_RM_R => todo!(),
+            InstructionKind::Mov_RM_Imm => todo!(),
+            InstructionKind::Add_R_RM => todo!(),
+            InstructionKind::Add_RM_Imm => todo!(),
+            InstructionKind::Add_RM_R => todo!(),
+            InstructionKind::IMul_R_RM => todo!(),
+            InstructionKind::IDiv => todo!(),
+            InstructionKind::Lea => todo!(),
+            InstructionKind::Call => {
+                let displacement: i32 = 0; // FIXME: resolve offset with linker.
+                let mut res = vec![0xe8]; // Call near.
+                res.extend(displacement.to_le_bytes());
+                res
+            }
+            InstructionKind::Push => {
+                assert_eq!(ins.operands.len(), 1);
+
+                let op = ins.operands.first().unwrap();
+                match op.kind {
+                    OperandKind::Register(_) => todo!(),
+                    OperandKind::Stack(_) => todo!(),
+                    _ => panic!("invalid argument"),
+                }
+            }
+            InstructionKind::Pop => {
+                assert_eq!(ins.operands.len(), 1);
+
+                let op = ins.operands.first().unwrap();
+                match op.kind {
+                    OperandKind::Register(_) => todo!(),
+                    OperandKind::Stack(_) => todo!(),
+                    _ => panic!("invalid argument"),
+                }
+            }
+            InstructionKind::Ret => vec![0xC3], // Near return.
+        }
+    }
+}
+
+impl Instruction {
+    // > A REX prefix is necessary only if an instruction references
+    // > one of the extended registers or one of the byte registers SPL, BPL, SIL,
+    // DIL;
+    // > or uses a 64-bit operand.
+    fn is_rex_needed(operands: &[Operand]) -> bool {
+        for op in operands {
+            if let OperandKind::Register(asm::Register::Amd64(reg)) = op.kind
+                && reg.is_extended()
+            {
+                return true;
+            }
+
+            if let OperandKind::Register(asm::Register::Amd64(reg)) = op.kind
+                && op.size == Size::_8
+                && (reg == Register::Rsp
+                    || reg == Register::Rbp
+                    || reg == Register::Rsi
+                    || reg == Register::Rdi)
+            {
+                return true;
+            }
+
+            if op.size == Size::_64 {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn encode_rex(
+        is_64_bit_operand_size: bool,
+        modrm_reg_extended: bool,
+        sib_extended: bool,
+        modrm_rm_or_sib_or_opcode_reg_extended: bool,
+        operands: &[Operand],
+    ) -> Option<u8> {
+        if !Self::is_rex_needed(operands) {
+            return None;
+        }
+
+        let mut res = 0b0100_0000;
+
+        if is_64_bit_operand_size {
+            // W
+            res |= 0b0000_1000;
+        }
+
+        if modrm_reg_extended {
+            // R
+            res |= 0b0000_0100;
+        }
+
+        if sib_extended {
+            // X
+            res |= 0b0000_0010;
+        }
+
+        if modrm_rm_or_sib_or_opcode_reg_extended {
+            // B
+            res |= 0b0000_0001;
+        }
+
+        Some(res)
+    }
+
+    pub fn encode(&self) -> Vec<u8> {
+        let mut res = Vec::new();
+
+        if let Some(Operand {
+            size: Size::_16, ..
+        }) = self.operands.first()
+        {
+            res.push(0x66) // 16 bits prefix.
+        }
+
+        res.extend(self.kind.encode(self));
+        res
     }
 }
 
