@@ -1145,15 +1145,15 @@ impl Interpreter {
                     };
 
                     match ins.operands[1].kind {
-                        OperandKind::Register(op) => {
+                        OperandKind::Register(reg) => {
                             let op_value = self
                                 .state
-                                .get(&MemoryLocation::Register(op))
+                                .get(&MemoryLocation::Register(asm::Register::Amd64(reg)))
                                 .unwrap_or(&EvalValue::new_int(0))
                                 .clone();
 
                             self.state
-                                .entry(MemoryLocation::Register(*dst_reg))
+                                .entry(MemoryLocation::Register(asm::Register::Amd64(*dst_reg)))
                                 .and_modify(|e| {
                                     *e = EvalValue::new_int(op_value.as_num() * e.as_num());
                                 })
@@ -1165,10 +1165,10 @@ impl Interpreter {
                 InstructionKind::IDiv => {
                     assert_eq!(ins.operands.len(), 1);
                     match ins.operands[0].kind {
-                        OperandKind::Register(op) => {
+                        OperandKind::Register(reg) => {
                             let divisor = self
                                 .state
-                                .get(&MemoryLocation::Register(op))
+                                .get(&MemoryLocation::Register(asm::Register::Amd64(reg)))
                                 .unwrap()
                                 .clone();
                             let quotient = self
@@ -1279,32 +1279,22 @@ impl Operand {
             OperandKind::FnName(name) => w.write_all(name.as_bytes()),
             OperandKind::EffectiveAddress(EffectiveAddress {
                 base,
-                index: None,
-                scale: 0,
-                displacement,
-            }) => {
-                w.write_all(self.size.as_asm_addressing_str().as_bytes())?;
-                if displacement > 0 {
-                    write!(w, " [{} + {:+}]", base.to_str(&self.size), displacement)
-                } else {
-                    write!(w, " [{}]", base.to_str(&self.size))
-                }
-            }
-            OperandKind::EffectiveAddress(EffectiveAddress {
-                base,
-                index: Some(index),
+                index,
                 scale,
                 displacement,
             }) => {
                 w.write_all(self.size.as_asm_addressing_str().as_bytes())?;
-                write!(
-                    w,
-                    " [{} + {} * {} + {:+}]",
-                    base.to_str(&self.size),
-                    index.to_str(&self.size),
-                    scale,
-                    displacement
-                )
+                write!(w, " [{}", base.to_str(&self.size))?;
+                if let Some(index) = index {
+                    write!(w, "  + {}", index.to_str(&self.size))?;
+                }
+                if *scale > 0 {
+                    write!(w, "  * {}", scale)?;
+                }
+                if *displacement > 0 {
+                    write!(w, " {:+}", displacement)?;
+                }
+                write!(w, "]")
             }
         }
     }
@@ -1381,5 +1371,29 @@ impl From<&MemoryLocation> for OperandKind {
 impl From<MemoryLocation> for OperandKind {
     fn from(value: MemoryLocation) -> Self {
         (&value).into()
+    }
+}
+
+impl From<OperandKind> for MemoryLocation {
+    fn from(value: OperandKind) -> Self {
+        (&value).into()
+    }
+}
+
+impl From<&OperandKind> for MemoryLocation {
+    fn from(value: &OperandKind) -> Self {
+        match value {
+            OperandKind::Register(register) => {
+                MemoryLocation::Register(asm::Register::Amd64(*register))
+            }
+            OperandKind::Immediate(_imm) => panic!(),
+            OperandKind::EffectiveAddress(EffectiveAddress {
+                base: Register::Rsp,
+                displacement,
+                ..
+            }) => MemoryLocation::Stack(*displacement as isize),
+            OperandKind::EffectiveAddress(_) => todo!(),
+            OperandKind::FnName(_) => todo!(),
+        }
     }
 }
