@@ -1039,7 +1039,7 @@ impl Interpreter {
         };
     }
 
-    pub fn eval(&mut self, instructions: &[Instruction]) {
+    pub fn eval(&mut self, instructions: &[asm::Instruction]) {
         // Assume we are always in `main` or one of its callees and thus
         // `rsp % 16 == -8` since a `call` just happened and thus the
         // return address is on the stack.
@@ -1052,6 +1052,10 @@ impl Interpreter {
 
         for ins in instructions {
             trace!("eval start: {:#?} rsp={}", &ins, self.stack_offset());
+
+            let ins = match ins {
+                asm::Instruction::Amd64(ins) => ins,
+            };
 
             match ins.kind {
                 InstructionKind::Mov_R_Imm

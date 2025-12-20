@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::BTreeMap,
     fmt::{Debug, Display},
     io::Write,
 };
@@ -10,7 +10,6 @@ use serde::Serialize;
 use crate::{
     amd64,
     ir::{self},
-    origin::Origin,
     register_alloc::{MemoryLocation, RegisterMapping},
     type_checker::Size,
 };
@@ -123,6 +122,14 @@ pub(crate) fn emit(
                     .collect(),
                 emitter.stack,
             )
+        }
+    }
+}
+
+impl Instruction {
+    pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+        match self {
+            Instruction::Amd64(ins) => ins.write(w),
         }
     }
 }
