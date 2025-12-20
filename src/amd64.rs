@@ -41,6 +41,18 @@ pub enum Register {
     Rsp,
 }
 
+enum ModRmEncoding {
+    Slash0,
+    Slash1,
+    Slash2,
+    Slash3,
+    Slash4,
+    Slash5,
+    Slash6,
+    Slash7,
+    SlashR,
+}
+
 impl From<&asm::Register> for Register {
     fn from(value: &asm::Register) -> Self {
         match value {
@@ -837,6 +849,36 @@ impl Instruction {
         }
 
         Some(res)
+    }
+
+    // Format: `mod (2 bits) | reg (3 bits) | rm (3bits)`.
+    fn encode_modrm(encoding: ModRmEncoding, op_rm: &Operand, op_reg: &Operand) -> u8 {
+        let reg: u8 = match encoding {
+            ModRmEncoding::Slash0 => 0,
+            ModRmEncoding::Slash1 => 1,
+            ModRmEncoding::Slash2 => 2,
+            ModRmEncoding::Slash3 => 3,
+            ModRmEncoding::Slash4 => 4,
+            ModRmEncoding::Slash5 => 5,
+            ModRmEncoding::Slash6 => 6,
+            ModRmEncoding::Slash7 => 7,
+            ModRmEncoding::SlashR => todo!(),
+        };
+        assert!(reg <= 0b111); // Fits in 3 bits.
+
+        let (mod_, rm): (u8, u8) = match op_rm.kind {
+            OperandKind::Register(_) => (0b11, todo!()),
+            OperandKind::Immediate(imm) => (0b00, 0b101),
+            OperandKind::Stack(0) => todo!(),
+            OperandKind::Stack(off) if off < u8::MAX as isize => todo!(),
+            OperandKind::Stack(off) => (0b10, todo!()),
+            OperandKind::FnName(_) => todo!(),
+        };
+
+        assert!(mod_ <= 0b11); // Fits in 2 bits.
+        assert!(rm <= 0b111); // Fits in 3 bits.
+
+        mod_ << 6 | reg << 3 | rm
     }
 
     pub fn encode(&self) -> Vec<u8> {
