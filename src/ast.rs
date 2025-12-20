@@ -64,7 +64,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn builtins(cap_hint: usize) -> (Vec<Node>, NameToNodeDef) {
+    pub(crate) fn builtins(cap_hint: usize) -> (Vec<Node>, NameToNodeDef) {
         let mut nodes = Vec::with_capacity(cap_hint);
         let mut names = NameToNodeDef::new();
 
@@ -526,10 +526,11 @@ mod tests {
         parser.parse();
 
         assert!(parser.errors.is_empty());
-        assert_eq!(parser.nodes.len(), 1);
+        let (builtins, _) = Parser::builtins(16);
+        assert_eq!(parser.nodes.len(), builtins.len() + 1);
 
         {
-            let node = &parser.nodes[0];
+            let node = &parser.nodes[builtins.len() + 0];
             assert_eq!(node.kind, NodeKind::Number);
             match node.data {
                 Some(NodeData::Num(123)) => {}
@@ -550,10 +551,11 @@ mod tests {
         parser.parse();
 
         assert!(parser.errors.is_empty());
-        assert_eq!(parser.nodes.len(), 5);
+        let (builtins, _) = Parser::builtins(16);
+        assert_eq!(parser.nodes.len(), builtins.len() + 5);
 
         {
-            let node = &parser.nodes[0];
+            let node = &parser.nodes[builtins.len() + 0];
             assert_eq!(node.kind, NodeKind::Number);
             match node.data {
                 Some(NodeData::Num(123)) => {}
@@ -561,7 +563,7 @@ mod tests {
             };
         }
         {
-            let node = &parser.nodes[1];
+            let node = &parser.nodes[builtins.len() + 1];
             assert_eq!(node.kind, NodeKind::Number);
             match node.data {
                 Some(NodeData::Num(45)) => {}
@@ -569,11 +571,11 @@ mod tests {
             };
         }
         {
-            let node = &parser.nodes[2];
+            let node = &parser.nodes[builtins.len() + 2];
             assert_eq!(node.kind, NodeKind::Add);
         }
         {
-            let node = &parser.nodes[3];
+            let node = &parser.nodes[builtins.len() + 3];
             assert_eq!(node.kind, NodeKind::Number);
             match node.data {
                 Some(NodeData::Num(0)) => {}
@@ -581,7 +583,7 @@ mod tests {
             };
         }
         {
-            let node = &parser.nodes[4];
+            let node = &parser.nodes[builtins.len() + 4];
             assert_eq!(node.kind, NodeKind::Add);
         }
     }

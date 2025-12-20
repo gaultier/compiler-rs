@@ -276,7 +276,10 @@ mod tests {
         let compiled = compile(&input, 1, ArchKind::Amd64);
         assert_eq!(compiled.errors.len(), 0);
         assert_eq!(compiled.lex_tokens.len(), 8 /* including EOF */);
-        assert_eq!(compiled.ast_nodes.len(), 7);
+
+        let (builtins, _) = Parser::builtins(16);
+        assert_eq!(compiled.ast_nodes.len(), builtins.len() + 7);
+
         assert_eq!(compiled.ir_instructions.len(), 7);
         // Due to spills.
         assert!(compiled.asm_instructions.len() >= compiled.ir_instructions.len());
