@@ -1254,6 +1254,7 @@ impl Interpreter {
                     assert_eq!(ins.operands.len(), 1);
 
                     let op = ins.operands.first().unwrap();
+                    assert_eq!(op.size, Size::_64);
 
                     let sp = self.stack_offset();
                     self.set_stack_offset(-(op.size.as_bytes_count() as isize));
@@ -1268,6 +1269,8 @@ impl Interpreter {
                     assert_eq!(ins.operands.len(), 1);
 
                     let op = ins.operands.first().unwrap();
+                    assert_eq!(op.size, Size::_64);
+
                     match op.kind {
                         OperandKind::Register(_) | OperandKind::EffectiveAddress(_) => {}
                         _ => panic!("invalid push argument"),
