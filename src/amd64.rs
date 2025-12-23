@@ -672,6 +672,52 @@ impl Emitter {
 }
 
 impl Register {
+    fn to_3_bits(&self) -> u8 {
+        let res = match self {
+            Register::Rax => 0b000,
+            Register::Rbx => 0b011,
+            Register::Rcx => 0b001,
+            Register::Rdx => 0b010,
+            Register::Rdi => 0b111,
+            Register::Rsi => 0b110,
+            Register::R8 => 0b000,
+            Register::R9 => 0b001,
+            Register::R10 => 0b010,
+            Register::R11 => 0b011,
+            Register::R12 => 0b100,
+            Register::R13 => 0b101,
+            Register::R14 => 0b110,
+            Register::R15 => 0b111,
+            Register::Rbp => 0b101,
+            Register::Rsp => 0b100,
+        };
+        assert!(res <= 0b111);
+        res
+    }
+
+    fn to_4_bits(&self) -> u8 {
+        let res = match self {
+            Register::Rax => 0b0000,
+            Register::Rbx => 0b0011,
+            Register::Rcx => 0b0001,
+            Register::Rdx => 0b0010,
+            Register::Rdi => 0b0111,
+            Register::Rsi => 0b0110,
+            Register::R8 => 0b1000,
+            Register::R9 => 0b1001,
+            Register::R10 => 0b1010,
+            Register::R11 => 0b1011,
+            Register::R12 => 0b1100,
+            Register::R13 => 0b1101,
+            Register::R14 => 0b1110,
+            Register::R15 => 0b1111,
+            Register::Rbp => 0b0101,
+            Register::Rsp => 0b0100,
+        };
+        assert!(res <= 0b1111);
+        res
+    }
+
     pub fn is_extended(&self) -> bool {
         match self {
             Register::Rax => false,
@@ -808,8 +854,23 @@ impl InstructionKind {
                 assert_eq!(ins.operands.len(), 1);
 
                 let op = ins.operands.first().unwrap();
+                if op.size != Size::_64 {
+                    panic!("invalid size");
+                }
                 match op.kind {
-                    OperandKind::Register(_) => todo!(),
+                    OperandKind::Register(reg) => {
+                        let res = Instruction::encode_rex(
+                            false,
+                            false,
+                            false,
+                            reg.is_extended(),
+                            &ins.operands,
+                        );
+                        dbg!(&res);
+                        let res = vec![0x50 | reg.to_3_bits()];
+                        res
+                    }
+                    OperandKind::Immediate(_) => todo!(),
                     OperandKind::EffectiveAddress(_) => todo!(),
                     _ => panic!("invalid argument"),
                 }
@@ -818,8 +879,13 @@ impl InstructionKind {
                 assert_eq!(ins.operands.len(), 1);
 
                 let op = ins.operands.first().unwrap();
+                if op.size != Size::_64 {
+                    panic!("invalid size");
+                }
                 match op.kind {
-                    OperandKind::Register(_) => todo!(),
+                    OperandKind::Register(reg) => {
+                        vec![0x58 | reg.to_3_bits()]
+                    }
                     OperandKind::EffectiveAddress(_) => todo!(),
                     _ => panic!("invalid argument"),
                 }
@@ -1397,5 +1463,35 @@ impl From<&OperandKind> for MemoryLocation {
             OperandKind::EffectiveAddress(_) => todo!(),
             OperandKind::FnName(_) => todo!(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_encoding() {
+        {
+            let ins = Instruction {
+                kind: InstructionKind::Push,
+                operands: vec![Operand {
+                    kind: OperandKind::Register(Register::R15),
+                    size: Size::_16,
+                }],
+                origin: Origin::new_unknown(),
+            };
+            let encoded = ins.encode();
+            assert_eq!(&encoded, &[0x41, 0x57]);
+        }
+
+        //let pop = Instruction {
+        //    kind: InstructionKind::Pop,
+        //    operands: vec![Operand {
+        //        kind: OperandKind::Register(Register::Rbx),
+        //        size: Size::_16,
+        //    }],
+        //    origin: Origin::new_unknown(),
+        //};
     }
 }
