@@ -838,35 +838,6 @@ impl InstructionKind {
 }
 
 impl Instruction {
-    // > A REX prefix is necessary only if an instruction references
-    // > one of the extended registers or one of the byte registers SPL, BPL, SIL,
-    // DIL;
-    // > or uses a 64-bit operand.
-    fn is_rex_needed(operands: &[Operand]) -> bool {
-        for op in operands {
-            if let OperandKind::Register(reg) = op.kind
-                && reg.is_extended()
-            {
-                return true;
-            }
-
-            if let OperandKind::Register(reg) = op.kind
-                && op.size == Size::_8
-                && (reg == Register::Rsp
-                    || reg == Register::Rbp
-                    || reg == Register::Rsi
-                    || reg == Register::Rdi)
-            {
-                return true;
-            }
-
-            if op.size == Size::_64 {
-                return true;
-            }
-        }
-        false
-    }
-
     fn encode_rex<W: Write>(
         w: &mut W,
         is_64_bit_operand_size: bool,
@@ -897,6 +868,10 @@ impl Instruction {
             res |= 0b0000_0001;
         }
 
+        // > A REX prefix is necessary only if an instruction references
+        // > one of the extended registers or one of the byte registers SPL, BPL, SIL,
+        // DIL;
+        // > or uses a 64-bit operand.
         if res != default {
             w.write_all(&[res])?;
         }
