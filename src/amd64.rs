@@ -1183,7 +1183,21 @@ impl Instruction {
 
                         w.write_all(&[0x58 | reg.to_3_bits()])
                     }
-                    OperandKind::EffectiveAddress(_) => todo!(),
+                    OperandKind::EffectiveAddress(addr) => {
+                        assert_ne!(op.size, Size::_0);
+                        assert_ne!(op.size, Size::_8);
+
+                        Instruction::encode_rex(
+                            w,
+                            false, // `pop` is 64 bits only.
+                            false,
+                            addr.index.map(|x| x.is_extended()).unwrap_or_default(),
+                            addr.base.is_extended(),
+                        )?;
+                        let modrm = Instruction::encode_modrm(ModRmEncoding::Slash0, op);
+                        w.write_all(&[0x8f, modrm])?;
+                        Instruction::encode_sib(w, &addr, modrm)
+                    }
                     _ => panic!("invalid argument"),
                 }
             }
@@ -1749,6 +1763,24 @@ mod tests {
             let mut w = Vec::with_capacity(5);
             ins.encode(&mut w).unwrap();
             assert_eq!(&w, &[0x41, 0xff, 0x74, 0x9c, 0x01]);
+        }
+        {
+            let ins = Instruction {
+                kind: InstructionKind::Pop,
+                operands: vec![Operand {
+                    kind: OperandKind::EffectiveAddress(EffectiveAddress {
+                        base: Register::R12,
+                        index: Some(Register::Rbx),
+                        scale: Scale::_4,
+                        displacement: 1,
+                    }),
+                    size: Size::_64,
+                }],
+                origin: Origin::new_unknown(),
+            };
+            let mut w = Vec::with_capacity(5);
+            ins.encode(&mut w).unwrap();
+            assert_eq!(&w, &[0x41, 0x8f, 0x44, 0x9c, 0x01]);
         }
     }
 }
