@@ -831,68 +831,6 @@ impl InstructionKind {
             InstructionKind::Ret => "ret",
         }
     }
-
-    pub(crate) fn encode(&self, ins: &Instruction) -> Vec<u8> {
-        match self {
-            InstructionKind::Mov_R_RM => todo!(),
-            InstructionKind::Mov_R_Imm => todo!(),
-            InstructionKind::Mov_RM_R => todo!(),
-            InstructionKind::Mov_RM_Imm => todo!(),
-            InstructionKind::Add_R_RM => todo!(),
-            InstructionKind::Add_RM_Imm => todo!(),
-            InstructionKind::Add_RM_R => todo!(),
-            InstructionKind::IMul_R_RM => todo!(),
-            InstructionKind::IDiv => todo!(),
-            InstructionKind::Lea => todo!(),
-            InstructionKind::Call => {
-                let displacement: i32 = 0; // FIXME: resolve offset with linker.
-                let mut res = vec![0xe8]; // Call near.
-                res.extend(displacement.to_le_bytes());
-                res
-            }
-            InstructionKind::Push => {
-                assert_eq!(ins.operands.len(), 1);
-
-                let op = ins.operands.first().unwrap();
-                if op.size != Size::_64 {
-                    panic!("invalid size");
-                }
-                match op.kind {
-                    OperandKind::Register(reg) => {
-                        let res = Instruction::encode_rex(
-                            false,
-                            false,
-                            false,
-                            reg.is_extended(),
-                            &ins.operands,
-                        );
-                        dbg!(&res);
-                        let res = vec![0x50 | reg.to_3_bits()];
-                        res
-                    }
-                    OperandKind::Immediate(_) => todo!(),
-                    OperandKind::EffectiveAddress(_) => todo!(),
-                    _ => panic!("invalid argument"),
-                }
-            }
-            InstructionKind::Pop => {
-                assert_eq!(ins.operands.len(), 1);
-
-                let op = ins.operands.first().unwrap();
-                if op.size != Size::_64 {
-                    panic!("invalid size");
-                }
-                match op.kind {
-                    OperandKind::Register(reg) => {
-                        vec![0x58 | reg.to_3_bits()]
-                    }
-                    OperandKind::EffectiveAddress(_) => todo!(),
-                    _ => panic!("invalid argument"),
-                }
-            }
-            InstructionKind::Ret => vec![0xC3], // Near return.
-        }
-    }
 }
 
 impl Instruction {
@@ -997,18 +935,85 @@ impl Instruction {
         mod_ << 6 | reg << 3 | rm
     }
 
-    pub fn encode(&self) -> Vec<u8> {
-        let mut res = Vec::new();
-
+    pub(crate) fn encode<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
         if let Some(Operand {
             size: Size::_16, ..
         }) = self.operands.first()
         {
-            res.push(0x66) // 16 bits prefix.
+            w.write_all(&[0x66])?; // 16 bits prefix.
         }
 
-        res.extend(self.kind.encode(self));
-        res
+        match self.kind {
+            InstructionKind::Mov_R_RM => todo!(),
+            InstructionKind::Mov_R_Imm => todo!(),
+            InstructionKind::Mov_RM_R => todo!(),
+            InstructionKind::Mov_RM_Imm => todo!(),
+            InstructionKind::Add_R_RM => todo!(),
+            InstructionKind::Add_RM_Imm => todo!(),
+            InstructionKind::Add_RM_R => todo!(),
+            InstructionKind::IMul_R_RM => todo!(),
+            InstructionKind::IDiv => todo!(),
+            InstructionKind::Lea => todo!(),
+            InstructionKind::Call => {
+                let displacement: i32 = 0; // FIXME: resolve offset with linker.
+                w.write_all(&[0xe8])?; // Call near.
+                w.write_all(&displacement.to_le_bytes())
+            }
+            InstructionKind::Push => {
+                assert_eq!(self.operands.len(), 1);
+
+                let op = self.operands.first().unwrap();
+                if op.size != Size::_64 {
+                    panic!("invalid size");
+                }
+                match op.kind {
+                    OperandKind::Register(reg) => {
+                        if let Some(rex) = Instruction::encode_rex(
+                            false,
+                            false,
+                            false,
+                            reg.is_extended(),
+                            &self.operands,
+                        ) {
+                            w.write_all(&[rex])?;
+                        }
+
+                        w.write_all(&[0x50 | reg.to_3_bits()])
+                    }
+                    OperandKind::Immediate(_) => todo!(),
+                    OperandKind::EffectiveAddress(_) => todo!(),
+                    _ => panic!("invalid argument"),
+                }
+            }
+            InstructionKind::Pop => {
+                assert_eq!(self.operands.len(), 1);
+
+                let op = self.operands.first().unwrap();
+                if op.size != Size::_64 {
+                    panic!("invalid size");
+                }
+                match op.kind {
+                    OperandKind::Register(reg) => {
+                        if let Some(rex) = Instruction::encode_rex(
+                            false,
+                            false,
+                            false,
+                            reg.is_extended(),
+                            &self.operands,
+                        ) {
+                            w.write_all(&[rex])?;
+                        }
+
+                        w.write_all(&[0x58 | reg.to_3_bits()])
+                    }
+                    OperandKind::EffectiveAddress(_) => todo!(),
+                    _ => panic!("invalid argument"),
+                }
+            }
+            InstructionKind::Ret => {
+                w.write_all(&[0xC3]) // Near return.
+            }
+        }
     }
 }
 
@@ -1477,12 +1482,13 @@ mod tests {
                 kind: InstructionKind::Push,
                 operands: vec![Operand {
                     kind: OperandKind::Register(Register::R15),
-                    size: Size::_16,
+                    size: Size::_64,
                 }],
                 origin: Origin::new_unknown(),
             };
-            let encoded = ins.encode();
-            assert_eq!(&encoded, &[0x41, 0x57]);
+            let mut w = Vec::with_capacity(2);
+            ins.encode(&mut w).unwrap();
+            assert_eq!(&w, &[0x41, 0x57]);
         }
 
         //let pop = Instruction {
