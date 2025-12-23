@@ -86,9 +86,7 @@ enum ModRmEncoding {
 pub(crate) fn encode(instructions: &[asm::Instruction]) -> Vec<u8> {
     let mut res = Vec::with_capacity(instructions.len() * 5);
     for ins in instructions {
-        let ins: &Instruction = match ins {
-            asm::Instruction::Amd64(ins) => ins,
-        };
+        let asm::Instruction::Amd64(ins) = ins;
         ins.encode(&mut res).unwrap();
     }
 
@@ -1147,7 +1145,7 @@ impl Instruction {
             InstructionKind::Lea => {
                 assert_eq!(self.operands.len(), 2);
                 let lhs = self.operands.first().unwrap();
-                let rhs = self.operands.iter().nth(1).unwrap();
+                let rhs = self.operands.get(1).unwrap();
 
                 assert_ne!(lhs.size, Size::_8);
                 assert!(lhs.is_reg());
