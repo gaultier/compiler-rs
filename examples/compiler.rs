@@ -65,6 +65,7 @@ fn main() {
         print!("{}: ", i);
         ins.write(&mut stdout()).unwrap();
     }
+    println!("encoded: {:x?}", &compiled.asm_encoded);
 
     println!("eval: {:#?}", &compiled.asm_eval);
 

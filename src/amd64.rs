@@ -893,6 +893,7 @@ impl Instruction {
     }
 
     // Format: `mod (2 bits) | reg (3 bits) | rm (3bits)`.
+    // FIXME: Should accept: `encoding: ModRmEncoding, lhs: &Operand, rhs: &Operand`
     fn encode_modrm(encoding: ModRmEncoding, reg: Option<Register>, op_rm: &Operand) -> u8 {
         let reg: u8 = match encoding {
             ModRmEncoding::Slash0 => 0,
