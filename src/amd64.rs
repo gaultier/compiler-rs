@@ -34,10 +34,10 @@ pub enum OperandKind {
 }
 
 #[derive(Serialize, Debug)]
-pub(crate) struct Instruction {
-    pub(crate) kind: InstructionKind,
-    pub(crate) operands: Vec<Operand>,
-    pub(crate) origin: Origin,
+pub struct Instruction {
+    pub kind: InstructionKind,
+    pub operands: Vec<Operand>,
+    pub origin: Origin,
 }
 
 #[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
