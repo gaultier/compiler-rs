@@ -1,4 +1,8 @@
-use std::{collections::HashMap, io::Write, panic};
+use std::{
+    collections::HashMap,
+    io::{self, Write},
+    panic,
+};
 
 use log::trace;
 use serde::Serialize;
@@ -863,18 +867,15 @@ impl Instruction {
         false
     }
 
-    fn encode_rex(
+    fn encode_rex<W: Write>(
+        w: &mut W,
         is_64_bit_operand_size: bool,
         modrm_reg_extended: bool,
         sib_extended: bool,
         modrm_rm_or_sib_or_opcode_reg_extended: bool,
-        operands: &[Operand],
-    ) -> Option<u8> {
-        if !Self::is_rex_needed(operands) {
-            return None;
-        }
-
-        let mut res = 0b0100_0000;
+    ) -> std::io::Result<()> {
+        let default = 0b0100_0000;
+        let mut res = default;
 
         if is_64_bit_operand_size {
             // W
@@ -896,7 +897,10 @@ impl Instruction {
             res |= 0b0000_0001;
         }
 
-        Some(res)
+        if res != default {
+            w.write_all(&[res])?;
+        }
+        Ok(())
     }
 
     // Format: `mod (2 bits) | reg (3 bits) | rm (3bits)`.
@@ -968,16 +972,7 @@ impl Instruction {
                 }
                 match op.kind {
                     OperandKind::Register(reg) => {
-                        if let Some(rex) = Instruction::encode_rex(
-                            false,
-                            false,
-                            false,
-                            reg.is_extended(),
-                            &self.operands,
-                        ) {
-                            w.write_all(&[rex])?;
-                        }
-
+                        Instruction::encode_rex(w, false, false, false, reg.is_extended())?;
                         w.write_all(&[0x50 | reg.to_3_bits()])
                     }
                     OperandKind::Immediate(_) => todo!(),
@@ -994,15 +989,7 @@ impl Instruction {
                 }
                 match op.kind {
                     OperandKind::Register(reg) => {
-                        if let Some(rex) = Instruction::encode_rex(
-                            false,
-                            false,
-                            false,
-                            reg.is_extended(),
-                            &self.operands,
-                        ) {
-                            w.write_all(&[rex])?;
-                        }
+                        Instruction::encode_rex(w, false, false, false, reg.is_extended())?;
 
                         w.write_all(&[0x58 | reg.to_3_bits()])
                     }
@@ -1491,13 +1478,18 @@ mod tests {
             assert_eq!(&w, &[0x41, 0x57]);
         }
 
-        //let pop = Instruction {
-        //    kind: InstructionKind::Pop,
-        //    operands: vec![Operand {
-        //        kind: OperandKind::Register(Register::Rbx),
-        //        size: Size::_16,
-        //    }],
-        //    origin: Origin::new_unknown(),
-        //};
+        {
+            let ins = Instruction {
+                kind: InstructionKind::Pop,
+                operands: vec![Operand {
+                    kind: OperandKind::Register(Register::Rbx),
+                    size: Size::_64,
+                }],
+                origin: Origin::new_unknown(),
+            };
+            let mut w = Vec::with_capacity(2);
+            ins.encode(&mut w).unwrap();
+            assert_eq!(&w, &[0x5b]);
+        }
     }
 }
