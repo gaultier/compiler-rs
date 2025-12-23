@@ -1119,30 +1119,30 @@ impl Instruction {
                     }
 
                     // mov r, rm
-                    (OperandKind::Register(reg), _, Size::_8) if rhs.is_rm() => {
+                    (OperandKind::Register(reg), _, Size::_8) if lhs.is_rm() => {
                         Instruction::encode_rex(w, false, reg.is_extended(), false, false)?;
                         let modrm =
-                            Instruction::encode_modrm(ModRmEncoding::SlashR, Some(*reg), rhs);
+                            Instruction::encode_modrm(ModRmEncoding::SlashR, Some(*reg), lhs);
                         w.write_all(&[0x8A, modrm])?;
-                        if let Some(addr) = rhs.as_effective_address() {
+                        if let Some(addr) = lhs.as_effective_address() {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
-                    (_, OperandKind::Register(reg), Size::_16 | Size::_32) if lhs.is_rm() => {
+                    (OperandKind::Register(reg), _, Size::_16 | Size::_32) if lhs.is_rm() => {
                         Instruction::encode_rex(w, false, reg.is_extended(), false, false)?;
                         let modrm =
-                            Instruction::encode_modrm(ModRmEncoding::SlashR, Some(*reg), rhs);
+                            Instruction::encode_modrm(ModRmEncoding::SlashR, Some(*reg), lhs);
                         w.write_all(&[0x8B, modrm])?;
-                        if let Some(addr) = rhs.as_effective_address() {
+                        if let Some(addr) = lhs.as_effective_address() {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
-                    (_, OperandKind::Register(reg), Size::_64) if lhs.is_rm() => {
+                    (OperandKind::Register(reg), _, Size::_64) if lhs.is_rm() => {
                         Instruction::encode_rex(w, true, reg.is_extended(), false, false)?;
                         let modrm =
-                            Instruction::encode_modrm(ModRmEncoding::SlashR, Some(*reg), rhs);
+                            Instruction::encode_modrm(ModRmEncoding::SlashR, Some(*reg), lhs);
                         w.write_all(&[0x8B, modrm])?;
-                        if let Some(addr) = rhs.as_effective_address() {
+                        if let Some(addr) = lhs.as_effective_address() {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
