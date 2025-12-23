@@ -843,32 +843,30 @@ impl InstructionKind {
 }
 
 impl Instruction {
-    fn encode_rex<W: Write>(
-        w: &mut W,
-        is_64_bit_operand_size: bool,
-        modrm_reg_extended: bool,
-        sib_extended: bool,
-        modrm_rm_or_sib_or_opcode_reg_extended: bool,
-    ) -> std::io::Result<()> {
+    // w: register is extended (r8-r15) OR manipulates operand size
+    // r: modr/m reg field is extended
+    // x: the index field in SIB is extended
+    // b: modr/m r/m OR the base field in SIB OR the opcode reg field used for accessing GPRs is extended
+    fn encode_rex<W: Write>(wr: &mut W, w: bool, r: bool, x: bool, b: bool) -> std::io::Result<()> {
         let default = 0b0100_0000;
         let mut res = default;
 
-        if is_64_bit_operand_size {
+        if w {
             // W
             res |= 0b0000_1000;
         }
 
-        if modrm_reg_extended {
+        if r {
             // R
             res |= 0b0000_0100;
         }
 
-        if sib_extended {
+        if x {
             // X
             res |= 0b0000_0010;
         }
 
-        if modrm_rm_or_sib_or_opcode_reg_extended {
+        if b {
             // B
             res |= 0b0000_0001;
         }
@@ -878,7 +876,7 @@ impl Instruction {
         // DIL;
         // > or uses a 64-bit operand.
         if res != default {
-            w.write_all(&[res])?;
+            wr.write_all(&[res])?;
         }
         Ok(())
     }
@@ -902,14 +900,131 @@ impl Instruction {
             OperandKind::Register(reg) => (0b11, reg.to_3_bits()),
             OperandKind::Immediate(_) => (0b00, 0b101),
             OperandKind::EffectiveAddress(EffectiveAddress {
-                displacement: 0, ..
-            }) => todo!(),
+                base: Register::Rax,
+                index: None,
+                scale: Scale::_0,
+                displacement: 0,
+            }) => (0b00, 0b000),
             OperandKind::EffectiveAddress(EffectiveAddress {
-                displacement, base, ..
-            }) if displacement < u8::MAX as i32 => (0b01, base.to_3_bits()),
-            OperandKind::EffectiveAddress(EffectiveAddress { base, .. }) => {
-                (0b10, base.to_3_bits())
+                base: Register::Rcx,
+                index: None,
+                scale: Scale::_0,
+                displacement: 0,
+            }) => (0b00, 0b001),
+            OperandKind::EffectiveAddress(EffectiveAddress {
+                base: Register::Rdx,
+                index: None,
+                scale: Scale::_0,
+                displacement: 0,
+            }) => (0b00, 0b010),
+            OperandKind::EffectiveAddress(EffectiveAddress {
+                base: Register::Rbx,
+                index: None,
+                scale: Scale::_0,
+                displacement: 0,
+            }) => (0b00, 0b011),
+            OperandKind::EffectiveAddress(EffectiveAddress {
+                base: Register::Rsi,
+                index: None,
+                scale: Scale::_0,
+                displacement: 0,
+            }) => (0b00, 0b110),
+            OperandKind::EffectiveAddress(EffectiveAddress {
+                base: Register::Rdi,
+                index: None,
+                scale: Scale::_0,
+                displacement: 0,
+            }) => (0b00, 0b111),
+            // TODO: case for disp32
+            OperandKind::EffectiveAddress(EffectiveAddress {
+                base: Register::Rax,
+                index: None,
+                scale: Scale::_0,
+                displacement,
+            }) if displacement <= i8::MAX as i32 => (0b01, 0b000),
+            OperandKind::EffectiveAddress(EffectiveAddress {
+                base: Register::Rcx,
+                index: None,
+                scale: Scale::_0,
+                displacement,
+            }) if displacement <= i8::MAX as i32 => (0b01, 0b001),
+            OperandKind::EffectiveAddress(EffectiveAddress {
+                base: Register::Rdx,
+                index: None,
+                scale: Scale::_0,
+                displacement,
+            }) if displacement <= i8::MAX as i32 => (0b01, 0b010),
+            OperandKind::EffectiveAddress(EffectiveAddress {
+                base: Register::Rbx,
+                index: None,
+                scale: Scale::_0,
+                displacement,
+            }) if displacement <= i8::MAX as i32 => (0b01, 0b011),
+            OperandKind::EffectiveAddress(EffectiveAddress {
+                base: Register::Rbp,
+                index: None,
+                scale: Scale::_0,
+                displacement,
+            }) if displacement <= i8::MAX as i32 => (0b01, 0b101),
+            OperandKind::EffectiveAddress(EffectiveAddress {
+                base: Register::Rsi,
+                index: None,
+                scale: Scale::_0,
+                displacement,
+            }) if displacement <= i8::MAX as i32 => (0b01, 0b110),
+            OperandKind::EffectiveAddress(EffectiveAddress {
+                base: Register::Rax,
+                index: None,
+                scale: Scale::_0,
+                ..
+            }) => (0b10, 0b000),
+            OperandKind::EffectiveAddress(EffectiveAddress {
+                base: Register::Rcx,
+                index: None,
+                scale: Scale::_0,
+                ..
+            }) => (0b10, 0b001),
+            OperandKind::EffectiveAddress(EffectiveAddress {
+                base: Register::Rdx,
+                index: None,
+                scale: Scale::_0,
+                ..
+            }) => (0b10, 0b010),
+            OperandKind::EffectiveAddress(EffectiveAddress {
+                base: Register::Rbx,
+                index: None,
+                scale: Scale::_0,
+                ..
+            }) => (0b10, 0b011),
+            OperandKind::EffectiveAddress(EffectiveAddress {
+                base: Register::Rbp,
+                index: None,
+                scale: Scale::_0,
+                ..
+            }) => (0b10, 0b101),
+            OperandKind::EffectiveAddress(EffectiveAddress {
+                base: Register::Rsi,
+                index: None,
+                scale: Scale::_0,
+                ..
+            }) => (0b10, 0b110),
+            OperandKind::EffectiveAddress(EffectiveAddress {
+                base: Register::Rdi,
+                index: None,
+                scale: Scale::_0,
+                ..
+            }) => (0b10, 0b111),
+
+            OperandKind::EffectiveAddress(EffectiveAddress {
+                displacement: 0, ..
+            }) => (0b00, 0b100),
+            OperandKind::EffectiveAddress(EffectiveAddress { displacement, .. })
+                if displacement > 0 && displacement <= i8::MAX as i32 =>
+            {
+                (0b01, 0b100)
             }
+            OperandKind::EffectiveAddress(_) => (0b10, 0b100),
+
             OperandKind::FnName(_) => todo!(),
         };
 
@@ -921,23 +1036,22 @@ impl Instruction {
 
     // Encoding: `Scale(2 bits) | Index(3 bits) | Base (3bits)`.
     fn encode_sib<W: Write>(w: &mut W, addr: &EffectiveAddress, modrm: u8) -> std::io::Result<()> {
-        let scale = (addr.scale as u8) << 6;
-        let index = addr.index.map(|x| x.to_3_bits()).unwrap_or_default() << 3;
-
-        // > SIB byte required for ESP-based addressing.
-        // > SIB byte also required for R12-based addressing.
-        let base = match addr.base {
-            Register::R12 | Register::Rsp => addr.base.to_3_bits(),
-            _ => 0,
-        };
-        let sib = scale | index | base;
-
         let is_sib_required = match (modrm >> 6, modrm & 0b111) {
             (0b00, 0b100) | (0b01, 0b100) | (0b10, 0b100) => true,
             _ => false,
         };
 
         if is_sib_required {
+            let scale = (addr.scale as u8) << 6;
+            let index = addr.index.map(|x| x.to_3_bits()).unwrap_or_default() << 3;
+
+            // > SIB byte required for ESP-based addressing.
+            // > SIB byte also required for R12-based addressing.
+            let base = match addr.base {
+                Register::R12 | Register::Rsp => addr.base.to_3_bits(),
+                _ => 0,
+            };
+            let sib = scale | index | base;
             w.write_all(&[sib])?;
         }
 
@@ -980,8 +1094,15 @@ impl Instruction {
                 assert!(lhs.is_reg());
                 assert!(rhs.is_effective_adddress());
                 let reg = lhs.as_reg();
+                let addr = rhs.as_effective_address();
 
-                Instruction::encode_rex(w, reg.is_extended(), false, false, rhs.size == Size::_64)?;
+                Instruction::encode_rex(
+                    w,
+                    lhs.size == Size::_64,
+                    reg.is_extended(),
+                    addr.index.map(|x| x.is_extended()).unwrap_or_default(),
+                    addr.base.is_extended(),
+                )?;
 
                 let opcode = 0x8d;
                 w.write_all(&[opcode])?;
@@ -989,7 +1110,7 @@ impl Instruction {
                 let modrm = Instruction::encode_modrm(ModRmEncoding::SlashR, rhs, &reg);
                 w.write_all(&[modrm])?;
 
-                Instruction::encode_sib(w, &rhs.as_effective_address(), modrm)
+                Instruction::encode_sib(w, &addr, modrm)
             }
             InstructionKind::Call => {
                 let displacement: i32 = 0; // FIXME: resolve offset with linker.
