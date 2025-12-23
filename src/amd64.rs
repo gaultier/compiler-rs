@@ -158,10 +158,7 @@ pub(crate) fn abi() -> Abi {
 #[allow(non_camel_case_types)]
 #[repr(u16)]
 pub enum InstructionKind {
-    Mov_R_RM,
-    Mov_R_Imm,
-    Mov_RM_R,
-    Mov_RM_Imm,
+    Mov,
     Add,
     IMul,
     IDiv,
@@ -591,7 +588,7 @@ impl Emitter {
                 OperandKind::Register(src_reg),
             ) => {
                 self.asm.push(Instruction {
-                    kind: InstructionKind::Mov_R_RM,
+                    kind: InstructionKind::Mov,
                     operands: vec![
                         Operand {
                             size: *size,
@@ -610,7 +607,7 @@ impl Emitter {
                 OperandKind::Immediate(src_imm),
             ) => {
                 self.asm.push(Instruction {
-                    kind: InstructionKind::Mov_R_Imm,
+                    kind: InstructionKind::Mov,
                     operands: vec![
                         Operand {
                             size: *size,
@@ -626,7 +623,7 @@ impl Emitter {
             }
             (MemoryLocation::Stack(_), OperandKind::Register(src_reg)) => {
                 self.asm.push(Instruction {
-                    kind: InstructionKind::Mov_RM_R,
+                    kind: InstructionKind::Mov,
                     operands: vec![
                         Operand {
                             size: *size,
@@ -646,7 +643,7 @@ impl Emitter {
                 }
 
                 self.asm.push(Instruction {
-                    kind: InstructionKind::Mov_RM_Imm,
+                    kind: InstructionKind::Mov,
                     operands: vec![
                         Operand {
                             size: *size,
@@ -670,7 +667,7 @@ impl Emitter {
                 OperandKind::EffectiveAddress(_),
             ) => {
                 self.asm.push(Instruction {
-                    kind: InstructionKind::Mov_R_RM,
+                    kind: InstructionKind::Mov,
                     operands: vec![
                         Operand {
                             size: *size,
@@ -842,10 +839,7 @@ impl Register {
 impl InstructionKind {
     pub(crate) fn to_str(self) -> &'static str {
         match self {
-            InstructionKind::Mov_RM_R
-            | InstructionKind::Mov_R_RM
-            | InstructionKind::Mov_R_Imm
-            | InstructionKind::Mov_RM_Imm => "mov",
+            InstructionKind::Mov => "mov",
             InstructionKind::Add => "add",
             InstructionKind::IMul => "imul",
             InstructionKind::IDiv => "idiv",
@@ -1092,10 +1086,7 @@ impl Instruction {
         }
 
         match self.kind {
-            InstructionKind::Mov_R_RM => todo!(),
-            InstructionKind::Mov_R_Imm => todo!(),
-            InstructionKind::Mov_RM_R => todo!(),
-            InstructionKind::Mov_RM_Imm => todo!(),
+            InstructionKind::Mov => todo!(),
             InstructionKind::Add => todo!(),
             InstructionKind::IMul => todo!(),
             InstructionKind::IDiv => {
@@ -1359,10 +1350,7 @@ impl Interpreter {
             let asm::Instruction::Amd64(ins) = ins;
 
             match ins.kind {
-                InstructionKind::Mov_R_Imm
-                | InstructionKind::Mov_R_RM
-                | InstructionKind::Mov_RM_R
-                | InstructionKind::Mov_RM_Imm => {
+                InstructionKind::Mov => {
                     assert_eq!(ins.operands.len(), 2);
                     self.store(&ins.operands[0], &ins.operands[1]);
                 }
