@@ -83,6 +83,18 @@ enum ModRmEncoding {
     SlashR,
 }
 
+impl Scale {
+    fn to_2_bits(&self) -> u8 {
+        match self {
+            Scale::_0 => panic!("zero scale should never be encoded"),
+            Scale::_1 => 0b00,
+            Scale::_2 => 0b01,
+            Scale::_4 => 0b10,
+            Scale::_8 => 0b11,
+        }
+    }
+}
+
 impl From<&asm::Register> for Register {
     fn from(value: &asm::Register) -> Self {
         match value {
@@ -1036,21 +1048,19 @@ impl Instruction {
 
     // Encoding: `Scale(2 bits) | Index(3 bits) | Base (3bits)`.
     fn encode_sib<W: Write>(w: &mut W, addr: &EffectiveAddress, modrm: u8) -> std::io::Result<()> {
+        dbg!(addr);
         let is_sib_required = match (modrm >> 6, modrm & 0b111) {
             (0b00, 0b100) | (0b01, 0b100) | (0b10, 0b100) => true,
             _ => false,
         };
 
         if is_sib_required {
-            let scale = (addr.scale as u8) << 6;
+            assert_ne!(addr.scale, Scale::_0);
+
+            let scale = addr.scale.to_2_bits() << 6;
             let index = addr.index.map(|x| x.to_3_bits()).unwrap_or_default() << 3;
 
-            // > SIB byte required for ESP-based addressing.
-            // > SIB byte also required for R12-based addressing.
-            let base = match addr.base {
-                Register::R12 | Register::Rsp => addr.base.to_3_bits(),
-                _ => 0,
-            };
+            let base = addr.base.to_3_bits();
             let sib = scale | index | base;
             w.write_all(&[sib])?;
         }
