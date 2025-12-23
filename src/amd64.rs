@@ -96,8 +96,7 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> Vec<u8> {
 impl Scale {
     fn to_2_bits(&self) -> u8 {
         match self {
-            Scale::_0 => panic!("zero scale should never be encoded"),
-            Scale::_1 => 0b00,
+            Scale::_0 | Scale::_1 => 0b00,
             Scale::_2 => 0b01,
             Scale::_4 => 0b10,
             Scale::_8 => 0b11,
@@ -760,8 +759,8 @@ impl Register {
             Register::R13 => true,
             Register::R14 => true,
             Register::R15 => true,
-            Register::Rbp => true,
-            Register::Rsp => true,
+            Register::Rbp => false,
+            Register::Rsp => false,
         }
     }
 
@@ -1031,7 +1030,7 @@ impl Instruction {
                 displacement: 0, ..
             }) => (0b00, 0b100),
             OperandKind::EffectiveAddress(EffectiveAddress { displacement, .. })
-                if displacement > 0 && displacement <= i8::MAX as i32 =>
+                if displacement <= i8::MAX as i32 =>
             {
                 (0b01, 0b100)
             }
@@ -1055,8 +1054,6 @@ impl Instruction {
         );
 
         if is_sib_required {
-            assert_ne!(addr.scale, Scale::_0);
-
             let scale = addr.scale.to_2_bits() << 6;
             let index = addr.index.map(|x| x.to_3_bits()).unwrap_or_default() << 3;
 
@@ -1117,6 +1114,9 @@ impl Instruction {
                             Instruction::encode_modrm(ModRmEncoding::SlashR, Some(*reg), lhs);
                         w.write_all(&[0x89, modrm])?;
                         if let Some(addr) = lhs.as_effective_address() {
+                            dbg!(self);
+                            dbg!(addr);
+                            dbg!(modrm);
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
@@ -1925,6 +1925,25 @@ mod tests {
             let mut w = Vec::with_capacity(5);
             ins.encode(&mut w).unwrap();
             assert_eq!(&w, &[0x49, 0xf7, 0x7c, 0x9c, 0x01]);
+        }
+        {
+            let ins = Instruction {
+                kind: InstructionKind::Mov,
+                operands: vec![
+                    Operand {
+                        kind: OperandKind::Register(Register::Rbp),
+                        size: Size::_64,
+                    },
+                    Operand {
+                        kind: OperandKind::Register(Register::Rsp),
+                        size: Size::_64,
+                    },
+                ],
+                origin: Origin::new_unknown(),
+            };
+            let mut w = Vec::with_capacity(5);
+            ins.encode(&mut w).unwrap();
+            assert_eq!(&w, &[0x48, 0x89, 0xe5]);
         }
     }
 }
