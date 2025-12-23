@@ -80,7 +80,7 @@ enum ModRmEncoding {
     Slash5,
     Slash6,
     Slash7,
-    SlashR,
+    SlashR(Register),
 }
 
 impl Scale {
@@ -894,7 +894,7 @@ impl Instruction {
     }
 
     // Format: `mod (2 bits) | reg (3 bits) | rm (3bits)`.
-    fn encode_modrm(encoding: ModRmEncoding, op_rm: &Operand, op_reg: &Register) -> u8 {
+    fn encode_modrm(encoding: ModRmEncoding, op_rm: &Operand) -> u8 {
         let reg: u8 = match encoding {
             ModRmEncoding::Slash0 => 0,
             ModRmEncoding::Slash1 => 1,
@@ -904,7 +904,7 @@ impl Instruction {
             ModRmEncoding::Slash5 => 5,
             ModRmEncoding::Slash6 => 6,
             ModRmEncoding::Slash7 => 7,
-            ModRmEncoding::SlashR => op_reg.to_3_bits(),
+            ModRmEncoding::SlashR(reg) => reg.to_3_bits(),
         };
         assert!(reg <= 0b111); // Fits in 3 bits.
 
@@ -1117,7 +1117,7 @@ impl Instruction {
                 let opcode = 0x8d;
                 w.write_all(&[opcode])?;
 
-                let modrm = Instruction::encode_modrm(ModRmEncoding::SlashR, rhs, &reg);
+                let modrm = Instruction::encode_modrm(ModRmEncoding::SlashR(reg), rhs);
                 w.write_all(&[modrm])?;
 
                 Instruction::encode_sib(w, &addr, modrm)
@@ -1139,8 +1139,34 @@ impl Instruction {
                         Instruction::encode_rex(w, false, false, false, reg.is_extended())?;
                         w.write_all(&[0x50 | reg.to_3_bits()])
                     }
-                    OperandKind::Immediate(_) => todo!(),
-                    OperandKind::EffectiveAddress(_) => todo!(),
+                    OperandKind::Immediate(imm) => {
+                        if let Ok(imm) = i8::try_from(imm) {
+                            w.write_all(&[0x6A])?;
+                            w.write_all(&imm.to_le_bytes())?;
+                        } else if let Ok(imm) = i16::try_from(imm) {
+                            w.write_all(&[0x68])?;
+                            w.write_all(&imm.to_le_bytes())?;
+                        } else {
+                            w.write_all(&[0x68])?;
+                            w.write_all(&imm.to_le_bytes())?;
+                        }
+                        Ok(())
+                    }
+                    OperandKind::EffectiveAddress(addr) => {
+                        assert_ne!(op.size, Size::_0);
+                        assert_ne!(op.size, Size::_8);
+
+                        Instruction::encode_rex(
+                            w,
+                            false, // `push` is 64 bits only.
+                            false,
+                            addr.index.map(|x| x.is_extended()).unwrap_or_default(),
+                            addr.base.is_extended(),
+                        )?;
+                        let modrm = Instruction::encode_modrm(ModRmEncoding::Slash6, op);
+                        w.write_all(&[0xff, modrm])?;
+                        Instruction::encode_sib(w, &addr, modrm)
+                    }
                     _ => panic!("invalid argument"),
                 }
             }
@@ -1705,6 +1731,24 @@ mod tests {
             let mut w = Vec::with_capacity(5);
             ins.encode(&mut w).unwrap();
             assert_eq!(&w, &[0x4f, 0x8d, 0x44, 0xf5, 0x2a]);
+        }
+        {
+            let ins = Instruction {
+                kind: InstructionKind::Push,
+                operands: vec![Operand {
+                    kind: OperandKind::EffectiveAddress(EffectiveAddress {
+                        base: Register::R12,
+                        index: Some(Register::Rbx),
+                        scale: Scale::_4,
+                        displacement: 1,
+                    }),
+                    size: Size::_64,
+                }],
+                origin: Origin::new_unknown(),
+            };
+            let mut w = Vec::with_capacity(5);
+            ins.encode(&mut w).unwrap();
+            assert_eq!(&w, &[0x41, 0xff, 0x74, 0x9c, 0x01]);
         }
     }
 }
