@@ -1048,7 +1048,6 @@ impl Instruction {
 
     // Encoding: `Scale(2 bits) | Index(3 bits) | Base (3bits)`.
     fn encode_sib<W: Write>(w: &mut W, addr: &EffectiveAddress, modrm: u8) -> std::io::Result<()> {
-        dbg!(addr);
         let is_sib_required = matches!(
             (modrm >> 6, modrm & 0b111),
             (0b00, 0b100) | (0b01, 0b100) | (0b10, 0b100)
@@ -1093,7 +1092,7 @@ impl Instruction {
 
                 match (&lhs.kind, &rhs.kind, lhs.size) {
                     // mov rm, r
-                    (_, OperandKind::Register(reg), Size::_8) if lhs.is_effective_address() => {
+                    (_, OperandKind::Register(reg), Size::_8) if lhs.is_rm() => {
                         Instruction::encode_rex(w, false, reg.is_extended(), false, false)?;
                         let modrm = Instruction::encode_modrm(ModRmEncoding::SlashR(*reg), lhs);
                         w.write_all(&[0x88, modrm])?;
@@ -1101,9 +1100,7 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
-                    (_, OperandKind::Register(reg), Size::_16 | Size::_32)
-                        if lhs.is_effective_address() =>
-                    {
+                    (_, OperandKind::Register(reg), Size::_16 | Size::_32) if lhs.is_rm() => {
                         Instruction::encode_rex(w, false, reg.is_extended(), false, false)?;
                         let modrm = Instruction::encode_modrm(ModRmEncoding::SlashR(*reg), lhs);
                         w.write_all(&[0x89, modrm])?;
@@ -1111,7 +1108,7 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
-                    (_, OperandKind::Register(reg), Size::_64) if lhs.is_effective_address() => {
+                    (_, OperandKind::Register(reg), Size::_64) if lhs.is_rm() => {
                         Instruction::encode_rex(w, true, reg.is_extended(), false, false)?;
                         let modrm = Instruction::encode_modrm(ModRmEncoding::SlashR(*reg), lhs);
                         w.write_all(&[0x89, modrm])?;
@@ -1121,7 +1118,7 @@ impl Instruction {
                     }
 
                     // mov r, rm
-                    (OperandKind::Register(reg), _, Size::_8) if rhs.is_effective_address() => {
+                    (OperandKind::Register(reg), _, Size::_8) if rhs.is_rm() => {
                         Instruction::encode_rex(w, false, reg.is_extended(), false, false)?;
                         let modrm = Instruction::encode_modrm(ModRmEncoding::SlashR(*reg), rhs);
                         w.write_all(&[0x8A, modrm])?;
@@ -1129,9 +1126,7 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
-                    (_, OperandKind::Register(reg), Size::_16 | Size::_32)
-                        if lhs.is_effective_address() =>
-                    {
+                    (_, OperandKind::Register(reg), Size::_16 | Size::_32) if lhs.is_rm() => {
                         Instruction::encode_rex(w, false, reg.is_extended(), false, false)?;
                         let modrm = Instruction::encode_modrm(ModRmEncoding::SlashR(*reg), rhs);
                         w.write_all(&[0x8B, modrm])?;
@@ -1139,7 +1134,7 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
-                    (_, OperandKind::Register(reg), Size::_64) if lhs.is_effective_address() => {
+                    (_, OperandKind::Register(reg), Size::_64) if lhs.is_rm() => {
                         Instruction::encode_rex(w, true, reg.is_extended(), false, false)?;
                         let modrm = Instruction::encode_modrm(ModRmEncoding::SlashR(*reg), rhs);
                         w.write_all(&[0x8B, modrm])?;
@@ -1178,7 +1173,7 @@ impl Instruction {
                         w.write_all(&imm.to_le_bytes())?;
                     }
 
-                    _ => panic!("invalid operands"),
+                    x => unimplemented!("{:?}", x),
                 }
                 Ok(())
             }

@@ -250,7 +250,7 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
         str::from_utf8_unchecked(&asm_text)
     });
 
-    let asm_encoded = vec![]; //asm::encode(&asm_instructions, &target_arch);
+    let asm_encoded = asm::encode(&asm_instructions, &target_arch);
 
     let asm_eval = asm::eval(&asm_instructions);
     trace!("asm_eval: {:#?}", asm_eval);
