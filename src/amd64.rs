@@ -83,6 +83,18 @@ enum ModRmEncoding {
     SlashR(Register),
 }
 
+pub(crate) fn encode(instructions: &[asm::Instruction]) -> Vec<u8> {
+    let mut res = Vec::with_capacity(instructions.len() * 5);
+    for ins in instructions {
+        let ins: &Instruction = match ins {
+            asm::Instruction::Amd64(ins) => ins,
+        };
+        ins.encode(&mut res).unwrap();
+    }
+
+    res
+}
+
 impl Scale {
     fn to_2_bits(&self) -> u8 {
         match self {

@@ -61,6 +61,12 @@ pub(crate) fn abi(target_arch: &ArchKind) -> Abi {
     }
 }
 
+pub(crate) fn encode(instructions: &[Instruction], target_arch: &ArchKind) -> Vec<u8> {
+    match target_arch {
+        ArchKind::Amd64 => amd64::encode(instructions),
+    }
+}
+
 pub(crate) struct Stack {
     pub(crate) offset: isize,
 }
