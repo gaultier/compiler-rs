@@ -1096,16 +1096,26 @@ impl Instruction {
                 assert_ne!(lhs.size, Size::_8);
                 assert_eq!(lhs.size, rhs.size);
 
-                assert!(lhs.is_reg());
-                let reg = lhs.as_reg();
-
-                assert!(rhs.is_rm());
-
-                match lhs.size {
-                    Size::_16 => todo!(),
-                    Size::_32 => todo!(),
-                    Size::_64 => todo!(),
-                    _ => unreachable!(),
+                match (&lhs.kind, &rhs.kind, lhs.size) {
+                    (OperandKind::Register(reg), _, Size::_16)
+                    | (OperandKind::Register(reg), _, Size::_32)
+                        if rhs.is_rm() =>
+                    {
+                        w.write_all(&[
+                            0x0f,
+                            0xaf,
+                            Instruction::encode_modrm(ModRmEncoding::SlashR(*reg), rhs),
+                        ])
+                    }
+                    (OperandKind::Register(reg), _, Size::_64) if rhs.is_rm() => {
+                        Instruction::encode_rex(w, true, reg.is_extended(), false, false)?;
+                        w.write_all(&[
+                            0x0f,
+                            0xaf,
+                            Instruction::encode_modrm(ModRmEncoding::SlashR(*reg), rhs),
+                        ])
+                    }
+                    _ => panic!("invalid/unsupported operands"),
                 }
             }
             InstructionKind::IDiv => {
@@ -1115,47 +1125,47 @@ impl Instruction {
 
                 let modrm = Instruction::encode_modrm(ModRmEncoding::Slash7, op);
 
-                match op.size {
-                    Size::_0 => panic!("invalid zero size"),
-                    Size::_8 => {
-                        match op.kind {
-                            OperandKind::Register(reg) => {
-                                Instruction::encode_rex(w, false, false, false, reg.is_extended())
-                            }
-                            OperandKind::EffectiveAddress(addr) => Instruction::encode_rex(
-                                w,
-                                false,
-                                false,
-                                addr.index.map(|x| x.is_extended()).unwrap_or_default(),
-                                addr.base.is_extended(),
-                            ),
-                            _ => unreachable!(),
-                        }?;
+                match (&op.kind, op.size) {
+                    (OperandKind::Register(reg), Size::_8) => {
+                        Instruction::encode_rex(w, false, false, false, reg.is_extended())?;
                         w.write_all(&[0xf6])?;
+                        w.write_all(&[modrm])
                     }
-                    Size::_16 | Size::_32 => {
-                        w.write_all(&[0xf7])?;
-                    }
-                    Size::_64 => {
-                        match op.kind {
-                            OperandKind::Register(reg) => {
-                                Instruction::encode_rex(w, true, false, false, reg.is_extended())
-                            }
-                            OperandKind::EffectiveAddress(addr) => Instruction::encode_rex(
-                                w,
-                                true,
-                                false,
-                                addr.index.map(|x| x.is_extended()).unwrap_or_default(),
-                                addr.base.is_extended(),
-                            ),
-                            _ => unreachable!(),
-                        }?;
-                        w.write_all(&[0xf7])?;
-                    }
-                }
 
-                w.write_all(&[modrm])?;
-                Instruction::encode_sib(w, &addr, modrm)
+                    (OperandKind::EffectiveAddress(addr), Size::_8) => {
+                        Instruction::encode_rex(
+                            w,
+                            false,
+                            false,
+                            addr.index.map(|x| x.is_extended()).unwrap_or_default(),
+                            addr.base.is_extended(),
+                        )?;
+                        w.write_all(&[0xf6])?;
+                        w.write_all(&[modrm])?;
+                        Instruction::encode_sib(w, &addr, modrm)
+                    }
+                    (OperandKind::Register(_), Size::_16 | Size::_32) => {
+                        w.write_all(&[0xf7])?;
+                        w.write_all(&[modrm])
+                    }
+                    (OperandKind::Register(reg), Size::_64) => {
+                        Instruction::encode_rex(w, true, false, false, reg.is_extended())?;
+                        w.write_all(&[modrm])
+                    }
+                    (OperandKind::EffectiveAddress(addr), Size::_64) => {
+                        Instruction::encode_rex(
+                            w,
+                            true,
+                            false,
+                            addr.index.map(|x| x.is_extended()).unwrap_or_default(),
+                            addr.base.is_extended(),
+                        )?;
+                        w.write_all(&[0xf7])?;
+                        w.write_all(&[modrm])?;
+                        Instruction::encode_sib(w, &addr, modrm)
+                    }
+                    _ => panic!("invalid operands"),
+                }
             }
             InstructionKind::Lea => {
                 assert_eq!(self.operands.len(), 2);
@@ -1165,8 +1175,8 @@ impl Instruction {
                 assert_ne!(lhs.size, Size::_8);
                 assert!(lhs.is_reg());
                 assert!(rhs.is_effective_address());
-                let reg = lhs.as_reg();
-                let addr = rhs.as_effective_address();
+                let reg = lhs.as_reg().unwrap();
+                let addr = rhs.as_effective_address().unwrap();
 
                 Instruction::encode_rex(
                     w,
@@ -1598,24 +1608,24 @@ impl Operand {
         self.is_reg() || self.is_effective_address()
     }
 
-    pub(crate) fn as_reg(&self) -> Register {
+    pub(crate) fn as_reg(&self) -> Option<Register> {
         match self.kind {
-            OperandKind::Register(reg) => reg,
-            _ => panic!("not a register"),
+            OperandKind::Register(reg) => Some(reg),
+            _ => None,
         }
     }
 
-    pub(crate) fn as_imm(&self) -> i64 {
+    pub(crate) fn as_imm(&self) -> Option<i64> {
         match self.kind {
-            OperandKind::Immediate(imm) => imm,
-            _ => panic!("not an immediate"),
+            OperandKind::Immediate(imm) => Some(imm),
+            _ => None,
         }
     }
 
-    pub(crate) fn as_effective_address(&self) -> EffectiveAddress {
+    pub(crate) fn as_effective_address(&self) -> Option<EffectiveAddress> {
         match self.kind {
-            OperandKind::EffectiveAddress(addr) => addr,
-            _ => panic!("not an effective address"),
+            OperandKind::EffectiveAddress(addr) => Some(addr),
+            _ => None,
         }
     }
 }
