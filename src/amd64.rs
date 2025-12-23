@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    io::{self, Write},
-    panic,
-};
+use std::{collections::HashMap, io::Write, panic};
 
 use log::trace;
 use serde::Serialize;
