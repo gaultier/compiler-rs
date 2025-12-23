@@ -1059,10 +1059,10 @@ impl Instruction {
     // Encoding: `Scale(2 bits) | Index(3 bits) | Base (3bits)`.
     fn encode_sib<W: Write>(w: &mut W, addr: &EffectiveAddress, modrm: u8) -> std::io::Result<()> {
         dbg!(addr);
-        let is_sib_required = match (modrm >> 6, modrm & 0b111) {
-            (0b00, 0b100) | (0b01, 0b100) | (0b10, 0b100) => true,
-            _ => false,
-        };
+        let is_sib_required = matches!(
+            (modrm >> 6, modrm & 0b111),
+            (0b00, 0b100) | (0b01, 0b100) | (0b10, 0b100)
+        );
 
         if is_sib_required {
             assert_ne!(addr.scale, Scale::_0);
