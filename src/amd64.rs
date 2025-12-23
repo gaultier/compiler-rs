@@ -162,9 +162,7 @@ pub enum InstructionKind {
     Mov_R_Imm,
     Mov_RM_R,
     Mov_RM_Imm,
-    Add_R_RM,
-    Add_RM_Imm,
-    Add_RM_R,
+    Add,
     IMul,
     IDiv,
     Lea,
@@ -222,13 +220,13 @@ impl Emitter {
                 );
                 let (kind, rhs_loc) = match (dst_loc, rhs_loc) {
                     (MemoryLocation::Register(_), MemoryLocation::Register(_)) => {
-                        (InstructionKind::Add_RM_R, rhs_loc)
+                        (InstructionKind::Add, rhs_loc)
                     }
                     (MemoryLocation::Register(_), MemoryLocation::Stack(_)) => {
-                        (InstructionKind::Add_R_RM, rhs_loc)
+                        (InstructionKind::Add, rhs_loc)
                     }
                     (MemoryLocation::Stack(_), MemoryLocation::Register(_)) => {
-                        (InstructionKind::Add_RM_R, rhs_loc)
+                        (InstructionKind::Add, rhs_loc)
                     }
                     (MemoryLocation::Stack(_), MemoryLocation::Stack(_)) => {
                         self.emit_store(
@@ -238,7 +236,7 @@ impl Emitter {
                             &Origin::new_synth_codegen(),
                         );
                         (
-                            InstructionKind::Add_RM_R,
+                            InstructionKind::Add,
                             &MemoryLocation::Register(asm::Register::Amd64(Register::R11)),
                         )
                     }
@@ -518,7 +516,7 @@ impl Emitter {
 
         if stack_offset_frame != 0 {
             self.asm.push(Instruction {
-                kind: InstructionKind::Add_RM_Imm,
+                kind: InstructionKind::Add,
                 operands: vec![
                     Operand {
                         size: Size::_64,
@@ -540,7 +538,7 @@ impl Emitter {
         // Restore stack.
         if stack_offset_frame != 0 {
             self.asm.push(Instruction {
-                kind: InstructionKind::Add_RM_Imm,
+                kind: InstructionKind::Add,
                 operands: vec![
                     Operand {
                         size: Size::_64,
@@ -848,9 +846,7 @@ impl InstructionKind {
             | InstructionKind::Mov_R_RM
             | InstructionKind::Mov_R_Imm
             | InstructionKind::Mov_RM_Imm => "mov",
-            InstructionKind::Add_R_RM | InstructionKind::Add_RM_Imm | InstructionKind::Add_RM_R => {
-                "add"
-            }
+            InstructionKind::Add => "add",
             InstructionKind::IMul => "imul",
             InstructionKind::IDiv => "idiv",
             InstructionKind::Lea => "lea",
@@ -1100,9 +1096,7 @@ impl Instruction {
             InstructionKind::Mov_R_Imm => todo!(),
             InstructionKind::Mov_RM_R => todo!(),
             InstructionKind::Mov_RM_Imm => todo!(),
-            InstructionKind::Add_R_RM => todo!(),
-            InstructionKind::Add_RM_Imm => todo!(),
-            InstructionKind::Add_RM_R => todo!(),
+            InstructionKind::Add => todo!(),
             InstructionKind::IMul => todo!(),
             InstructionKind::IDiv => {
                 assert_eq!(self.operands.len(), 1);
@@ -1372,15 +1366,14 @@ impl Interpreter {
                     assert_eq!(ins.operands.len(), 2);
                     self.store(&ins.operands[0], &ins.operands[1]);
                 }
-                InstructionKind::Add_R_RM => {
+                InstructionKind::Add => {
                     assert_eq!(ins.operands.len(), 2);
                     let size = ins.operands[0].size;
                     assert_eq!(size, ins.operands[1].size);
 
-                    assert!(ins.operands[0].is_reg());
+                    assert!(ins.operands[0].is_rm());
                     let dst: MemoryLocation = (&ins.operands[0].kind).into();
 
-                    assert!(ins.operands[1].is_rm());
                     let src: MemoryLocation = (&ins.operands[1].kind).into();
 
                     let op_value = self
@@ -1393,52 +1386,6 @@ impl Interpreter {
                         .entry(dst)
                         .and_modify(|e| {
                             *e = EvalValue::new_int(op_value.as_num() + e.as_num());
-                        })
-                        .or_insert(EvalValue::new_int(0));
-                }
-                InstructionKind::Add_RM_R => {
-                    assert_eq!(ins.operands.len(), 2);
-                    let size = ins.operands[0].size;
-                    assert_eq!(size, ins.operands[1].size);
-
-                    assert!(ins.operands[0].is_rm());
-                    let dst: MemoryLocation = (&ins.operands[0].kind).into();
-
-                    assert!(ins.operands[1].is_reg());
-                    let src: MemoryLocation = (&ins.operands[1].kind).into();
-
-                    let op_value = self
-                        .state
-                        .get(&src)
-                        .unwrap_or(&EvalValue::new_int(0))
-                        .clone();
-
-                    self.state
-                        .entry(dst)
-                        .and_modify(|e| {
-                            *e = EvalValue::new_int(op_value.as_num() + e.as_num());
-                        })
-                        .or_insert(EvalValue::new_int(0));
-                }
-                InstructionKind::Add_RM_Imm => {
-                    assert_eq!(ins.operands.len(), 2);
-                    let size = ins.operands[0].size;
-                    assert_eq!(size, ins.operands[1].size);
-
-                    assert!(ins.operands[0].is_rm());
-                    let dst: MemoryLocation = (&ins.operands[0].kind).into();
-
-                    assert!(ins.operands[1].is_imm());
-                    if !ins.operands[1].is_imm32() {
-                        todo!();
-                    }
-                    let src = ins.operands[1].as_imm();
-                    assert!(src <= i32::MAX as i64);
-
-                    self.state
-                        .entry(dst)
-                        .and_modify(|e| {
-                            *e = EvalValue::new_int(src + e.as_num());
                         })
                         .or_insert(EvalValue::new_int(0));
                 }
