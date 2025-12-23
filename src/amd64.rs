@@ -1106,7 +1106,44 @@ impl Instruction {
             InstructionKind::Add_RM_Imm => todo!(),
             InstructionKind::Add_RM_R => todo!(),
             InstructionKind::IMul_R_RM => todo!(),
-            InstructionKind::IDiv => todo!(),
+            InstructionKind::IDiv => {
+                assert_eq!(self.operands.len(), 1);
+                let op = self.operands.first().unwrap();
+                assert!(op.is_effective_address());
+                let addr = op.as_effective_address();
+
+                let modrm = Instruction::encode_modrm(ModRmEncoding::Slash7, op);
+
+                match op.size {
+                    Size::_0 => panic!("invalid zero size"),
+                    Size::_8 => {
+                        Instruction::encode_rex(
+                            w,
+                            false,
+                            false,
+                            addr.index.map(|x| x.is_extended()).unwrap_or_default(),
+                            addr.base.is_extended(),
+                        )?;
+                        w.write_all(&[0xf6])?;
+                    }
+                    Size::_16 | Size::_32 => {
+                        w.write_all(&[0xf7])?;
+                    }
+                    Size::_64 => {
+                        Instruction::encode_rex(
+                            w,
+                            true,
+                            false,
+                            addr.index.map(|x| x.is_extended()).unwrap_or_default(),
+                            addr.base.is_extended(),
+                        )?;
+                        w.write_all(&[0xf7])?;
+                    }
+                }
+
+                w.write_all(&[modrm])?;
+                Instruction::encode_sib(w, &addr, modrm)
+            }
             InstructionKind::Lea => {
                 assert_eq!(self.operands.len(), 2);
                 let lhs = self.operands.first().unwrap();
@@ -1114,7 +1151,7 @@ impl Instruction {
 
                 assert_ne!(lhs.size, Size::_8);
                 assert!(lhs.is_reg());
-                assert!(rhs.is_effective_adddress());
+                assert!(rhs.is_effective_address());
                 let reg = lhs.as_reg();
                 let addr = rhs.as_effective_address();
 
@@ -1590,12 +1627,12 @@ impl Operand {
         matches!(self.kind, OperandKind::Immediate(imm) if imm <= i32::MAX as i64)
     }
 
-    pub(crate) fn is_effective_adddress(&self) -> bool {
+    pub(crate) fn is_effective_address(&self) -> bool {
         matches!(self.kind, OperandKind::EffectiveAddress(_))
     }
 
     pub(crate) fn is_rm(&self) -> bool {
-        self.is_reg() || self.is_effective_adddress()
+        self.is_reg() || self.is_effective_address()
     }
 
     pub(crate) fn as_reg(&self) -> Register {
@@ -1793,6 +1830,24 @@ mod tests {
             let mut w = Vec::with_capacity(5);
             ins.encode(&mut w).unwrap();
             assert_eq!(&w, &[0x41, 0x8f, 0x44, 0x9c, 0x01]);
+        }
+        {
+            let ins = Instruction {
+                kind: InstructionKind::IDiv,
+                operands: vec![Operand {
+                    kind: OperandKind::EffectiveAddress(EffectiveAddress {
+                        base: Register::R12,
+                        index: Some(Register::Rbx),
+                        scale: Scale::_4,
+                        displacement: 1,
+                    }),
+                    size: Size::_64,
+                }],
+                origin: Origin::new_unknown(),
+            };
+            let mut w = Vec::with_capacity(5);
+            ins.encode(&mut w).unwrap();
+            assert_eq!(&w, &[0x49, 0xf7, 0x7c, 0x9c, 0x01]);
         }
     }
 }
