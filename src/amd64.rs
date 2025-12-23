@@ -1238,7 +1238,7 @@ impl Instruction {
                         )?;
                         w.write_all(&[0xf6])?;
                         w.write_all(&[modrm])?;
-                        Instruction::encode_sib(w, &addr, modrm)
+                        Instruction::encode_sib(w, addr, modrm)
                     }
                     (OperandKind::Register(_), Size::_16 | Size::_32) => {
                         w.write_all(&[0xf7])?;
@@ -1258,7 +1258,7 @@ impl Instruction {
                         )?;
                         w.write_all(&[0xf7])?;
                         w.write_all(&[modrm])?;
-                        Instruction::encode_sib(w, &addr, modrm)
+                        Instruction::encode_sib(w, addr, modrm)
                     }
                     _ => panic!("invalid operands"),
                 }
