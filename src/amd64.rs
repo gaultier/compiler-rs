@@ -1088,38 +1088,68 @@ impl Instruction {
         match self.kind {
             InstructionKind::Mov => todo!(),
             InstructionKind::Add => todo!(),
-            InstructionKind::IMul => todo!(),
+            InstructionKind::IMul => {
+                assert_eq!(self.operands.len(), 2);
+                let lhs = &self.operands[0];
+                let rhs = &self.operands[1];
+                assert_ne!(lhs.size, Size::_0);
+                assert_ne!(lhs.size, Size::_8);
+                assert_eq!(lhs.size, rhs.size);
+
+                assert!(lhs.is_reg());
+                let reg = lhs.as_reg();
+
+                assert!(rhs.is_rm());
+
+                match lhs.size {
+                    Size::_16 => todo!(),
+                    Size::_32 => todo!(),
+                    Size::_64 => todo!(),
+                    _ => unreachable!(),
+                }
+            }
             InstructionKind::IDiv => {
                 assert_eq!(self.operands.len(), 1);
                 let op = self.operands.first().unwrap();
-                assert!(op.is_effective_address());
-                let addr = op.as_effective_address();
+                assert!(op.is_rm());
 
                 let modrm = Instruction::encode_modrm(ModRmEncoding::Slash7, op);
 
                 match op.size {
                     Size::_0 => panic!("invalid zero size"),
                     Size::_8 => {
-                        Instruction::encode_rex(
-                            w,
-                            false,
-                            false,
-                            addr.index.map(|x| x.is_extended()).unwrap_or_default(),
-                            addr.base.is_extended(),
-                        )?;
+                        match op.kind {
+                            OperandKind::Register(reg) => {
+                                Instruction::encode_rex(w, false, false, false, reg.is_extended())
+                            }
+                            OperandKind::EffectiveAddress(addr) => Instruction::encode_rex(
+                                w,
+                                false,
+                                false,
+                                addr.index.map(|x| x.is_extended()).unwrap_or_default(),
+                                addr.base.is_extended(),
+                            ),
+                            _ => unreachable!(),
+                        }?;
                         w.write_all(&[0xf6])?;
                     }
                     Size::_16 | Size::_32 => {
                         w.write_all(&[0xf7])?;
                     }
                     Size::_64 => {
-                        Instruction::encode_rex(
-                            w,
-                            true,
-                            false,
-                            addr.index.map(|x| x.is_extended()).unwrap_or_default(),
-                            addr.base.is_extended(),
-                        )?;
+                        match op.kind {
+                            OperandKind::Register(reg) => {
+                                Instruction::encode_rex(w, true, false, false, reg.is_extended())
+                            }
+                            OperandKind::EffectiveAddress(addr) => Instruction::encode_rex(
+                                w,
+                                true,
+                                false,
+                                addr.index.map(|x| x.is_extended()).unwrap_or_default(),
+                                addr.base.is_extended(),
+                            ),
+                            _ => unreachable!(),
+                        }?;
                         w.write_all(&[0xf7])?;
                     }
                 }
