@@ -17,11 +17,20 @@ pub struct Operand {
     pub kind: OperandKind,
 }
 
+#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Scale {
+    _0 = 0,
+    _1 = 1,
+    _2 = 2,
+    _4 = 4,
+    _8 = 8,
+}
+
 #[derive(Serialize, Debug, Clone, Copy)]
 pub struct EffectiveAddress {
     base: Register,
     index: Option<Register>,
-    scale: u8,
+    scale: Scale,
     displacement: i32,
 }
 
@@ -624,7 +633,7 @@ impl Emitter {
                             kind: OperandKind::EffectiveAddress(EffectiveAddress {
                                 base: Register::Rsp,
                                 index: None,
-                                scale: 0,
+                                scale: Scale::_0,
                                 displacement: (*off).try_into().unwrap(),
                             }),
                         },
@@ -660,7 +669,7 @@ impl Emitter {
                 OperandKind::EffectiveAddress(EffectiveAddress {
                     base: Register::Rsp,
                     index: None,
-                    scale: 0,
+                    scale: Scale::_0,
                     displacement,
                 }),
             ) if *dst == (*displacement as isize) => {
@@ -875,7 +884,7 @@ impl Instruction {
     }
 
     // Format: `mod (2 bits) | reg (3 bits) | rm (3bits)`.
-    fn encode_modrm(encoding: ModRmEncoding, op_rm: &Operand, op_reg: &Operand) -> u8 {
+    fn encode_modrm(encoding: ModRmEncoding, op_rm: &Operand, op_reg: &Register) -> u8 {
         let reg: u8 = match encoding {
             ModRmEncoding::Slash0 => 0,
             ModRmEncoding::Slash1 => 1,
@@ -885,22 +894,22 @@ impl Instruction {
             ModRmEncoding::Slash5 => 5,
             ModRmEncoding::Slash6 => 6,
             ModRmEncoding::Slash7 => 7,
-            ModRmEncoding::SlashR => todo!(),
+            ModRmEncoding::SlashR => op_reg.to_3_bits(),
         };
         assert!(reg <= 0b111); // Fits in 3 bits.
 
         let (mod_, rm): (u8, u8) = match op_rm.kind {
-            OperandKind::Register(_) => (0b11, todo!()),
-            OperandKind::Immediate(imm) => (0b00, 0b101),
+            OperandKind::Register(reg) => (0b11, reg.to_3_bits()),
+            OperandKind::Immediate(_) => (0b00, 0b101),
             OperandKind::EffectiveAddress(EffectiveAddress {
                 displacement: 0, ..
             }) => todo!(),
-            OperandKind::EffectiveAddress(EffectiveAddress { displacement, .. })
-                if displacement < u8::MAX as i32 =>
-            {
-                todo!()
+            OperandKind::EffectiveAddress(EffectiveAddress {
+                displacement, base, ..
+            }) if displacement < u8::MAX as i32 => (0b01, base.to_3_bits()),
+            OperandKind::EffectiveAddress(EffectiveAddress { base, .. }) => {
+                (0b10, base.to_3_bits())
             }
-            OperandKind::EffectiveAddress(EffectiveAddress { displacement, .. }) => (0b10, todo!()),
             OperandKind::FnName(_) => todo!(),
         };
 
@@ -908,6 +917,40 @@ impl Instruction {
         assert!(rm <= 0b111); // Fits in 3 bits.
 
         mod_ << 6 | reg << 3 | rm
+    }
+
+    // Encoding: `Scale(2 bits) | Index(3 bits) | Base (3bits)`.
+    fn encode_sib<W: Write>(w: &mut W, addr: &EffectiveAddress, modrm: u8) -> std::io::Result<()> {
+        let scale = (addr.scale as u8) << 6;
+        let index = addr.index.map(|x| x.to_3_bits()).unwrap_or_default() << 3;
+
+        // > SIB byte required for ESP-based addressing.
+        // > SIB byte also required for R12-based addressing.
+        let base = match addr.base {
+            Register::R12 | Register::Rsp => addr.base.to_3_bits(),
+            _ => 0,
+        };
+        let sib = scale | index | base;
+
+        let is_sib_required = match (modrm >> 6, modrm & 0b111) {
+            (0b00, 0b100) | (0b01, 0b100) | (0b10, 0b100) => true,
+            _ => false,
+        };
+
+        if is_sib_required {
+            w.write_all(&[sib])?;
+        }
+
+        // Displacement.
+        if addr.displacement > 0 || addr.can_base_be_mistaken_for_rel_addressing() {
+            if let Ok(disp) = u8::try_from(addr.displacement) {
+                w.write_all(&[disp])?;
+            } else {
+                w.write_all(&addr.displacement.to_le_bytes())?;
+            }
+        }
+
+        Ok(())
     }
 
     pub(crate) fn encode<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
@@ -928,7 +971,26 @@ impl Instruction {
             InstructionKind::Add_RM_R => todo!(),
             InstructionKind::IMul_R_RM => todo!(),
             InstructionKind::IDiv => todo!(),
-            InstructionKind::Lea => todo!(),
+            InstructionKind::Lea => {
+                assert_eq!(self.operands.len(), 2);
+                let lhs = self.operands.first().unwrap();
+                let rhs = self.operands.iter().nth(1).unwrap();
+
+                assert_ne!(lhs.size, Size::_8);
+                assert!(lhs.is_reg());
+                assert!(rhs.is_effective_adddress());
+                let reg = lhs.as_reg();
+
+                Instruction::encode_rex(w, reg.is_extended(), false, false, rhs.size == Size::_64)?;
+
+                let opcode = 0x8d;
+                w.write_all(&[opcode])?;
+
+                let modrm = Instruction::encode_modrm(ModRmEncoding::SlashR, rhs, &reg);
+                w.write_all(&[modrm])?;
+
+                Instruction::encode_sib(w, &lhs.as_effective_address(), modrm)
+            }
             InstructionKind::Call => {
                 let displacement: i32 = 0; // FIXME: resolve offset with linker.
                 w.write_all(&[0xe8])?; // Call near.
@@ -1322,8 +1384,8 @@ impl Operand {
                 if let Some(index) = index {
                     write!(w, "  + {}", index.to_str(&self.size))?;
                 }
-                if *scale > 0 {
-                    write!(w, "  * {}", scale)?;
+                if *scale != Scale::_0 {
+                    write!(w, "  * {}", *scale as u8)?;
                 }
                 if *displacement > 0 {
                     write!(w, " {:+}", displacement)?;
@@ -1366,6 +1428,29 @@ impl Operand {
             _ => panic!("not an immediate"),
         }
     }
+
+    pub(crate) fn as_effective_address(&self) -> EffectiveAddress {
+        match self.kind {
+            OperandKind::EffectiveAddress(addr) => addr,
+            _ => panic!("not an effective address"),
+        }
+    }
+}
+
+impl EffectiveAddress {
+    // Avoid accidentally using RIP-relative addressing:
+    // > The ModR/M encoding for RIP-relative addressing does not depend on
+    // > using a prefix. Specifically, the r/m bit field encoding of 101B (used
+    // > to select RIP-relative addressing) is not affected by the REX prefix.
+    // > For example, selecting
+    // > R13 (REX.B = 1, r/m = 101B) with mod = 00B still results in
+    // > RIP-relative addressing. The 4-bit r/m field of REX.B combined with
+    // > ModR/M is not fully decoded. In order to address R13 with no
+    // > displacement, software must encode R13 + 0 using a 1-byte displacement
+    // > of zero.
+    fn can_base_be_mistaken_for_rel_addressing(&self) -> bool {
+        self.base == Register::R13 || self.base == Register::Rbp
+    }
 }
 
 impl Instruction {
@@ -1395,7 +1480,7 @@ impl From<&MemoryLocation> for OperandKind {
             MemoryLocation::Stack(off) => OperandKind::EffectiveAddress(EffectiveAddress {
                 base: Register::Rsp,
                 index: None,
-                scale: 0,
+                scale: Scale::_0,
                 displacement: (*off).try_into().unwrap(), // TODO: handle gracefully,
             }),
         }
