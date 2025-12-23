@@ -165,7 +165,7 @@ pub enum InstructionKind {
     Add_R_RM,
     Add_RM_Imm,
     Add_RM_R,
-    IMul_R_RM,
+    IMul,
     IDiv,
     Lea,
     Call,
@@ -274,7 +274,7 @@ impl Emitter {
                     &ins.origin,
                 );
                 self.asm.push(Instruction {
-                    kind: InstructionKind::IMul_R_RM,
+                    kind: InstructionKind::IMul,
                     operands: vec![
                         Operand::from_memory_location(
                             &Size::_64,
@@ -851,7 +851,7 @@ impl InstructionKind {
             InstructionKind::Add_R_RM | InstructionKind::Add_RM_Imm | InstructionKind::Add_RM_R => {
                 "add"
             }
-            InstructionKind::IMul_R_RM => "imul",
+            InstructionKind::IMul => "imul",
             InstructionKind::IDiv => "idiv",
             InstructionKind::Lea => "lea",
             InstructionKind::Push => "push",
@@ -1103,7 +1103,7 @@ impl Instruction {
             InstructionKind::Add_R_RM => todo!(),
             InstructionKind::Add_RM_Imm => todo!(),
             InstructionKind::Add_RM_R => todo!(),
-            InstructionKind::IMul_R_RM => todo!(),
+            InstructionKind::IMul => todo!(),
             InstructionKind::IDiv => {
                 assert_eq!(self.operands.len(), 1);
                 let op = self.operands.first().unwrap();
@@ -1442,7 +1442,7 @@ impl Interpreter {
                         })
                         .or_insert(EvalValue::new_int(0));
                 }
-                InstructionKind::IMul_R_RM => {
+                InstructionKind::IMul => {
                     assert_eq!(ins.operands.len(), 2);
                     let size = ins.operands[0].size;
                     assert_eq!(size, ins.operands[1].size);
