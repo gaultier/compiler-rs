@@ -1114,9 +1114,6 @@ impl Instruction {
                             Instruction::encode_modrm(ModRmEncoding::SlashR, Some(*reg), lhs);
                         w.write_all(&[0x89, modrm])?;
                         if let Some(addr) = lhs.as_effective_address() {
-                            dbg!(self);
-                            dbg!(addr);
-                            dbg!(modrm);
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
