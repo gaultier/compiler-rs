@@ -989,7 +989,7 @@ impl Instruction {
                 let modrm = Instruction::encode_modrm(ModRmEncoding::SlashR, rhs, &reg);
                 w.write_all(&[modrm])?;
 
-                Instruction::encode_sib(w, &lhs.as_effective_address(), modrm)
+                Instruction::encode_sib(w, &rhs.as_effective_address(), modrm)
             }
             InstructionKind::Call => {
                 let displacement: i32 = 0; // FIXME: resolve offset with linker.
@@ -1549,6 +1549,31 @@ mod tests {
             let mut w = Vec::with_capacity(2);
             ins.encode(&mut w).unwrap();
             assert_eq!(&w, &[0x5b]);
+        }
+
+        {
+            let ins = Instruction {
+                kind: InstructionKind::Lea,
+                operands: vec![
+                    Operand {
+                        kind: OperandKind::Register(Register::R8),
+                        size: Size::_64,
+                    },
+                    Operand {
+                        kind: OperandKind::EffectiveAddress(EffectiveAddress {
+                            base: Register::R13,
+                            index: Some(Register::R14),
+                            scale: Scale::_8,
+                            displacement: 42,
+                        }),
+                        size: Size::_64,
+                    },
+                ],
+                origin: Origin::new_unknown(),
+            };
+            let mut w = Vec::with_capacity(5);
+            ins.encode(&mut w).unwrap();
+            assert_eq!(&w, &[0x4f, 0x8d, 0x44, 0xf5, 0x2a]);
         }
     }
 }
