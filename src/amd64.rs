@@ -720,29 +720,6 @@ impl Register {
         res
     }
 
-    fn to_4_bits(&self) -> u8 {
-        let res = match self {
-            Register::Rax => 0b0000,
-            Register::Rbx => 0b0011,
-            Register::Rcx => 0b0001,
-            Register::Rdx => 0b0010,
-            Register::Rdi => 0b0111,
-            Register::Rsi => 0b0110,
-            Register::R8 => 0b1000,
-            Register::R9 => 0b1001,
-            Register::R10 => 0b1010,
-            Register::R11 => 0b1011,
-            Register::R12 => 0b1100,
-            Register::R13 => 0b1101,
-            Register::R14 => 0b1110,
-            Register::R15 => 0b1111,
-            Register::Rbp => 0b0101,
-            Register::Rsp => 0b0100,
-        };
-        assert!(res <= 0b1111);
-        res
-    }
-
     pub fn is_extended(&self) -> bool {
         match self {
             Register::Rax => false,
@@ -1774,14 +1751,6 @@ impl Operand {
         matches!(self.kind, OperandKind::Register(_))
     }
 
-    pub(crate) fn is_imm(&self) -> bool {
-        matches!(self.kind, OperandKind::Immediate(_))
-    }
-
-    pub(crate) fn is_imm32(&self) -> bool {
-        matches!(self.kind, OperandKind::Immediate(imm) if imm <= i32::MAX as i64)
-    }
-
     pub(crate) fn is_effective_address(&self) -> bool {
         matches!(self.kind, OperandKind::EffectiveAddress(_))
     }
@@ -1793,13 +1762,6 @@ impl Operand {
     pub(crate) fn as_reg(&self) -> Option<Register> {
         match self.kind {
             OperandKind::Register(reg) => Some(reg),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn as_imm(&self) -> Option<i64> {
-        match self.kind {
-            OperandKind::Immediate(imm) => Some(imm),
             _ => None,
         }
     }
