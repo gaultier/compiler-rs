@@ -1906,6 +1906,11 @@ impl From<&OperandKind> for MemoryLocation {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        io::{Read, Stdin},
+        process::{ChildStdin, Stdio},
+    };
+
     use super::*;
 
     #[test]
@@ -2034,6 +2039,46 @@ mod tests {
             let mut w = Vec::with_capacity(5);
             ins.encode(&mut w).unwrap();
             assert_eq!(&w, &[0x48, 0x89, 0xe5]);
+        }
+    }
+
+    fn oracle_encode(ins: &Instruction) -> std::io::Result<Vec<u8>> {
+        let mut child = std::process::Command::new("llvm-mc")
+            .args(&["-triple=x86_64", "--x86-asm-syntax=intel", "--filetype=obj"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()?;
+
+        {
+            let mut stdin = child.stdin.take().unwrap();
+            ins.write(&mut stdin)?;
+        }
+        let output = child.wait_with_output()?;
+
+        Ok(output.stdout)
+    }
+
+    #[test]
+    fn test_encode_oracle() {
+        let ins = Instruction {
+            kind: InstructionKind::Mov,
+            operands: vec![
+                Operand {
+                    kind: OperandKind::Register(Register::Rbp),
+                    size: Size::_64,
+                },
+                Operand {
+                    kind: OperandKind::Register(Register::Rsp),
+                    size: Size::_64,
+                },
+            ],
+            origin: Origin::new_unknown(),
+        };
+        let mut actual = Vec::with_capacity(5);
+        ins.encode(&mut actual).unwrap();
+
+        if let Ok(expected) = oracle_encode(&ins) {
+            assert_eq!(actual, expected);
         }
     }
 }
