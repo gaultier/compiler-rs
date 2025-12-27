@@ -1196,11 +1196,7 @@ impl Instruction {
 
                 let lhs = &self.operands[0];
                 let rhs = &self.operands[1];
-                if lhs.size == Size::_0
-                    && self.operands.len() != 2 {
-                        return Err(std::io::Error::from(io::ErrorKind::InvalidData));
-                    }
-                if lhs.size != rhs.size {
+                if lhs.size == Size::_0 || lhs.size != rhs.size {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
 
