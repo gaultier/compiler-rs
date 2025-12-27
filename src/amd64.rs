@@ -1,4 +1,8 @@
-use std::{collections::HashMap, io::Write, panic};
+use std::{
+    collections::HashMap,
+    io::{self, Write},
+    panic,
+};
 
 use log::trace;
 use serde::Serialize;
@@ -1081,7 +1085,10 @@ impl Instruction {
 
         match self.kind {
             InstructionKind::Mov => {
-                assert_eq!(self.operands.len(), 2);
+                if self.operands.len() != 2 {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
+
                 let lhs = &self.operands[0];
                 let rhs = &self.operands[1];
 
@@ -1183,11 +1190,20 @@ impl Instruction {
                 Ok(())
             }
             InstructionKind::Add => {
-                assert_eq!(self.operands.len(), 2);
+                if self.operands.len() != 2 {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
+
                 let lhs = &self.operands[0];
                 let rhs = &self.operands[1];
-                assert_ne!(lhs.size, Size::_0);
-                assert_eq!(lhs.size, rhs.size);
+                if lhs.size == Size::_0 {
+                    if self.operands.len() != 2 {
+                        return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                    }
+                }
+                if lhs.size != rhs.size {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
 
                 match (&lhs.kind, &rhs.kind, lhs.size) {
                     (_, OperandKind::Immediate(imm), Size::_8) if lhs.is_rm() => {
@@ -1245,12 +1261,23 @@ impl Instruction {
                 Ok(())
             }
             InstructionKind::IMul => {
-                assert_eq!(self.operands.len(), 2);
+                if self.operands.len() != 2 {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
+
                 let lhs = &self.operands[0];
                 let rhs = &self.operands[1];
-                assert_ne!(lhs.size, Size::_0);
-                assert_ne!(lhs.size, Size::_8);
-                assert_eq!(lhs.size, rhs.size);
+                if lhs.size == Size::_0 {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
+
+                if lhs.size == Size::_8 {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
+
+                if lhs.size != rhs.size {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
 
                 match (&lhs.kind, &rhs.kind, lhs.size) {
                     (OperandKind::Register(reg), _, Size::_16)
@@ -1278,9 +1305,14 @@ impl Instruction {
                 Ok(())
             }
             InstructionKind::IDiv => {
-                assert_eq!(self.operands.len(), 1);
+                if self.operands.len() != 1 {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
+
                 let op = self.operands.first().unwrap();
-                assert!(op.is_rm());
+                if !op.is_rm() {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
 
                 let modrm = Instruction::encode_modrm(ModRmEncoding::Slash7, op, None);
 
@@ -1327,13 +1359,25 @@ impl Instruction {
                 }
             }
             InstructionKind::Lea => {
-                assert_eq!(self.operands.len(), 2);
+                if self.operands.len() != 2 {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
+
                 let lhs = self.operands.first().unwrap();
                 let rhs = self.operands.get(1).unwrap();
 
-                assert_ne!(lhs.size, Size::_8);
-                assert!(lhs.is_reg());
-                assert!(rhs.is_effective_address());
+                if lhs.size == Size::_8 {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
+
+                if !lhs.is_reg() {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
+
+                if !rhs.is_effective_address() {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
+
                 let reg = lhs.as_reg().unwrap();
                 let addr = rhs.as_effective_address().unwrap();
 
@@ -1359,7 +1403,9 @@ impl Instruction {
                 w.write_all(&displacement.to_le_bytes())
             }
             InstructionKind::Push => {
-                assert_eq!(self.operands.len(), 1);
+                if self.operands.len() != 1 {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
 
                 let op = self.operands.first().unwrap();
                 if op.size != Size::_64 {
@@ -1384,8 +1430,9 @@ impl Instruction {
                         Ok(())
                     }
                     OperandKind::EffectiveAddress(addr) => {
-                        assert_ne!(op.size, Size::_0);
-                        assert_ne!(op.size, Size::_8);
+                        if op.size == Size::_0 || op.size == Size::_8 {
+                            return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                        }
 
                         Instruction::encode_rex(
                             w,
@@ -1402,7 +1449,9 @@ impl Instruction {
                 }
             }
             InstructionKind::Pop => {
-                assert_eq!(self.operands.len(), 1);
+                if self.operands.len() != 1 {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
 
                 let op = self.operands.first().unwrap();
                 if op.size != Size::_64 {
@@ -1415,8 +1464,9 @@ impl Instruction {
                         w.write_all(&[0x58 | reg.to_3_bits()])
                     }
                     OperandKind::EffectiveAddress(addr) => {
-                        assert_ne!(op.size, Size::_0);
-                        assert_ne!(op.size, Size::_8);
+                        if op.size == Size::_0 || op.size == Size::_8 {
+                            return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                        }
 
                         Instruction::encode_rex(
                             w,
