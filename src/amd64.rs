@@ -1131,6 +1131,29 @@ impl Instruction {
                 let rhs = &self.operands[1];
 
                 match (&lhs.kind, &rhs.kind, lhs.size) {
+                    (OperandKind::Register(reg), OperandKind::Immediate(imm), Size::_8) => {
+                        let imm = i8::try_from(*imm)
+                            .map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?;
+                        Instruction::encode_rex(w, false, reg.is_extended(), false, false)?;
+                        w.write_all(&[0xB0 | reg.to_3_bits()])?;
+                        w.write_all(&imm.to_le_bytes())?;
+                    }
+                    (
+                        OperandKind::Register(reg),
+                        OperandKind::Immediate(imm),
+                        Size::_16 | Size::_32,
+                    ) => {
+                        let imm = i32::try_from(*imm)
+                            .map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?;
+                        Instruction::encode_rex(w, false, reg.is_extended(), false, false)?;
+                        w.write_all(&[0xB8 | reg.to_3_bits()])?;
+                        w.write_all(&imm.to_le_bytes())?;
+                    }
+                    (OperandKind::Register(reg), OperandKind::Immediate(imm), Size::_64) => {
+                        Instruction::encode_rex(w, true, false, reg.is_extended(), false)?;
+                        w.write_all(&[0xB8])?;
+                        w.write_all(&imm.to_le_bytes())?;
+                    }
                     // mov rm, r
                     (_, OperandKind::Register(reg), Size::_8) if lhs.is_rm() => {
                         Instruction::encode_rex(w, false, reg.is_extended(), false, false)?;
