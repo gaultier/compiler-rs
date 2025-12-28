@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     fmt::Display,
     io::{self, Write},
     panic,
@@ -1805,33 +1804,6 @@ impl Operand {
         }
     }
 
-    pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
-        match &self.kind {
-            OperandKind::Register(register) => w.write_all(register.to_str(&self.size).as_bytes()),
-            OperandKind::Immediate(n) => write!(w, "{}", n),
-            OperandKind::FnName(name) => w.write_all(name.as_bytes()),
-            OperandKind::EffectiveAddress(EffectiveAddress {
-                base,
-                index,
-                scale,
-                displacement,
-            }) => {
-                w.write_all(self.size.as_asm_addressing_str().as_bytes())?;
-                write!(w, " [{}", base.to_str(&self.size))?;
-                if let Some(index) = index {
-                    write!(w, "  + {}", index.to_str(&self.size))?;
-                }
-                if *scale != Scale::_0 {
-                    write!(w, "  * {}", *scale as u8)?;
-                }
-                if *displacement > 0 {
-                    write!(w, " {:+}", displacement)?;
-                }
-                write!(w, "]")
-            }
-        }
-    }
-
     pub(crate) fn is_reg(&self) -> bool {
         matches!(self.kind, OperandKind::Register(_))
     }
@@ -1872,26 +1844,6 @@ impl EffectiveAddress {
     // > of zero.
     fn can_base_be_mistaken_for_rel_addressing(&self) -> bool {
         self.base == Register::R13 || self.base == Register::Rbp
-    }
-}
-
-impl Instruction {
-    pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
-        w.write_all(self.kind.to_str().as_bytes())?;
-
-        self.operands.iter().enumerate().try_for_each(|(i, o)| {
-            if i == 0 {
-                write!(w, " ")?;
-            } else {
-                write!(w, ", ")?;
-            }
-            o.write(w)
-        })?;
-
-        w.write_all(b" // ")?;
-        self.origin.write(w, &HashMap::new() /* FIXME */)?;
-
-        writeln!(w)
     }
 }
 
@@ -2114,7 +2066,7 @@ mod tests {
 
         {
             let mut stdin = child.stdin.take().unwrap();
-            ins.write(&mut stdin)?;
+            write!(&mut stdin, "{}", ins)?;
         }
         let output = child.wait_with_output()?;
 

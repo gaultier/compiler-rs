@@ -8,7 +8,7 @@ mod origin;
 pub mod register_alloc;
 pub mod type_checker;
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fmt::Write};
 
 use log::trace;
 
@@ -242,13 +242,11 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
     );
     trace!("asm_instructions: {:#?}", asm_instructions);
 
-    let mut asm_text = Vec::with_capacity(asm_instructions.len() * 8 /* heuristic */);
+    let mut asm_text = String::with_capacity(asm_instructions.len() * 8 /* heuristic */);
     for ins in &asm_instructions {
-        ins.write(&mut asm_text).unwrap();
+        write!(&mut asm_text, "{}", ins).unwrap();
     }
-    trace!("asm_text: {}", unsafe {
-        str::from_utf8_unchecked(&asm_text)
-    });
+    trace!("asm_text: {}", asm_text);
 
     let asm_encoded = asm::encode(&asm_instructions, &target_arch);
 
@@ -265,7 +263,7 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
         ir_eval,
         vreg_to_memory_location,
         asm_instructions,
-        asm_text: String::from_utf8(asm_text).unwrap(),
+        asm_text,
         asm_encoded,
         asm_eval,
     }

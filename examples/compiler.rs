@@ -62,8 +62,7 @@ fn main() {
     println!("--- ASM ---");
     println!("instructions: {:#?}", &compiled.asm_instructions);
     for (i, ins) in compiled.asm_instructions.iter().enumerate() {
-        print!("{}: ", i);
-        ins.write(&mut stdout()).unwrap();
+        println!("{}: {}", i, ins);
     }
     println!("encoded: {:x?}", &compiled.asm_encoded);
 

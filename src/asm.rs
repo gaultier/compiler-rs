@@ -1,7 +1,6 @@
 use std::{
     collections::BTreeMap,
     fmt::{Debug, Display},
-    io::Write,
 };
 
 use log::trace;
@@ -119,10 +118,10 @@ pub(crate) fn emit(
     }
 }
 
-impl Instruction {
-    pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+impl Display for Instruction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Instruction::Amd64(ins) => ins.write(w),
+            Instruction::Amd64(ins) => write!(f, "{}", ins),
         }
     }
 }
