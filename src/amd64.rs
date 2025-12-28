@@ -892,27 +892,39 @@ impl Instruction {
         // > or uses a 64-bit operand.
         for op in operands {
             match (&op.kind, op.size) {
-                (_, Size::_64)
-                | (
+                (
                     OperandKind::Register(
                         Register::Rsp | Register::Rbp | Register::Rsi | Register::Rdi,
                     ),
-                    _,
+                    Size::_8,
                 )
                 | (
                     OperandKind::EffectiveAddress(EffectiveAddress {
                         base: Register::Rsp | Register::Rbp | Register::Rsi | Register::Rdi,
                         ..
                     }),
-                    _,
+                    Size::_8,
                 )
                 | (
                     OperandKind::EffectiveAddress(EffectiveAddress {
                         index: Some(Register::Rsp | Register::Rbp | Register::Rsi | Register::Rdi),
                         ..
                     }),
+                    Size::_8,
+                )
+                | (_, Size::_64) => {
+                    required = true;
+                    break;
+                }
+
+                (OperandKind::Register(reg), _)
+                | (OperandKind::EffectiveAddress(EffectiveAddress { base: reg, .. }), _)
+                | (
+                    OperandKind::EffectiveAddress(EffectiveAddress {
+                        index: Some(reg), ..
+                    }),
                     _,
-                ) => {
+                ) if reg.is_extended() => {
                     required = true;
                     break;
                 }
