@@ -1361,9 +1361,9 @@ impl Instruction {
                             Some(lhs),
                         )?;
                         w.write_all(&[0xB8 | reg.to_3_bits()])?;
-                        Instruction::encode_imm(w, *imm, &Size::_16)?;
+                        Instruction::encode_imm(w, *imm, &Size::_32)?;
                     }
-                    (Operand::Register(reg), Operand::Immediate(imm), Size::_64) => {
+                    (Operand::Register(reg), Operand::Immediate(imm)) if reg.is_64_bits() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             true,
@@ -1373,11 +1373,11 @@ impl Instruction {
                             Some(lhs),
                         )?;
                         w.write_all(&[0xB8 | reg.to_3_bits()])?;
-                        Instruction::encode_imm(w, *imm, &lhs.size)?;
+                        Instruction::encode_imm(w, *imm, &Size::_64)?;
                     }
                     // mov rm, r
                     // Encoding: MR 	ModRM:r/m (w) 	ModRM:reg (r)
-                    (_, Operand::Register(reg), Size::_8) if lhs.is_rm() => {
+                    (_, Operand::Register(reg)) if lhs.is_rm() && reg.is_8_bits() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
