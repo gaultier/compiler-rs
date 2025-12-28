@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    fmt::Display,
     io::{self, Write},
     panic,
 };
@@ -1859,6 +1860,12 @@ impl Instruction {
     }
 }
 
+impl Display for Instruction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
 impl From<&MemoryLocation> for OperandKind {
     fn from(value: &MemoryLocation) -> Self {
         match value {
@@ -2112,7 +2119,7 @@ mod tests {
         match (ins.encode(&mut actual), oracle_encode(&ins)) {
             (Ok(()), Ok(expected)) => assert_eq!(actual, expected),
             (Err(_), Err(_)) => {},
-            (a,b) => panic!("oracle and implementation do not aggree: {:#?} vs {:#?}",a,b )
+            (actual,oracle) => panic!("oracle and implementation do not agree: actual={:#?} oracle={:#?} ins={}",actual,oracle, ins )
         }
         }
     }

@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc b1149bb5c64dc956af2e607a9c1db3049b3b8608a0c7204d597ce07ae8a1eaee # shrinks to ins = Instruction { kind: Mov, operands: [Operand { size: _0, kind: Register(Rax) }, Operand { size: _0, kind: Register(Rax) }], origin: Origin { line: 0, column: 0, offset: 0, len: 0, kind: Unknown } }
