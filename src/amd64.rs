@@ -17,12 +17,6 @@ use crate::{
     type_checker::Size,
 };
 
-#[derive(Serialize, Debug, Clone, Arbitrary)]
-pub struct Operand {
-    pub size: Size,
-    pub kind: OperandKind,
-}
-
 #[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Arbitrary)]
 pub enum Scale {
     _0 = 0,
@@ -40,7 +34,7 @@ pub struct EffectiveAddress {
 }
 
 #[derive(Serialize, Debug, Clone, Arbitrary)]
-pub enum OperandKind {
+pub enum Operand {
     Register(Register),
     Immediate(i64),
     EffectiveAddress(EffectiveAddress),
@@ -59,23 +53,89 @@ pub struct Instruction {
 #[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Arbitrary)]
 #[repr(u8)]
 pub enum Register {
+    Al,
+    Ah,
+    Ax,
+    Eax,
     Rax,
-    Rbx,
-    Rcx,
-    Rdx,
-    Rdi,
-    Rsi,
-    R8,
-    R9,
-    R10,
-    R11,
-    R12,
-    R13,
-    R14,
-    R15,
 
+    Bl,
+    Bh,
+    Bx,
+    Ebx,
+    Rbx,
+
+    Cl,
+    Ch,
+    Cx,
+    Ecx,
+    Rcx,
+
+    Dl,
+    Dh,
+    Dx,
+    Edx,
+    Rdx,
+
+    Dil,
+    Di,
+    Edi,
+    Rdi,
+
+    Sil,
+    Si,
+    Esi,
+    Rsi,
+
+    Bpl,
+    Bp,
+    Ebp,
     Rbp,
+
+    Spl,
+    Sp,
+    Esp,
     Rsp,
+
+    R8b,
+    R8w,
+    R8d,
+    R8,
+
+    R9b,
+    R9w,
+    R9d,
+    R9,
+
+    R10b,
+    R10w,
+    R10d,
+    R10,
+
+    R11b,
+    R11w,
+    R11d,
+    R11,
+
+    R12b,
+    R12w,
+    R12d,
+    R12,
+
+    R13b,
+    R13w,
+    R13d,
+    R13,
+
+    R14b,
+    R14w,
+    R14d,
+    R14,
+
+    R15b,
+    R15w,
+    R15d,
+    R15,
 }
 
 enum ModRmEncoding {
@@ -98,11 +158,11 @@ impl Display for Size {
 
 impl Display for Operand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.kind {
-            OperandKind::Register(register) => f.write_str(register.to_str(&self.size)),
-            OperandKind::Immediate(n) => write!(f, "{}", n),
-            OperandKind::FnName(name) => f.write_str(name),
-            OperandKind::EffectiveAddress(EffectiveAddress {
+        match &self {
+            Operand::Register(reg) => write!(f, "{}", reg),
+            Operand::Immediate(n) => write!(f, "{}", n),
+            Operand::FnName(name) => f.write_str(name),
+            Operand::EffectiveAddress(EffectiveAddress {
                 base,
                 index_scale,
                 displacement,
@@ -111,7 +171,7 @@ impl Display for Operand {
                 f.write_str("[")?;
 
                 if let Some(base) = base {
-                    f.write_str(base.to_str(&self.size))?;
+                    write!(f, "{}", base)?;
                 }
 
                 if base.is_some() && index_scale.is_some() {
@@ -119,7 +179,7 @@ impl Display for Operand {
                 }
 
                 if let Some((index, scale)) = index_scale {
-                    f.write_str(index.to_str(&self.size))?;
+                    write!(f, "{}", index)?;
                     if *scale != Scale::_0 {
                         write!(f, "  * {}", *scale as u8)?;
                     }
@@ -397,7 +457,7 @@ impl Emitter {
                 // first to only divide `rax`.
                 self.emit_store(
                     &MemoryLocation::Register(asm::Register::Amd64(Register::Rdx)),
-                    &OperandKind::Immediate(0),
+                    &Operand::Immediate(0),
                     &Size::_64,
                     &ins.origin,
                 );
@@ -467,7 +527,7 @@ impl Emitter {
             ) => {
                 self.emit_store(
                     vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
-                    &OperandKind::Immediate(*num),
+                    &Operand::Immediate(*num),
                     &ins.typ.size.unwrap(),
                     &ins.origin,
                 );
@@ -482,7 +542,7 @@ impl Emitter {
             ) => {
                 self.emit_store(
                     vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
-                    &OperandKind::Immediate(if *b { 1 } else { 0 }),
+                    &Operand::Immediate(if *b { 1 } else { 0 }),
                     &Size::_8,
                     &ins.origin,
                 );
@@ -519,10 +579,7 @@ impl Emitter {
 
                 self.asm.push(Instruction {
                     kind: InstructionKind::Call,
-                    operands: vec![Operand {
-                        size: Size::_64,
-                        kind: OperandKind::FnName(fn_name.clone()),
-                    }],
+                    operands: vec![Operand::FnName(fn_name.clone())],
                     origin: ins.origin,
                 });
                 self.emit_store(
@@ -545,15 +602,12 @@ impl Emitter {
 
         self.asm.push(Instruction {
             kind: InstructionKind::Push,
-            operands: vec![Operand {
-                size: Size::_64,
-                kind: OperandKind::Register(Register::Rbp),
-            }],
+            operands: vec![Operand::Register(Register::Rbp)],
             origin: Origin::new_synth_codegen(),
         });
         self.emit_store(
             &MemoryLocation::Register(asm::Register::Amd64(Register::Rbp)),
-            &OperandKind::Register(Register::Rsp),
+            &Operand::Register(Register::Rsp),
             &Size::_64,
             &Origin::new_synth_codegen(),
         );
@@ -568,14 +622,8 @@ impl Emitter {
             self.asm.push(Instruction {
                 kind: InstructionKind::Add,
                 operands: vec![
-                    Operand {
-                        size: Size::_64,
-                        kind: OperandKind::Register(Register::Rsp),
-                    },
-                    Operand {
-                        size: Size::_64,
-                        kind: OperandKind::Immediate(stack_offset_frame),
-                    },
+                    Operand::Register(Register::Rsp),
+                    Operand::Immediate(stack_offset_frame),
                 ],
                 origin: Origin::new_synth_codegen(),
             });
@@ -590,24 +638,15 @@ impl Emitter {
             self.asm.push(Instruction {
                 kind: InstructionKind::Add,
                 operands: vec![
-                    Operand {
-                        size: Size::_64,
-                        kind: OperandKind::Register(Register::Rsp),
-                    },
-                    Operand {
-                        size: Size::_64,
-                        kind: OperandKind::Immediate(-(stack_offset_frame)),
-                    },
+                    Operand::Register(Register::Rsp),
+                    Operand::Immediate(-(stack_offset_frame)),
                 ],
                 origin: Origin::new_synth_codegen(),
             });
         }
         self.asm.push(Instruction {
             kind: InstructionKind::Pop,
-            operands: vec![Operand {
-                size: Size::_64,
-                kind: OperandKind::Register(Register::Rbp),
-            }],
+            operands: vec![Operand::Register(Register::Rbp)],
             origin: Origin::new_synth_codegen(),
         });
 
@@ -622,75 +661,48 @@ impl Emitter {
     pub(crate) fn emit_store(
         &mut self,
         dst: &MemoryLocation,
-        src: &OperandKind,
+        src: &Operand,
         size: &Size,
         origin: &Origin,
     ) {
         match (dst, src) {
-            (_, OperandKind::FnName(_)) => {
+            (_, Operand::FnName(_)) => {
                 todo!()
             }
             (
                 MemoryLocation::Register(asm::Register::Amd64(dst_reg)),
-                OperandKind::Register(src_reg),
+                Operand::Register(src_reg),
             ) if dst_reg == src_reg => {
                 // noop.
             }
             (
                 MemoryLocation::Register(asm::Register::Amd64(dst_reg)),
-                OperandKind::Register(src_reg),
+                Operand::Register(src_reg),
             ) => {
                 self.asm.push(Instruction {
                     kind: InstructionKind::Mov,
-                    operands: vec![
-                        Operand {
-                            size: *size,
-                            kind: OperandKind::Register(*dst_reg),
-                        },
-                        Operand {
-                            size: *size,
-                            kind: OperandKind::Register(*src_reg),
-                        },
-                    ],
+                    operands: vec![Operand::Register(*dst_reg), Operand::Register(*src_reg)],
                     origin: *origin,
                 });
             }
             (
                 MemoryLocation::Register(asm::Register::Amd64(dst_reg)),
-                OperandKind::Immediate(src_imm),
+                Operand::Immediate(src_imm),
             ) => {
                 self.asm.push(Instruction {
                     kind: InstructionKind::Mov,
-                    operands: vec![
-                        Operand {
-                            size: *size,
-                            kind: OperandKind::Register(*dst_reg),
-                        },
-                        Operand {
-                            size: *size,
-                            kind: OperandKind::Immediate(*src_imm),
-                        },
-                    ],
+                    operands: vec![Operand::Register(*dst_reg), Operand::Immediate(*src_imm)],
                     origin: *origin,
                 });
             }
-            (MemoryLocation::Stack(_), OperandKind::Register(src_reg)) => {
+            (MemoryLocation::Stack(_), Operand::Register(src_reg)) => {
                 self.asm.push(Instruction {
                     kind: InstructionKind::Mov,
-                    operands: vec![
-                        Operand {
-                            size: *size,
-                            kind: dst.into(),
-                        },
-                        Operand {
-                            size: *size,
-                            kind: OperandKind::Register(*src_reg),
-                        },
-                    ],
+                    operands: vec![dst.into(), Operand::Register(*src_reg)],
                     origin: *origin,
                 });
             }
-            (MemoryLocation::Stack(off), OperandKind::Immediate(imm)) => {
+            (MemoryLocation::Stack(off), Operand::Immediate(imm)) => {
                 if *imm > i32::MAX as i64 {
                     todo!();
                 }
@@ -698,44 +710,29 @@ impl Emitter {
                 self.asm.push(Instruction {
                     kind: InstructionKind::Mov,
                     operands: vec![
-                        Operand {
-                            size: *size,
-                            kind: OperandKind::EffectiveAddress(EffectiveAddress {
-                                base: Some(Register::Rsp),
-                                index_scale: None,
-                                displacement: (*off).try_into().unwrap(),
-                            }),
-                        },
-                        Operand {
-                            size: *size,
-                            kind: src.clone(),
-                        },
+                        Operand::EffectiveAddress(EffectiveAddress {
+                            base: Some(Register::Rsp),
+                            index_scale: None,
+                            displacement: (*off).try_into().unwrap(),
+                        }),
+                        src.clone(),
                     ],
                     origin: *origin,
                 });
             }
             (
                 MemoryLocation::Register(asm::Register::Amd64(dst_reg)),
-                OperandKind::EffectiveAddress(_),
+                Operand::EffectiveAddress(_),
             ) => {
                 self.asm.push(Instruction {
                     kind: InstructionKind::Mov,
-                    operands: vec![
-                        Operand {
-                            size: *size,
-                            kind: OperandKind::Register(*dst_reg),
-                        },
-                        Operand {
-                            size: *size,
-                            kind: src.clone(),
-                        },
-                    ],
+                    operands: vec![Operand::Register(*dst_reg), src.clone()],
                     origin: *origin,
                 });
             }
             (
                 MemoryLocation::Stack(dst),
-                OperandKind::EffectiveAddress(EffectiveAddress {
+                Operand::EffectiveAddress(EffectiveAddress {
                     base: Some(Register::Rsp),
                     index_scale: None,
                     displacement,
@@ -743,30 +740,122 @@ impl Emitter {
             ) if *dst == (*displacement as isize) => {
                 // noop.
             }
-            (MemoryLocation::Stack(_), OperandKind::EffectiveAddress(_)) => todo!(),
+            (MemoryLocation::Stack(_), Operand::EffectiveAddress(_)) => todo!(),
         }
     }
 }
 
 impl Register {
+    fn is_64_bits(&self) -> bool {
+        match self {
+            Register::Rax
+            | Register::Rbx
+            | Register::Rcx
+            | Register::Rdx
+            | Register::Rdi
+            | Register::Rsi
+            | Register::Rbp
+            | Register::Rsp
+            | Register::R8
+            | Register::R9
+            | Register::R10
+            | Register::R11
+            | Register::R12
+            | Register::R13
+            | Register::R14
+            | Register::R15 => true,
+            _ => false,
+        }
+    }
+
+    fn is_32_bits(&self) -> bool {
+        match self {
+            Register::Eax
+            | Register::Ebx
+            | Register::Ecx
+            | Register::Edx
+            | Register::Edi
+            | Register::Esi
+            | Register::Ebp
+            | Register::Esp
+            | Register::R8d
+            | Register::R9d
+            | Register::R10d
+            | Register::R11d
+            | Register::R12d
+            | Register::R13d
+            | Register::R14d
+            | Register::R15d => true,
+            _ => false,
+        }
+    }
+
+    fn is_16_bits(&self) -> bool {
+        match self {
+            Register::Ax
+            | Register::Bx
+            | Register::Cx
+            | Register::Dx
+            | Register::Di
+            | Register::Si
+            | Register::Bp
+            | Register::Sp
+            | Register::R8w
+            | Register::R9w
+            | Register::R10w
+            | Register::R11w
+            | Register::R12w
+            | Register::R13w
+            | Register::R14w
+            | Register::R15w => true,
+            _ => false,
+        }
+    }
+
+    fn is_8_bits(&self) -> bool {
+        match self {
+            Register::Ah
+            | Register::Al
+            | Register::Bh
+            | Register::Bl
+            | Register::Ch
+            | Register::Cl
+            | Register::Dh
+            | Register::Dl
+            | Register::Dil
+            | Register::Sil
+            | Register::Bpl
+            | Register::Spl
+            | Register::R8b
+            | Register::R9b
+            | Register::R10b
+            | Register::R11b
+            | Register::R12b
+            | Register::R13b
+            | Register::R14b
+            | Register::R15b => true,
+            _ => false,
+        }
+    }
+
     fn to_3_bits(&self) -> u8 {
         let res = match self {
-            Register::Rax => 0b000,
-            Register::Rbx => 0b011,
-            Register::Rcx => 0b001,
-            Register::Rdx => 0b010,
-            Register::Rdi => 0b111,
-            Register::Rsi => 0b110,
-            Register::R8 => 0b000,
-            Register::R9 => 0b001,
-            Register::R10 => 0b010,
-            Register::R11 => 0b011,
-            Register::R12 => 0b100,
-            Register::R13 => 0b101,
-            Register::R14 => 0b110,
-            Register::R15 => 0b111,
-            Register::Rbp => 0b101,
-            Register::Rsp => 0b100,
+            Register::Al | Register::Ah | Register::Ax | Register::Eax | Register::Rax => 0b000,
+            Register::Bl | Register::Bh | Register::Bx | Register::Ebx | Register::Rbx => 0b011,
+            Register::Cl | Register::Ch | Register::Cx | Register::Ecx | Register::Rcx => 0b001,
+            Register::Dl | Register::Dh | Register::Dx | Register::Edx | Register::Rdx => 0b010,
+            Register::Dil | Register::Di | Register::Edi | Register::Rdi => 0b111,
+            Register::Si | Register::Sil | Register::Esi | Register::Rsi => 0b110,
+            Register::Bpl | Register::Bp | Register::Ebp | Register::Rbp => 0b101,
+            Register::Spl | Register::Sp | Register::Esp | Register::Rsp => 0b100,
+            Register::R8b | Register::R8w | Register::R8d | Register::R8 => 0b000,
+            Register::R9b | Register::R9w | Register::R9d | Register::R9 => 0b001,
+            Register::R10b | Register::R10w | Register::R10d | Register::R10 => 0b010,
+            Register::R11b | Register::R11w | Register::R11d | Register::R11 => 0b011,
+            Register::R12b | Register::R12w | Register::R12d | Register::R12 => 0b100,
+            Register::R13b | Register::R13w | Register::R13d | Register::R13 => 0b101,
+            Register::R14b | Register::R14w | Register::R14d | Register::R14 => 0b110,
+            Register::R15b | Register::R15w | Register::R15d | Register::R15 => 0b111,
         };
         assert!(res <= 0b111);
         res
@@ -774,91 +863,105 @@ impl Register {
 
     pub fn is_extended(&self) -> bool {
         match self {
-            Register::Rax => false,
-            Register::Rbx => false,
-            Register::Rcx => false,
-            Register::Rdx => false,
-            Register::Rdi => false,
-            Register::Rsi => false,
-            Register::R8 => true,
-            Register::R9 => true,
-            Register::R10 => true,
-            Register::R11 => true,
-            Register::R12 => true,
-            Register::R13 => true,
-            Register::R14 => true,
-            Register::R15 => true,
-            Register::Rbp => false,
-            Register::Rsp => false,
+            Register::R8b | Register::R8w | Register::R8d | Register::R8 => true,
+            Register::R9b | Register::R9w | Register::R9d | Register::R9 => true,
+            Register::R10b | Register::R10w | Register::R10d | Register::R10 => true,
+            Register::R11b | Register::R11w | Register::R11d | Register::R11 => true,
+            Register::R12b | Register::R12w | Register::R12d | Register::R12 => true,
+            Register::R13b | Register::R13w | Register::R13d | Register::R13 => true,
+            Register::R14b | Register::R14w | Register::R14d | Register::R14 => true,
+            Register::R15b | Register::R15w | Register::R15d | Register::R15 => true,
+            _ => false,
         }
     }
+}
 
-    pub(crate) fn to_str(self, size: &Size) -> &'static str {
-        match (self, size) {
-            (Register::Rax, Size::_8) => "al",
-            (Register::Rax, Size::_16) => "ax",
-            (Register::Rax, Size::_32) => "eax",
-            (Register::Rax, Size::_64) => "rax",
-            (Register::Rbx, Size::_8) => "bl",
-            (Register::Rbx, Size::_16) => "bx",
-            (Register::Rbx, Size::_32) => "ebx",
-            (Register::Rbx, Size::_64) => "rbx",
-            (Register::Rcx, Size::_8) => "cl",
-            (Register::Rcx, Size::_16) => "cx",
-            (Register::Rcx, Size::_32) => "ecx",
-            (Register::Rcx, Size::_64) => "rcx",
-            (Register::Rdx, Size::_8) => "dl",
-            (Register::Rdx, Size::_16) => "dx",
-            (Register::Rdx, Size::_32) => "edx",
-            (Register::Rdx, Size::_64) => "rdx",
-            (Register::Rdi, Size::_8) => "dil",
-            (Register::Rdi, Size::_16) => "di",
-            (Register::Rdi, Size::_32) => "edi",
-            (Register::Rdi, Size::_64) => "rdi",
-            (Register::Rsi, Size::_8) => "sil",
-            (Register::Rsi, Size::_16) => "si",
-            (Register::Rsi, Size::_32) => "esi",
-            (Register::Rsi, Size::_64) => "rsi",
-            (Register::R8, Size::_8) => "r8b",
-            (Register::R8, Size::_16) => "r8w",
-            (Register::R8, Size::_32) => "r8d",
-            (Register::R8, Size::_64) => "r8",
-            (Register::R9, Size::_8) => "r9b",
-            (Register::R9, Size::_16) => "r9w",
-            (Register::R9, Size::_32) => "r9d",
-            (Register::R9, Size::_64) => "r9",
-            (Register::R10, Size::_8) => "r10b",
-            (Register::R10, Size::_16) => "r10w",
-            (Register::R10, Size::_32) => "r10d",
-            (Register::R10, Size::_64) => "r10",
-            (Register::R11, Size::_8) => "r11b",
-            (Register::R11, Size::_16) => "r11w",
-            (Register::R11, Size::_32) => "r11d",
-            (Register::R11, Size::_64) => "r11",
-            (Register::R12, Size::_8) => "r12b",
-            (Register::R12, Size::_16) => "r12w",
-            (Register::R12, Size::_32) => "r12d",
-            (Register::R12, Size::_64) => "r12",
-            (Register::R13, Size::_8) => "r13b",
-            (Register::R13, Size::_16) => "r13w",
-            (Register::R13, Size::_32) => "r13d",
-            (Register::R13, Size::_64) => "r13",
-            (Register::R14, Size::_8) => "r14b",
-            (Register::R14, Size::_16) => "r14w",
-            (Register::R14, Size::_32) => "r14d",
-            (Register::R14, Size::_64) => "r14",
-            (Register::R15, Size::_8) => "r15b",
-            (Register::R15, Size::_16) => "r15w",
-            (Register::R15, Size::_32) => "r15d",
-            (Register::R15, Size::_64) => "r15",
-            (Register::Rsp, Size::_8) => "spl",
-            (Register::Rsp, Size::_16) => "sp",
-            (Register::Rsp, Size::_32) => "esp",
-            (Register::Rsp, Size::_64) => "rsp",
-            (Register::Rbp, Size::_8) => "bpl",
-            (Register::Rbp, Size::_16) => "bp",
-            (Register::Rbp, Size::_32) => "ebp",
-            (Register::Rbp, Size::_64) => "rbp",
+impl Display for Register {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Register::Al => f.write_str("al"),
+            Register::Ah => f.write_str("ah"),
+            Register::Ax => f.write_str("ax"),
+            Register::Eax => f.write_str("eax"),
+            Register::Rax => f.write_str("rax"),
+
+            Register::Bl => f.write_str("bl"),
+            Register::Bh => f.write_str("bh"),
+            Register::Bx => f.write_str("bx"),
+            Register::Ebx => f.write_str("ebx"),
+            Register::Rbx => f.write_str("rbx"),
+
+            Register::Cl => f.write_str("cl"),
+            Register::Ch => f.write_str("ch"),
+            Register::Cx => f.write_str("cx"),
+            Register::Ecx => f.write_str("ecx"),
+            Register::Rcx => f.write_str("rcx"),
+
+            Register::Dl => f.write_str("dl"),
+            Register::Dh => f.write_str("dh"),
+            Register::Dx => f.write_str("dx"),
+            Register::Edx => f.write_str("edx"),
+            Register::Rdx => f.write_str("rdx"),
+
+            Register::Dil => f.write_str("dil"),
+            Register::Di => f.write_str("di"),
+            Register::Edi => f.write_str("edi"),
+            Register::Rdi => f.write_str("rdi"),
+
+            Register::Sil => f.write_str("sil"),
+            Register::Si => f.write_str("si"),
+            Register::Esi => f.write_str("esi"),
+            Register::Rsi => f.write_str("rsi"),
+
+            Register::Bpl => f.write_str("bpl"),
+            Register::Bp => f.write_str("bp"),
+            Register::Ebp => f.write_str("ebp"),
+            Register::Rbp => f.write_str("rbp"),
+
+            Register::Spl => f.write_str("spl"),
+            Register::Sp => f.write_str("sp"),
+            Register::Esp => f.write_str("esp"),
+            Register::Rsp => f.write_str("rsp"),
+
+            Register::R8b => f.write_str("r8b"),
+            Register::R8w => f.write_str("r8w"),
+            Register::R8d => f.write_str("r8d"),
+            Register::R8 => f.write_str("r8"),
+
+            Register::R9b => f.write_str("r9b"),
+            Register::R9w => f.write_str("r9w"),
+            Register::R9d => f.write_str("r9d"),
+            Register::R9 => f.write_str("r9"),
+
+            Register::R10b => f.write_str("r10b"),
+            Register::R10w => f.write_str("r10w"),
+            Register::R10d => f.write_str("r10d"),
+            Register::R10 => f.write_str("r10"),
+
+            Register::R11b => f.write_str("r11b"),
+            Register::R11w => f.write_str("r11w"),
+            Register::R11d => f.write_str("r11d"),
+            Register::R11 => f.write_str("r11"),
+
+            Register::R12b => f.write_str("r12b"),
+            Register::R12w => f.write_str("r12w"),
+            Register::R12d => f.write_str("r12d"),
+            Register::R12 => f.write_str("r12"),
+
+            Register::R13b => f.write_str("r13b"),
+            Register::R13w => f.write_str("r13w"),
+            Register::R13d => f.write_str("r13d"),
+            Register::R13 => f.write_str("r13"),
+
+            Register::R14b => f.write_str("r14b"),
+            Register::R14w => f.write_str("r14w"),
+            Register::R14d => f.write_str("r14d"),
+            Register::R14 => f.write_str("r14"),
+
+            Register::R15b => f.write_str("r15b"),
+            Register::R15w => f.write_str("r15w"),
+            Register::R15d => f.write_str("r15d"),
+            Register::R15 => f.write_str("r15"),
         }
     }
 }
@@ -900,47 +1003,31 @@ impl Instruction {
         // DIL;
         // > or uses a 64-bit operand.
         for op in operands {
-            match (&op.kind, op.size) {
-                (_, Size::_64)
-                | (
-                    OperandKind::Register(
-                        Register::Rsp | Register::Rbp | Register::Rsi | Register::Rdi,
-                    ),
-                    Size::_8,
+            match op {
+                Operand::Register(
+                    Register::Spl | Register::Bpl | Register::Sil | Register::Dil,
                 )
-                | (
-                    OperandKind::EffectiveAddress(EffectiveAddress {
-                        base: Some(Register::Rsp | Register::Rbp | Register::Rsi | Register::Rdi),
-                        ..
-                    }),
-                    Size::_8,
-                )
-                | (
-                    OperandKind::EffectiveAddress(EffectiveAddress {
-                        index_scale:
-                            Some((Register::Rsp | Register::Rbp | Register::Rsi | Register::Rdi, _)),
-                        ..
-                    }),
-                    Size::_8,
-                ) => {
+                | Operand::EffectiveAddress(EffectiveAddress {
+                    base: Some(Register::Spl | Register::Bpl | Register::Sil | Register::Dil),
+                    ..
+                })
+                | Operand::EffectiveAddress(EffectiveAddress {
+                    index_scale:
+                        Some((Register::Spl | Register::Bpl | Register::Sil | Register::Dil, _)),
+                    ..
+                }) => {
                     required = true;
                     break;
                 }
 
-                (OperandKind::Register(reg), _)
-                | (
-                    OperandKind::EffectiveAddress(EffectiveAddress {
-                        base: Some(reg), ..
-                    }),
-                    _,
-                )
-                | (
-                    OperandKind::EffectiveAddress(EffectiveAddress {
-                        index_scale: Some((reg, _)),
-                        ..
-                    }),
-                    _,
-                ) if reg.is_extended() => {
+                Operand::Register(reg)
+                | Operand::EffectiveAddress(EffectiveAddress {
+                    base: Some(reg), ..
+                })
+                | Operand::EffectiveAddress(EffectiveAddress {
+                    index_scale: Some((reg, _)),
+                    ..
+                }) if reg.is_extended() => {
                     required = true;
                     break;
                 }
@@ -987,45 +1074,28 @@ impl Instruction {
         op_reg: Option<&Operand>,
     ) -> std::io::Result<()> {
         let r = match op_modrm_reg {
-            Some(Operand {
-                kind: OperandKind::Register(reg),
-                ..
-            }) if reg.is_extended() => true,
+            Some(Operand::Register(reg)) if reg.is_extended() => true,
             _ => false,
         };
 
         let x = match op_sib {
-            Some(Operand {
-                kind:
-                    OperandKind::EffectiveAddress(EffectiveAddress {
-                        index_scale: Some((reg, _)),
-                        ..
-                    }),
+            Some(Operand::EffectiveAddress(EffectiveAddress {
+                index_scale: Some((reg, _)),
                 ..
-            }) if reg.is_extended() => true,
+            })) if reg.is_extended() => true,
             _ => false,
         };
 
         let mut b = match op_modrm_rm {
-            Some(Operand {
-                kind: OperandKind::Register(reg),
-                ..
-            }) if reg.is_extended() => true,
-            Some(Operand {
-                kind:
-                    OperandKind::EffectiveAddress(EffectiveAddress {
-                        base: Some(reg), ..
-                    }),
-                ..
-            }) if reg.is_extended() => true,
+            Some(Operand::Register(reg)) if reg.is_extended() => true,
+            Some(Operand::EffectiveAddress(EffectiveAddress {
+                base: Some(reg), ..
+            })) if reg.is_extended() => true,
             _ => false,
         };
 
         b |= match op_reg {
-            Some(Operand {
-                kind: OperandKind::Register(reg),
-                ..
-            }) if reg.is_extended() => true,
+            Some(Operand::Register(reg)) if reg.is_extended() => true,
             _ => false,
         };
 
@@ -1052,117 +1122,117 @@ impl Instruction {
         };
         assert!(reg <= 0b111); // Fits in 3 bits.
 
-        let (mod_, rm): (u8, u8) = match op_rm.kind {
-            OperandKind::Register(reg) => (0b11, reg.to_3_bits()),
-            OperandKind::Immediate(_) => (0b00, 0b101),
-            OperandKind::EffectiveAddress(EffectiveAddress {
+        let (mod_, rm): (u8, u8) = match op_rm {
+            Operand::Register(reg) => (0b11, reg.to_3_bits()),
+            Operand::Immediate(_) => (0b00, 0b101),
+            Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rax),
                 index_scale: None,
                 displacement: 0,
             }) => (0b00, 0b000),
-            OperandKind::EffectiveAddress(EffectiveAddress {
+            Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rcx),
                 index_scale: None,
                 displacement: 0,
             }) => (0b00, 0b001),
-            OperandKind::EffectiveAddress(EffectiveAddress {
+            Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rdx),
                 index_scale: None,
                 displacement: 0,
             }) => (0b00, 0b010),
-            OperandKind::EffectiveAddress(EffectiveAddress {
+            Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rbx),
                 index_scale: None,
                 displacement: 0,
             }) => (0b00, 0b011),
-            OperandKind::EffectiveAddress(EffectiveAddress {
+            Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rsi),
                 index_scale: None,
                 displacement: 0,
             }) => (0b00, 0b110),
-            OperandKind::EffectiveAddress(EffectiveAddress {
+            Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rdi),
                 index_scale: None,
                 displacement: 0,
             }) => (0b00, 0b111),
             // TODO: case for disp32
-            OperandKind::EffectiveAddress(EffectiveAddress {
+            Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rax),
                 index_scale: None,
                 displacement,
-            }) if displacement <= i8::MAX as i32 => (0b01, 0b000),
-            OperandKind::EffectiveAddress(EffectiveAddress {
+            }) if *displacement <= i8::MAX as i32 => (0b01, 0b000),
+            Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rcx),
                 index_scale: None,
                 displacement,
-            }) if displacement <= i8::MAX as i32 => (0b01, 0b001),
-            OperandKind::EffectiveAddress(EffectiveAddress {
+            }) if *displacement <= i8::MAX as i32 => (0b01, 0b001),
+            Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rdx),
                 index_scale: None,
                 displacement,
-            }) if displacement <= i8::MAX as i32 => (0b01, 0b010),
-            OperandKind::EffectiveAddress(EffectiveAddress {
+            }) if *displacement <= i8::MAX as i32 => (0b01, 0b010),
+            Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rbx),
                 index_scale: None,
                 displacement,
-            }) if displacement <= i8::MAX as i32 => (0b01, 0b011),
-            OperandKind::EffectiveAddress(EffectiveAddress {
+            }) if *displacement <= i8::MAX as i32 => (0b01, 0b011),
+            Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rbp),
                 index_scale: None,
                 displacement,
-            }) if displacement <= i8::MAX as i32 => (0b01, 0b101),
-            OperandKind::EffectiveAddress(EffectiveAddress {
+            }) if *displacement <= i8::MAX as i32 => (0b01, 0b101),
+            Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rsi),
                 index_scale: None,
                 displacement,
-            }) if displacement <= i8::MAX as i32 => (0b01, 0b110),
-            OperandKind::EffectiveAddress(EffectiveAddress {
+            }) if *displacement <= i8::MAX as i32 => (0b01, 0b110),
+            Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rax),
                 index_scale: None,
                 ..
             }) => (0b10, 0b000),
-            OperandKind::EffectiveAddress(EffectiveAddress {
+            Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rcx),
                 index_scale: None,
                 ..
             }) => (0b10, 0b001),
-            OperandKind::EffectiveAddress(EffectiveAddress {
+            Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rdx),
                 index_scale: None,
                 ..
             }) => (0b10, 0b010),
-            OperandKind::EffectiveAddress(EffectiveAddress {
+            Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rbx),
                 index_scale: None,
                 ..
             }) => (0b10, 0b011),
-            OperandKind::EffectiveAddress(EffectiveAddress {
+            Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rbp),
                 index_scale: None,
                 ..
             }) => (0b10, 0b101),
-            OperandKind::EffectiveAddress(EffectiveAddress {
+            Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rsi),
                 index_scale: None,
                 ..
             }) => (0b10, 0b110),
-            OperandKind::EffectiveAddress(EffectiveAddress {
+            Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rdi),
                 index_scale: None,
                 ..
             }) => (0b10, 0b111),
 
-            OperandKind::EffectiveAddress(EffectiveAddress {
+            Operand::EffectiveAddress(EffectiveAddress {
                 displacement: 0, ..
             }) => (0b00, 0b100),
-            OperandKind::EffectiveAddress(EffectiveAddress { displacement, .. })
-                if displacement <= i8::MAX as i32 =>
+            Operand::EffectiveAddress(EffectiveAddress { displacement, .. })
+                if *displacement <= i8::MAX as i32 =>
             {
                 (0b01, 0b100)
             }
-            OperandKind::EffectiveAddress(_) => (0b10, 0b100),
+            Operand::EffectiveAddress(_) => (0b10, 0b100),
 
-            OperandKind::FnName(_) => todo!(),
+            Operand::FnName(_) => todo!(),
         };
 
         assert!(mod_ <= 0b11); // Fits in 2 bits.
@@ -1217,17 +1287,25 @@ impl Instruction {
     }
 
     pub(crate) fn encode<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
-        if let Some(Operand {
-            size: Size::_16, ..
-        }) = self.operands.first()
+        if let Some(Operand::Register(reg)) = self.operands.first()
+            && reg.is_16_bits()
             && self.kind != InstructionKind::Ret
         {
             w.write_all(&[0x66])?; // 16 bits prefix.
         }
 
         for op in &self.operands {
-            if op.is_effective_address() && (op.size == Size::_8 || op.size == Size::_16) {
-                return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+            match op {
+                Operand::EffectiveAddress(EffectiveAddress {
+                    base: Some(reg), ..
+                })
+                | Operand::EffectiveAddress(EffectiveAddress {
+                    index_scale: Some((reg, _)),
+                    ..
+                }) if !(reg.is_64_bits() || reg.is_32_bits()) => {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
+                _ => {}
             }
         }
 
@@ -1240,16 +1318,16 @@ impl Instruction {
                 let lhs = &self.operands[0];
                 let rhs = &self.operands[1];
 
-                if (lhs.is_reg() && rhs.is_rm()) || (lhs.is_rm() && rhs.is_reg()) {
-                    if lhs.size != rhs.size {
-                        return Err(std::io::Error::from(io::ErrorKind::InvalidData));
-                    }
-                }
+                //if (lhs.is_reg() && rhs.is_rm()) || (lhs.is_rm() && rhs.is_reg()) {
+                //    if lhs.size != rhs.size {
+                //        return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                //    }
+                //}
 
-                match (&lhs.kind, &rhs.kind, lhs.size) {
+                match (&lhs, &rhs) {
                     // mov r, imm
                     // Encoding: OI 	opcode + rd (w) 	imm8/16/32/64
-                    (OperandKind::Register(reg), OperandKind::Immediate(imm), Size::_8) => {
+                    (Operand::Register(reg), Operand::Immediate(imm)) if reg.is_8_bits() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1261,11 +1339,7 @@ impl Instruction {
                         w.write_all(&[0xB0 | reg.to_3_bits()])?;
                         Instruction::encode_imm(w, *imm, &lhs.size)?;
                     }
-                    (
-                        OperandKind::Register(reg),
-                        OperandKind::Immediate(imm),
-                        Size::_16 | Size::_32,
-                    ) => {
+                    (Operand::Register(reg), Operand::Immediate(imm)) if reg.is_16_bits() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1275,9 +1349,21 @@ impl Instruction {
                             Some(lhs),
                         )?;
                         w.write_all(&[0xB8 | reg.to_3_bits()])?;
-                        Instruction::encode_imm(w, *imm, &lhs.size)?;
+                        Instruction::encode_imm(w, *imm, &Size::_16)?;
                     }
-                    (OperandKind::Register(reg), OperandKind::Immediate(imm), Size::_64) => {
+                    (Operand::Register(reg), Operand::Immediate(imm)) if reg.is_32_bits() => {
+                        Instruction::encode_rex_from_operands(
+                            w,
+                            false,
+                            None,
+                            None,
+                            None,
+                            Some(lhs),
+                        )?;
+                        w.write_all(&[0xB8 | reg.to_3_bits()])?;
+                        Instruction::encode_imm(w, *imm, &Size::_16)?;
+                    }
+                    (Operand::Register(reg), Operand::Immediate(imm), Size::_64) => {
                         Instruction::encode_rex_from_operands(
                             w,
                             true,
@@ -1291,7 +1377,7 @@ impl Instruction {
                     }
                     // mov rm, r
                     // Encoding: MR 	ModRM:r/m (w) 	ModRM:reg (r)
-                    (_, OperandKind::Register(reg), Size::_8) if lhs.is_rm() => {
+                    (_, Operand::Register(reg), Size::_8) if lhs.is_rm() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1307,7 +1393,7 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
-                    (_, OperandKind::Register(reg), Size::_16 | Size::_32) if lhs.is_rm() => {
+                    (_, Operand::Register(reg), Size::_16 | Size::_32) if lhs.is_rm() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1323,7 +1409,7 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
-                    (_, OperandKind::Register(reg), Size::_64) if lhs.is_rm() => {
+                    (_, Operand::Register(reg), Size::_64) if lhs.is_rm() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             true,
@@ -1342,7 +1428,7 @@ impl Instruction {
 
                     // mov r, rm
                     // Encoding: RM 	ModRM:reg (w) 	ModRM:r/m (r)
-                    (OperandKind::Register(reg), _, Size::_8) if rhs.is_rm() => {
+                    (Operand::Register(reg), _, Size::_8) if rhs.is_rm() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1358,7 +1444,7 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
-                    (OperandKind::Register(reg), _, Size::_16 | Size::_32) if rhs.is_rm() => {
+                    (Operand::Register(reg), _, Size::_16 | Size::_32) if rhs.is_rm() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1374,7 +1460,7 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
-                    (OperandKind::Register(reg), _, Size::_64) if rhs.is_rm() => {
+                    (Operand::Register(reg), _, Size::_64) if rhs.is_rm() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             true,
@@ -1393,7 +1479,7 @@ impl Instruction {
 
                     // mov rm, imm
                     // Encoding: MI 	ModRM:r/m (w) 	imm8/16/32/64
-                    (_, OperandKind::Immediate(imm), Size::_8) if lhs.is_rm() => {
+                    (_, Operand::Immediate(imm), Size::_8) if lhs.is_rm() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1407,7 +1493,7 @@ impl Instruction {
                         w.write_all(&[0xC6, modrm])?;
                         Instruction::encode_imm(w, *imm, &lhs.size)?;
                     }
-                    (_, OperandKind::Immediate(imm), Size::_16) if lhs.is_rm() => {
+                    (_, Operand::Immediate(imm), Size::_16) if lhs.is_rm() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1421,7 +1507,7 @@ impl Instruction {
                         w.write_all(&[0xC7, modrm])?;
                         Instruction::encode_imm(w, *imm, &lhs.size)?;
                     }
-                    (_, OperandKind::Immediate(imm), Size::_32) if lhs.is_rm() => {
+                    (_, Operand::Immediate(imm), Size::_32) if lhs.is_rm() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1435,7 +1521,7 @@ impl Instruction {
                         w.write_all(&[0xC7, modrm])?;
                         Instruction::encode_imm(w, *imm, &lhs.size)?;
                     }
-                    (_, OperandKind::Immediate(imm), Size::_64) if lhs.is_rm() => {
+                    (_, Operand::Immediate(imm), Size::_64) if lhs.is_rm() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             true,
@@ -1468,7 +1554,7 @@ impl Instruction {
                 match (&lhs.kind, &rhs.kind, lhs.size) {
                     // add rm, imm
                     // Encoding: MI 	ModRM:r/m (r, w) 	imm8/16/32
-                    (_, OperandKind::Immediate(imm), Size::_8) if lhs.is_rm() => {
+                    (_, Operand::Immediate(imm), Size::_8) if lhs.is_rm() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1484,7 +1570,7 @@ impl Instruction {
                         }
                         Instruction::encode_imm(w, *imm, &lhs.size)?;
                     }
-                    (_, OperandKind::Immediate(imm), Size::_16 | Size::_32) if lhs.is_rm() => {
+                    (_, Operand::Immediate(imm), Size::_16 | Size::_32) if lhs.is_rm() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1501,7 +1587,7 @@ impl Instruction {
 
                         Instruction::encode_imm(w, *imm, &lhs.size)?;
                     }
-                    (_, OperandKind::Immediate(imm), Size::_64) if lhs.is_rm() => {
+                    (_, Operand::Immediate(imm), Size::_64) if lhs.is_rm() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             true,
@@ -1519,7 +1605,7 @@ impl Instruction {
                     }
                     // add rm, r
                     // Encoding: MR 	ModRM:r/m (r, w) 	ModRM:reg (r)
-                    (_, OperandKind::Register(reg), Size::_8) if lhs.is_rm() => {
+                    (_, Operand::Register(reg), Size::_8) if lhs.is_rm() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1535,7 +1621,7 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
-                    (_, OperandKind::Register(reg), Size::_16 | Size::_32 | Size::_64)
+                    (_, Operand::Register(reg), Size::_16 | Size::_32 | Size::_64)
                         if lhs.is_rm() =>
                     {
                         Instruction::encode_rex_from_operands(
@@ -1576,8 +1662,8 @@ impl Instruction {
                 match (&lhs.kind, &rhs.kind, lhs.size) {
                     // imul r, rm
                     // Encoding: RM 	ModRM:reg (r, w) 	ModRM:r/m (r)
-                    (OperandKind::Register(reg), _, Size::_16)
-                    | (OperandKind::Register(reg), _, Size::_32)
+                    (Operand::Register(reg), _, Size::_16)
+                    | (Operand::Register(reg), _, Size::_32)
                         if rhs.is_rm() =>
                     {
                         Instruction::encode_rex_from_operands(
@@ -1595,7 +1681,7 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
-                    (OperandKind::Register(reg), _, Size::_64) if rhs.is_rm() => {
+                    (Operand::Register(reg), _, Size::_64) if rhs.is_rm() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             true,
@@ -1728,7 +1814,7 @@ impl Instruction {
                 match op.kind {
                     // push r
                     // Encoding: O 	opcode + rd (r)
-                    OperandKind::Register(reg) => {
+                    Operand::Register(reg) => {
                         if reg.is_extended() {
                             Instruction::encode_rex_from_operands(
                                 w,
@@ -1743,7 +1829,7 @@ impl Instruction {
                     }
                     // push imm
                     // Encoding: I 	imm8/16/32
-                    OperandKind::Immediate(imm) => {
+                    Operand::Immediate(imm) => {
                         if let Ok(imm) = u8::try_from(imm) {
                             w.write_all(&[0x6A])?;
                             w.write_all(&imm.to_le_bytes())?;
@@ -1758,7 +1844,7 @@ impl Instruction {
                     }
                     // push rm
                     // Encoding: M 	ModRM:r/m (r)
-                    OperandKind::EffectiveAddress(addr) => {
+                    Operand::EffectiveAddress(addr) => {
                         if op.size == Size::_8 {
                             return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                         }
@@ -1790,7 +1876,7 @@ impl Instruction {
                 match op.kind {
                     // pop r
                     // Encoding: O 	opcode + rd (w)
-                    OperandKind::Register(reg) => {
+                    Operand::Register(reg) => {
                         if reg.is_extended() {
                             Instruction::encode_rex_from_operands(
                                 w,
@@ -1806,7 +1892,7 @@ impl Instruction {
                     }
                     // pop rm
                     // Encoding: M 	ModRM:r/m (w)
-                    OperandKind::EffectiveAddress(addr) => {
+                    Operand::EffectiveAddress(addr) => {
                         if op.size == Size::_8 {
                             return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                         }
@@ -1901,13 +1987,13 @@ impl Interpreter {
         assert_eq!(dst.size, src.size);
 
         match (&dst.kind, &src.kind) {
-            (OperandKind::FnName(_), _) => panic!("invalid store to fn name"),
-            (_, OperandKind::FnName(_)) => {
+            (Operand::FnName(_), _) => panic!("invalid store to fn name"),
+            (_, Operand::FnName(_)) => {
                 todo!()
             }
-            (OperandKind::Register(_), OperandKind::Register(_))
-            | (OperandKind::EffectiveAddress(_), OperandKind::Register(_))
-            | (OperandKind::Register(_), OperandKind::EffectiveAddress(_)) => {
+            (Operand::Register(_), Operand::Register(_))
+            | (Operand::EffectiveAddress(_), Operand::Register(_))
+            | (Operand::Register(_), Operand::EffectiveAddress(_)) => {
                 let value = self
                     .state
                     .get(&(&src.kind).into())
@@ -1915,13 +2001,13 @@ impl Interpreter {
                     .clone();
                 self.state.insert((&dst.kind).into(), value);
             }
-            (OperandKind::Register(_), OperandKind::Immediate(imm))
-            | (OperandKind::EffectiveAddress(_), OperandKind::Immediate(imm)) => {
+            (Operand::Register(_), Operand::Immediate(imm))
+            | (Operand::EffectiveAddress(_), Operand::Immediate(imm)) => {
                 self.state
                     .insert((&dst.kind).into(), EvalValue::new_int(*imm));
             }
-            (OperandKind::Immediate(_), _) => panic!("invalid store destination"),
-            (OperandKind::EffectiveAddress(_), OperandKind::EffectiveAddress(_)) => {
+            (Operand::Immediate(_), _) => panic!("invalid store destination"),
+            (Operand::EffectiveAddress(_), Operand::EffectiveAddress(_)) => {
                 panic!("unsupported store")
             }
         };
@@ -1931,7 +2017,7 @@ impl Interpreter {
         assert_eq!(dst.size, src.size);
 
         match (&dst.kind, &src.kind) {
-            (OperandKind::Register(_), OperandKind::EffectiveAddress(_)) => {
+            (Operand::Register(_), Operand::EffectiveAddress(_)) => {
                 let value = self
                     .state
                     .get(&(&src.kind).into())
@@ -1994,14 +2080,14 @@ impl Interpreter {
 
                     let dst_reg = match &ins.operands[0] {
                         Operand {
-                            kind: OperandKind::Register(reg),
+                            kind: Operand::Register(reg),
                             ..
                         } => reg,
                         _ => panic!("invalid dst"),
                     };
 
                     match ins.operands[1].kind {
-                        OperandKind::Register(reg) => {
+                        Operand::Register(reg) => {
                             let op_value = self
                                 .state
                                 .get(&MemoryLocation::Register(asm::Register::Amd64(reg)))
@@ -2021,7 +2107,7 @@ impl Interpreter {
                 InstructionKind::IDiv => {
                     assert_eq!(ins.operands.len(), 1);
                     match ins.operands[0].kind {
-                        OperandKind::Register(reg) => {
+                        Operand::Register(reg) => {
                             let divisor = self
                                 .state
                                 .get(&MemoryLocation::Register(asm::Register::Amd64(reg)))
@@ -2057,7 +2143,7 @@ impl Interpreter {
 
                     assert_eq!(ins.operands.len(), 1);
                     let fn_name = match &ins.operands.first().unwrap().kind {
-                        OperandKind::FnName(fn_name) => fn_name,
+                        Operand::FnName(fn_name) => fn_name,
                         _ => panic!("invalid call"),
                     };
 
@@ -2097,7 +2183,7 @@ impl Interpreter {
                     assert_eq!(op.size, Size::_64);
 
                     match op.kind {
-                        OperandKind::Register(_) | OperandKind::EffectiveAddress(_) => {}
+                        Operand::Register(_) | Operand::EffectiveAddress(_) => {}
                         _ => panic!("invalid push argument"),
                     };
                     let sp = self.stack_offset();
@@ -2132,11 +2218,11 @@ impl Operand {
     }
 
     pub(crate) fn is_reg(&self) -> bool {
-        matches!(self.kind, OperandKind::Register(_))
+        matches!(self.kind, Operand::Register(_))
     }
 
     pub(crate) fn is_effective_address(&self) -> bool {
-        matches!(self.kind, OperandKind::EffectiveAddress(_))
+        matches!(self.kind, Operand::EffectiveAddress(_))
     }
 
     pub(crate) fn is_rm(&self) -> bool {
@@ -2145,21 +2231,21 @@ impl Operand {
 
     pub(crate) fn as_reg(&self) -> Option<Register> {
         match self.kind {
-            OperandKind::Register(reg) => Some(reg),
+            Operand::Register(reg) => Some(reg),
             _ => None,
         }
     }
 
     pub(crate) fn as_effective_address(&self) -> Option<EffectiveAddress> {
         match self.kind {
-            OperandKind::EffectiveAddress(addr) => Some(addr),
+            Operand::EffectiveAddress(addr) => Some(addr),
             _ => None,
         }
     }
 
     pub(crate) fn as_imm(&self) -> Option<i64> {
         match self.kind {
-            OperandKind::Immediate(imm) => Some(imm),
+            Operand::Immediate(imm) => Some(imm),
             _ => None,
         }
     }
@@ -2196,11 +2282,11 @@ impl Display for Instruction {
     }
 }
 
-impl From<&MemoryLocation> for OperandKind {
+impl From<&MemoryLocation> for Operand {
     fn from(value: &MemoryLocation) -> Self {
         match value {
-            MemoryLocation::Register(asm::Register::Amd64(reg)) => OperandKind::Register(*reg),
-            MemoryLocation::Stack(off) => OperandKind::EffectiveAddress(EffectiveAddress {
+            MemoryLocation::Register(asm::Register::Amd64(reg)) => Operand::Register(*reg),
+            MemoryLocation::Stack(off) => Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rsp),
                 index_scale: None,
                 displacement: (*off).try_into().unwrap(), // TODO: handle gracefully,
@@ -2209,32 +2295,32 @@ impl From<&MemoryLocation> for OperandKind {
     }
 }
 
-impl From<MemoryLocation> for OperandKind {
+impl From<MemoryLocation> for Operand {
     fn from(value: MemoryLocation) -> Self {
         (&value).into()
     }
 }
 
-impl From<OperandKind> for MemoryLocation {
-    fn from(value: OperandKind) -> Self {
+impl From<Operand> for MemoryLocation {
+    fn from(value: Operand) -> Self {
         (&value).into()
     }
 }
 
-impl From<&OperandKind> for MemoryLocation {
-    fn from(value: &OperandKind) -> Self {
+impl From<&Operand> for MemoryLocation {
+    fn from(value: &Operand) -> Self {
         match value {
-            OperandKind::Register(register) => {
+            Operand::Register(register) => {
                 MemoryLocation::Register(asm::Register::Amd64(*register))
             }
-            OperandKind::Immediate(_imm) => panic!(),
-            OperandKind::EffectiveAddress(EffectiveAddress {
+            Operand::Immediate(_imm) => panic!(),
+            Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rsp),
                 displacement,
                 ..
             }) => MemoryLocation::Stack(*displacement as isize),
-            OperandKind::EffectiveAddress(_) => todo!(),
-            OperandKind::FnName(_) => todo!(),
+            Operand::EffectiveAddress(_) => todo!(),
+            Operand::FnName(_) => todo!(),
         }
     }
 }
@@ -2253,7 +2339,7 @@ mod tests {
             let ins = Instruction {
                 kind: InstructionKind::Push,
                 operands: vec![Operand {
-                    kind: OperandKind::Register(Register::R15),
+                    kind: Operand::Register(Register::R15),
                     size: Size::_64,
                 }],
                 origin: Origin::new_unknown(),
@@ -2267,7 +2353,7 @@ mod tests {
             let ins = Instruction {
                 kind: InstructionKind::Pop,
                 operands: vec![Operand {
-                    kind: OperandKind::Register(Register::Rbx),
+                    kind: Operand::Register(Register::Rbx),
                     size: Size::_64,
                 }],
                 origin: Origin::new_unknown(),
@@ -2282,11 +2368,11 @@ mod tests {
                 kind: InstructionKind::Lea,
                 operands: vec![
                     Operand {
-                        kind: OperandKind::Register(Register::R8),
+                        kind: Operand::Register(Register::R8),
                         size: Size::_64,
                     },
                     Operand {
-                        kind: OperandKind::EffectiveAddress(EffectiveAddress {
+                        kind: Operand::EffectiveAddress(EffectiveAddress {
                             base: Some(Register::R13),
                             index_scale: Some((Register::R14, Scale::_8)),
                             displacement: 42,
@@ -2304,7 +2390,7 @@ mod tests {
             let ins = Instruction {
                 kind: InstructionKind::Push,
                 operands: vec![Operand {
-                    kind: OperandKind::EffectiveAddress(EffectiveAddress {
+                    kind: Operand::EffectiveAddress(EffectiveAddress {
                         base: Some(Register::R12),
                         index_scale: Some((Register::Rbx, Scale::_4)),
                         displacement: 1,
@@ -2321,7 +2407,7 @@ mod tests {
             let ins = Instruction {
                 kind: InstructionKind::Pop,
                 operands: vec![Operand {
-                    kind: OperandKind::EffectiveAddress(EffectiveAddress {
+                    kind: Operand::EffectiveAddress(EffectiveAddress {
                         base: Some(Register::R12),
                         index_scale: Some((Register::Rbx, Scale::_4)),
                         displacement: 1,
@@ -2338,7 +2424,7 @@ mod tests {
             let ins = Instruction {
                 kind: InstructionKind::IDiv,
                 operands: vec![Operand {
-                    kind: OperandKind::EffectiveAddress(EffectiveAddress {
+                    kind: Operand::EffectiveAddress(EffectiveAddress {
                         base: Some(Register::R12),
                         index_scale: Some((Register::Rbx, Scale::_4)),
                         displacement: 1,
@@ -2356,11 +2442,11 @@ mod tests {
                 kind: InstructionKind::Mov,
                 operands: vec![
                     Operand {
-                        kind: OperandKind::Register(Register::Rbp),
+                        kind: Operand::Register(Register::Rbp),
                         size: Size::_64,
                     },
                     Operand {
-                        kind: OperandKind::Register(Register::Rsp),
+                        kind: Operand::Register(Register::Rsp),
                         size: Size::_64,
                     },
                 ],
@@ -2412,11 +2498,11 @@ mod tests {
             kind: InstructionKind::Mov,
             operands: vec![
                 Operand {
-                    kind: OperandKind::Register(Register::Rbp),
+                    kind: Operand::Register(Register::Rbp),
                     size: Size::_64,
                 },
                 Operand {
-                    kind: OperandKind::Register(Register::Rsp),
+                    kind: Operand::Register(Register::Rsp),
                     size: Size::_64,
                 },
             ],
