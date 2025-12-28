@@ -1233,6 +1233,12 @@ impl Instruction {
                 let lhs = &self.operands[0];
                 let rhs = &self.operands[1];
 
+                if (lhs.is_reg() && rhs.is_rm()) || (lhs.is_rm() && rhs.is_reg()) {
+                    if lhs.size != rhs.size {
+                        return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                    }
+                }
+
                 match (&lhs.kind, &rhs.kind, lhs.size) {
                     // mov r, imm
                     // Encoding: OI 	opcode + rd (w) 	imm8/16/32/64
@@ -1279,7 +1285,6 @@ impl Instruction {
                     // mov rm, r
                     // Encoding: MR 	ModRM:r/m (w) 	ModRM:reg (r)
                     (_, OperandKind::Register(reg), Size::_8) if lhs.is_rm() => {
-                        if lhs.size!=rhs.size
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1438,7 +1443,7 @@ impl Instruction {
                         Instruction::encode_imm(w, *imm, &lhs.size)?;
                     }
 
-                    x => unimplemented!("{:?}", x),
+                    _ => return Err(std::io::Error::from(io::ErrorKind::InvalidData)),
                 }
                 Ok(())
             }
