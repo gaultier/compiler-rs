@@ -892,7 +892,8 @@ impl Instruction {
         // > or uses a 64-bit operand.
         for op in operands {
             match (&op.kind, op.size) {
-                (
+                (_, Size::_64)
+                | (
                     OperandKind::Register(
                         Register::Rsp | Register::Rbp | Register::Rsi | Register::Rdi,
                     ),
@@ -1702,14 +1703,16 @@ impl Instruction {
                     // push r
                     // Encoding: O 	opcode + rd (r)
                     OperandKind::Register(reg) => {
-                        Instruction::encode_rex_from_operands(
-                            w,
-                            false,
-                            None,
-                            None,
-                            None,
-                            Some(op),
-                        )?;
+                        if reg.is_extended() {
+                            Instruction::encode_rex_from_operands(
+                                w,
+                                false,
+                                None,
+                                None,
+                                None,
+                                Some(op),
+                            )?;
+                        }
                         w.write_all(&[0x50 | reg.to_3_bits()])
                     }
                     // push imm
@@ -1762,14 +1765,16 @@ impl Instruction {
                     // pop r
                     // Encoding: O 	opcode + rd (w)
                     OperandKind::Register(reg) => {
-                        Instruction::encode_rex_from_operands(
-                            w,
-                            false,
-                            None,
-                            None,
-                            None,
-                            Some(op),
-                        )?;
+                        if reg.is_extended() {
+                            Instruction::encode_rex_from_operands(
+                                w,
+                                false,
+                                None,
+                                None,
+                                None,
+                                Some(op),
+                            )?;
+                        }
 
                         w.write_all(&[0x58 | reg.to_3_bits()])
                     }
