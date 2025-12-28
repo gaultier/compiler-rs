@@ -2038,14 +2038,29 @@ mod tests {
     }
 
     fn oracle_encode(ins: &Instruction) -> std::io::Result<Vec<u8>> {
-        let mut child = std::process::Command::new("llvm-mc")
-            .args(&["-triple=x86_64", "--x86-asm-syntax=intel", "--filetype=obj"])
+        let mut child = std::process::Command::new("clang")
+            .args(&[
+                "--target=x86_64-unknown-linux",
+                "-static",
+                "-fuse-ld=lld",
+                "-mllvm",
+                "--x86-asm-syntax=intel",
+                "-x",
+                "assembler",
+                "-O0",
+                "-nostdlib",
+                "-Wl,--oformat=binary",
+                "-o",
+                "/dev/stdout", // FIXME: Windows.
+                "-",
+            ])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()?;
 
         {
             let mut stdin = child.stdin.take().unwrap();
+            //write!(stdin, ".globl _start\n _start:\n")?;
             ins.write(&mut stdin)?;
         }
         let output = child.wait_with_output()?;
