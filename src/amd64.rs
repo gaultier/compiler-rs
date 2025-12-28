@@ -962,32 +962,61 @@ impl Instruction {
         wr.write_all(&[res])
     }
 
-    fn encode_rex_from_operand<W: Write>(w: &mut W, op: &Operand) -> std::io::Result<()> {
-        match op.kind {
-            OperandKind::Register(reg) => {
-                Instruction::encode_rex(
-                    w,
-                    op.size == Size::_64,
-                    reg.is_extended(),
-                    false,
-                    false,
-                    std::slice::from_ref(op),
-                )?;
-            }
-            OperandKind::EffectiveAddress(addr) => {
-                Instruction::encode_rex(
-                    w,
-                    op.size == Size::_64,
-                    false,
-                    addr.index.map(|x| x.is_extended()).unwrap_or_default(),
-                    addr.base.is_extended(),
-                    std::slice::from_ref(op),
-                )?;
-            }
+    fn encode_rex_from_operands<W: Write>(
+        w: &mut W,
+        wide: bool,
+        op_modrm_rm: Option<&Operand>,
+        op_modrm_reg: Option<&Operand>,
+        op_sib: Option<&Operand>,
+        op_reg: Option<&Operand>,
+    ) -> std::io::Result<()> {
+        let r = match op_modrm_reg {
+            Some(Operand {
+                kind: OperandKind::Register(reg),
+                ..
+            }) if reg.is_extended() => true,
+            _ => false,
+        };
 
-            _ => {}
-        }
-        Ok(())
+        let x = match op_sib {
+            Some(Operand {
+                kind:
+                    OperandKind::EffectiveAddress(EffectiveAddress {
+                        index: Some(reg), ..
+                    }),
+                ..
+            }) if reg.is_extended() => true,
+            _ => false,
+        };
+
+        let mut b = match op_modrm_rm {
+            Some(Operand {
+                kind: OperandKind::Register(reg),
+                ..
+            }) if reg.is_extended() => true,
+            Some(Operand {
+                kind: OperandKind::EffectiveAddress(EffectiveAddress { base: reg, .. }),
+                ..
+            }) if reg.is_extended() => true,
+            _ => false,
+        };
+
+        b |= match op_reg {
+            Some(Operand {
+                kind: OperandKind::Register(reg),
+                ..
+            }) if reg.is_extended() => true,
+            _ => false,
+        };
+
+        Instruction::encode_rex(
+            w,
+            wide,
+            r,
+            x,
+            b,
+            &[], // TODO
+        )
     }
 
     // Format: `mod (2 bits) | reg (3 bits) | rm (3bits)`.
@@ -1198,14 +1227,16 @@ impl Instruction {
                 let rhs = &self.operands[1];
 
                 match (&lhs.kind, &rhs.kind, lhs.size) {
+                    // mov r, imm
+                    // Encoding: OI 	opcode + rd (w) 	imm8/16/32/64
                     (OperandKind::Register(reg), OperandKind::Immediate(imm), Size::_8) => {
-                        Instruction::encode_rex(
+                        Instruction::encode_rex_from_operands(
                             w,
                             false,
-                            reg.is_extended(),
-                            false,
-                            false,
-                            self.operands.as_slice(),
+                            None,
+                            None,
+                            None,
+                            Some(lhs),
                         )?;
                         w.write_all(&[0xB0 | reg.to_3_bits()])?;
                         Instruction::encode_imm(w, *imm, &lhs.size)?;
@@ -1215,38 +1246,39 @@ impl Instruction {
                         OperandKind::Immediate(imm),
                         Size::_16 | Size::_32,
                     ) => {
-                        Instruction::encode_rex(
+                        Instruction::encode_rex_from_operands(
                             w,
                             false,
-                            reg.is_extended(),
-                            false,
-                            false,
-                            self.operands.as_slice(),
+                            None,
+                            None,
+                            None,
+                            Some(lhs),
                         )?;
                         w.write_all(&[0xB8 | reg.to_3_bits()])?;
                         Instruction::encode_imm(w, *imm, &lhs.size)?;
                     }
                     (OperandKind::Register(reg), OperandKind::Immediate(imm), Size::_64) => {
-                        Instruction::encode_rex(
+                        Instruction::encode_rex_from_operands(
                             w,
                             true,
-                            false,
-                            reg.is_extended(),
-                            false,
-                            self.operands.as_slice(),
+                            None,
+                            None,
+                            None,
+                            Some(lhs),
                         )?;
-                        w.write_all(&[0xB8])?;
+                        w.write_all(&[0xB8 | reg.to_3_bits()])?;
                         Instruction::encode_imm(w, *imm, &lhs.size)?;
                     }
                     // mov rm, r
+                    // Encoding: MR 	ModRM:r/m (w) 	ModRM:reg (r)
                     (_, OperandKind::Register(reg), Size::_8) if lhs.is_rm() => {
-                        Instruction::encode_rex(
+                        Instruction::encode_rex_from_operands(
                             w,
                             false,
-                            reg.is_extended(),
-                            false,
-                            false,
-                            self.operands.as_slice(),
+                            Some(lhs),
+                            Some(rhs),
+                            None,
+                            None,
                         )?;
                         let modrm =
                             Instruction::encode_modrm(ModRmEncoding::SlashR, lhs, Some(*reg));
@@ -1256,13 +1288,13 @@ impl Instruction {
                         }
                     }
                     (_, OperandKind::Register(reg), Size::_16 | Size::_32) if lhs.is_rm() => {
-                        Instruction::encode_rex(
+                        Instruction::encode_rex_from_operands(
                             w,
                             false,
-                            reg.is_extended(),
-                            false,
-                            false,
-                            self.operands.as_slice(),
+                            Some(lhs),
+                            Some(rhs),
+                            None,
+                            None,
                         )?;
                         let modrm =
                             Instruction::encode_modrm(ModRmEncoding::SlashR, lhs, Some(*reg));
@@ -1272,13 +1304,13 @@ impl Instruction {
                         }
                     }
                     (_, OperandKind::Register(reg), Size::_64) if lhs.is_rm() => {
-                        Instruction::encode_rex(
+                        Instruction::encode_rex_from_operands(
                             w,
                             true,
-                            reg.is_extended(),
-                            false,
-                            false,
-                            self.operands.as_slice(),
+                            Some(lhs),
+                            Some(rhs),
+                            None,
+                            None,
                         )?;
                         let modrm =
                             Instruction::encode_modrm(ModRmEncoding::SlashR, lhs, Some(*reg));
@@ -1289,14 +1321,15 @@ impl Instruction {
                     }
 
                     // mov r, rm
-                    (OperandKind::Register(reg), _, Size::_8) if lhs.is_rm() => {
-                        Instruction::encode_rex(
+                    // Encoding: RM 	ModRM:reg (w) 	ModRM:r/m (r)
+                    (OperandKind::Register(reg), _, Size::_8) if rhs.is_rm() => {
+                        Instruction::encode_rex_from_operands(
                             w,
                             false,
-                            reg.is_extended(),
-                            false,
-                            false,
-                            self.operands.as_slice(),
+                            Some(rhs),
+                            Some(lhs),
+                            None,
+                            None,
                         )?;
                         let modrm =
                             Instruction::encode_modrm(ModRmEncoding::SlashR, rhs, Some(*reg));
@@ -1305,14 +1338,14 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
-                    (OperandKind::Register(reg), _, Size::_16 | Size::_32) if lhs.is_rm() => {
-                        Instruction::encode_rex(
+                    (OperandKind::Register(reg), _, Size::_16 | Size::_32) if rhs.is_rm() => {
+                        Instruction::encode_rex_from_operands(
                             w,
                             false,
-                            reg.is_extended(),
-                            false,
-                            false,
-                            self.operands.as_slice(),
+                            Some(rhs),
+                            Some(lhs),
+                            None,
+                            None,
                         )?;
                         let modrm =
                             Instruction::encode_modrm(ModRmEncoding::SlashR, rhs, Some(*reg));
@@ -1321,14 +1354,14 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
-                    (OperandKind::Register(reg), _, Size::_64) if lhs.is_rm() => {
-                        Instruction::encode_rex(
+                    (OperandKind::Register(reg), _, Size::_64) if rhs.is_rm() => {
+                        Instruction::encode_rex_from_operands(
                             w,
                             true,
-                            reg.is_extended(),
-                            false,
-                            false,
-                            self.operands.as_slice(),
+                            Some(rhs),
+                            Some(lhs),
+                            None,
+                            None,
                         )?;
                         let modrm =
                             Instruction::encode_modrm(ModRmEncoding::SlashR, rhs, Some(*reg));
@@ -1339,29 +1372,58 @@ impl Instruction {
                     }
 
                     // mov rm, imm
+                    // Encoding: MI 	ModRM:r/m (w) 	imm8/16/32/64
                     (_, OperandKind::Immediate(imm), Size::_8) if lhs.is_rm() => {
-                        Instruction::encode_rex_from_operand(w, lhs)?;
+                        Instruction::encode_rex_from_operands(
+                            w,
+                            false,
+                            Some(lhs),
+                            None,
+                            None,
+                            None,
+                        )?;
 
                         let modrm = Instruction::encode_modrm(ModRmEncoding::Slash0, lhs, None);
                         w.write_all(&[0xC6, modrm])?;
                         Instruction::encode_imm(w, *imm, &lhs.size)?;
                     }
                     (_, OperandKind::Immediate(imm), Size::_16) if lhs.is_rm() => {
-                        Instruction::encode_rex_from_operand(w, lhs)?;
+                        Instruction::encode_rex_from_operands(
+                            w,
+                            false,
+                            Some(lhs),
+                            None,
+                            None,
+                            None,
+                        )?;
 
                         let modrm = Instruction::encode_modrm(ModRmEncoding::Slash0, lhs, None);
                         w.write_all(&[0xC7, modrm])?;
                         Instruction::encode_imm(w, *imm, &lhs.size)?;
                     }
                     (_, OperandKind::Immediate(imm), Size::_32) if lhs.is_rm() => {
-                        Instruction::encode_rex_from_operand(w, lhs)?;
+                        Instruction::encode_rex_from_operands(
+                            w,
+                            false,
+                            Some(lhs),
+                            None,
+                            None,
+                            None,
+                        )?;
 
                         let modrm = Instruction::encode_modrm(ModRmEncoding::Slash0, lhs, None);
                         w.write_all(&[0xC7, modrm])?;
                         Instruction::encode_imm(w, *imm, &lhs.size)?;
                     }
                     (_, OperandKind::Immediate(imm), Size::_64) if lhs.is_rm() => {
-                        Instruction::encode_rex_from_operand(w, lhs)?;
+                        Instruction::encode_rex_from_operands(
+                            w,
+                            true,
+                            Some(lhs),
+                            None,
+                            None,
+                            None,
+                        )?;
 
                         let modrm = Instruction::encode_modrm(ModRmEncoding::Slash0, lhs, None);
                         w.write_all(&[0xC7, modrm])?;
@@ -1384,8 +1446,17 @@ impl Instruction {
                 }
 
                 match (&lhs.kind, &rhs.kind, lhs.size) {
+                    // add rm, imm
+                    // Encoding: MI 	ModRM:r/m (r, w) 	imm8/16/32
                     (_, OperandKind::Immediate(imm), Size::_8) if lhs.is_rm() => {
-                        Instruction::encode_rex_from_operand(w, lhs)?;
+                        Instruction::encode_rex_from_operands(
+                            w,
+                            false,
+                            Some(lhs),
+                            None,
+                            None,
+                            None,
+                        )?;
                         let modrm = Instruction::encode_modrm(ModRmEncoding::Slash0, lhs, None);
                         w.write_all(&[0x80, modrm])?;
                         if let Some(addr) = lhs.as_effective_address() {
@@ -1394,7 +1465,14 @@ impl Instruction {
                         Instruction::encode_imm(w, *imm, &lhs.size)?;
                     }
                     (_, OperandKind::Immediate(imm), Size::_16 | Size::_32) if lhs.is_rm() => {
-                        Instruction::encode_rex_from_operand(w, lhs)?;
+                        Instruction::encode_rex_from_operands(
+                            w,
+                            false,
+                            Some(lhs),
+                            None,
+                            None,
+                            None,
+                        )?;
                         let modrm = Instruction::encode_modrm(ModRmEncoding::Slash0, lhs, None);
                         w.write_all(&[0x81, modrm])?;
                         if let Some(addr) = lhs.as_effective_address() {
@@ -1404,7 +1482,14 @@ impl Instruction {
                         Instruction::encode_imm(w, *imm, &lhs.size)?;
                     }
                     (_, OperandKind::Immediate(imm), Size::_64) if lhs.is_rm() => {
-                        Instruction::encode_rex_from_operand(w, lhs)?;
+                        Instruction::encode_rex_from_operands(
+                            w,
+                            true,
+                            Some(lhs),
+                            None,
+                            None,
+                            None,
+                        )?;
                         let modrm = Instruction::encode_modrm(ModRmEncoding::Slash0, lhs, None);
                         w.write_all(&[0x83, modrm])?;
                         if let Some(addr) = lhs.as_effective_address() {
@@ -1412,8 +1497,17 @@ impl Instruction {
                         }
                         Instruction::encode_imm(w, *imm, &lhs.size)?;
                     }
+                    // add rm, r
+                    // Encoding: MR 	ModRM:r/m (r, w) 	ModRM:reg (r)
                     (_, OperandKind::Register(reg), Size::_8) if lhs.is_rm() => {
-                        Instruction::encode_rex_from_operand(w, lhs)?;
+                        Instruction::encode_rex_from_operands(
+                            w,
+                            false,
+                            Some(lhs),
+                            Some(rhs),
+                            None,
+                            None,
+                        )?;
                         let modrm =
                             Instruction::encode_modrm(ModRmEncoding::SlashR, lhs, Some(*reg));
                         w.write_all(&[0x00, modrm])?;
@@ -1424,7 +1518,14 @@ impl Instruction {
                     (_, OperandKind::Register(reg), Size::_16 | Size::_32 | Size::_64)
                         if lhs.is_rm() =>
                     {
-                        Instruction::encode_rex_from_operand(w, lhs)?;
+                        Instruction::encode_rex_from_operands(
+                            w,
+                            lhs.size == Size::_64,
+                            Some(lhs),
+                            Some(rhs),
+                            None,
+                            None,
+                        )?;
                         let modrm =
                             Instruction::encode_modrm(ModRmEncoding::SlashR, lhs, Some(*reg));
                         w.write_all(&[0x01, modrm])?;
@@ -1453,10 +1554,20 @@ impl Instruction {
                 }
 
                 match (&lhs.kind, &rhs.kind, lhs.size) {
+                    // imul r, rm
+                    // Encoding: RM 	ModRM:reg (r, w) 	ModRM:r/m (r)
                     (OperandKind::Register(reg), _, Size::_16)
                     | (OperandKind::Register(reg), _, Size::_32)
                         if rhs.is_rm() =>
                     {
+                        Instruction::encode_rex_from_operands(
+                            w,
+                            false,
+                            Some(rhs),
+                            Some(lhs),
+                            None,
+                            None,
+                        )?;
                         let modrm =
                             Instruction::encode_modrm(ModRmEncoding::SlashR, rhs, Some(*reg));
                         w.write_all(&[0x0f, 0xaf, modrm])?;
@@ -1497,63 +1608,37 @@ impl Instruction {
                 let modrm = Instruction::encode_modrm(ModRmEncoding::Slash7, op, None);
 
                 match (&op.kind, op.size) {
-                    (OperandKind::Register(reg), Size::_8) => {
-                        Instruction::encode_rex(
+                    // idiv rm
+                    // Encoding: M 	ModRM:r/m (r)
+                    (_, Size::_8) if op.is_rm() => {
+                        Instruction::encode_rex_from_operands(
                             w,
                             false,
-                            false,
-                            false,
-                            reg.is_extended(),
-                            self.operands.as_slice(),
+                            Some(op),
+                            None,
+                            None,
+                            None,
                         )?;
                         w.write_all(&[0xf6])?;
                         w.write_all(&[modrm])
                     }
-
-                    (OperandKind::EffectiveAddress(addr), Size::_8) => {
-                        Instruction::encode_rex(
+                    (_, Size::_16 | Size::_32 | Size::_64) if op.is_rm() => {
+                        Instruction::encode_rex_from_operands(
                             w,
-                            false,
-                            false,
-                            addr.index.map(|x| x.is_extended()).unwrap_or_default(),
-                            addr.base.is_extended(),
-                            self.operands.as_slice(),
-                        )?;
-                        w.write_all(&[0xf6])?;
-                        w.write_all(&[modrm])?;
-                        Instruction::encode_sib(w, addr, modrm)
-                    }
-                    (OperandKind::Register(_), Size::_16 | Size::_32) => {
-                        w.write_all(&[0xf7])?;
-                        w.write_all(&[modrm])
-                    }
-                    (OperandKind::Register(reg), Size::_64) => {
-                        Instruction::encode_rex(
-                            w,
-                            true,
-                            false,
-                            false,
-                            reg.is_extended(),
-                            self.operands.as_slice(),
-                        )?;
-                        w.write_all(&[modrm])
-                    }
-                    (OperandKind::EffectiveAddress(addr), Size::_64) => {
-                        Instruction::encode_rex(
-                            w,
-                            true,
-                            false,
-                            addr.index.map(|x| x.is_extended()).unwrap_or_default(),
-                            addr.base.is_extended(),
-                            self.operands.as_slice(),
+                            op.size == Size::_64,
+                            Some(op),
+                            None,
+                            None,
+                            None,
                         )?;
                         w.write_all(&[0xf7])?;
-                        w.write_all(&[modrm])?;
-                        Instruction::encode_sib(w, addr, modrm)
+                        w.write_all(&[modrm])
                     }
                     _ => Err(std::io::Error::from(io::ErrorKind::InvalidData)),
                 }
             }
+            // lea r, m
+            // Encoding: RM 	ModRM:reg (w) 	ModRM:r/m (r)
             InstructionKind::Lea => {
                 if self.operands.len() != 2 {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
@@ -1577,13 +1662,13 @@ impl Instruction {
                 let reg = lhs.as_reg().unwrap();
                 let addr = rhs.as_effective_address().unwrap();
 
-                Instruction::encode_rex(
+                Instruction::encode_rex_from_operands(
                     w,
                     lhs.size == Size::_64,
-                    reg.is_extended(),
-                    addr.index.map(|x| x.is_extended()).unwrap_or_default(),
-                    addr.base.is_extended(),
-                    self.operands.as_slice(),
+                    Some(rhs),
+                    Some(lhs),
+                    None,
+                    None,
                 )?;
 
                 let opcode = 0x8d;
@@ -1609,17 +1694,21 @@ impl Instruction {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
                 match op.kind {
+                    // push r
+                    // Encoding: O 	opcode + rd (r)
                     OperandKind::Register(reg) => {
-                        Instruction::encode_rex(
+                        Instruction::encode_rex_from_operands(
                             w,
                             false,
-                            false,
-                            false,
-                            reg.is_extended(),
-                            self.operands.as_slice(),
+                            None
+                            None,
+                            None,
+                            Some(op),
                         )?;
                         w.write_all(&[0x50 | reg.to_3_bits()])
                     }
+                    // push imm
+                    // Encoding: I 	imm8/16/32
                     OperandKind::Immediate(imm) => {
                         if let Ok(imm) = u8::try_from(imm) {
                             w.write_all(&[0x6A])?;
@@ -1633,19 +1722,21 @@ impl Instruction {
                         }
                         Ok(())
                     }
+                    // push rm
+                    // Encoding: M 	ModRM:r/m (r)
                     OperandKind::EffectiveAddress(addr) => {
                         if op.size == Size::_8 {
                             return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                         }
 
-                        Instruction::encode_rex(
+                        Instruction::encode_rex_from_operands(
                             w,
-                            false, // `push` is 64 bits only.
                             false,
-                            addr.index.map(|x| x.is_extended()).unwrap_or_default(),
-                            addr.base.is_extended(),
-                            self.operands.as_slice(),
-                        )?;
+                            Some(op),
+                            None,
+                            None,
+                            None,
+                        );
                         let modrm = Instruction::encode_modrm(ModRmEncoding::Slash6, op, None);
                         w.write_all(&[0xff, modrm])?;
                         Instruction::encode_sib(w, &addr, modrm)
@@ -1663,14 +1754,16 @@ impl Instruction {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
                 match op.kind {
+                    // pop r
+                    // Encoding: O 	opcode + rd (w)
                     OperandKind::Register(reg) => {
-                        Instruction::encode_rex(
+                        Instruction::encode_rex_from_operands(
                             w,
                             false,
-                            false,
-                            false,
-                            reg.is_extended(),
-                            self.operands.as_slice(),
+                            None
+                            None,
+                            None,
+                            Some(op),
                         )?;
 
                         w.write_all(&[0x58 | reg.to_3_bits()])
