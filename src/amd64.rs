@@ -1576,13 +1576,13 @@ impl Instruction {
                         }
                     }
                     (OperandKind::Register(reg), _, Size::_64) if rhs.is_rm() => {
-                        Instruction::encode_rex(
+                        Instruction::encode_rex_from_operands(
                             w,
                             true,
-                            reg.is_extended(),
-                            false,
-                            false,
-                            self.operands.as_slice(),
+                            Some(rhs),
+                            Some(lhs),
+                            None,
+                            None,
                         )?;
                         let modrm =
                             Instruction::encode_modrm(ModRmEncoding::SlashR, rhs, Some(*reg));
@@ -1700,7 +1700,7 @@ impl Instruction {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
-                            None
+                            None,
                             None,
                             None,
                             Some(op),
@@ -1729,14 +1729,7 @@ impl Instruction {
                             return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                         }
 
-                        Instruction::encode_rex_from_operands(
-                            w,
-                            false,
-                            Some(op),
-                            None,
-                            None,
-                            None,
-                        );
+                        Instruction::encode_rex_from_operands(w, false, Some(op), None, None, None);
                         let modrm = Instruction::encode_modrm(ModRmEncoding::Slash6, op, None);
                         w.write_all(&[0xff, modrm])?;
                         Instruction::encode_sib(w, &addr, modrm)
@@ -1760,7 +1753,7 @@ impl Instruction {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
-                            None
+                            None,
                             None,
                             None,
                             Some(op),
@@ -1768,18 +1761,20 @@ impl Instruction {
 
                         w.write_all(&[0x58 | reg.to_3_bits()])
                     }
+                    // pop rm
+                    // Encoding: M 	ModRM:r/m (w)
                     OperandKind::EffectiveAddress(addr) => {
                         if op.size == Size::_8 {
                             return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                         }
 
-                        Instruction::encode_rex(
+                        Instruction::encode_rex_from_operands(
                             w,
-                            false, // `pop` is 64 bits only.
                             false,
-                            addr.index.map(|x| x.is_extended()).unwrap_or_default(),
-                            addr.base.is_extended(),
-                            self.operands.as_slice(),
+                            Some(op),
+                            None,
+                            None,
+                            None,
                         )?;
                         let modrm = Instruction::encode_modrm(ModRmEncoding::Slash0, op, None);
                         w.write_all(&[0x8f, modrm])?;
