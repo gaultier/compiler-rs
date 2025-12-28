@@ -92,6 +92,41 @@ enum ModRmEncoding {
     SlashR,
 }
 
+impl Display for Size {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as usize)
+    }
+}
+
+impl Display for Operand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.kind {
+            OperandKind::Register(register) => f.write_str(register.to_str(&self.size)),
+            OperandKind::Immediate(n) => write!(f, "{}", n),
+            OperandKind::FnName(name) => f.write_str(name),
+            OperandKind::EffectiveAddress(EffectiveAddress {
+                base,
+                index,
+                scale,
+                displacement,
+            }) => {
+                f.write_str(self.size.as_asm_addressing_str())?;
+                write!(f, " [{}", base.to_str(&self.size))?;
+                if let Some(index) = index {
+                    write!(f, "  + {}", index.to_str(&self.size))?;
+                }
+                if *scale != Scale::_0 {
+                    write!(f, "  * {}", *scale as u8)?;
+                }
+                if *displacement > 0 {
+                    write!(f, " {:+}", displacement)?;
+                }
+                write!(f, "]")
+            }
+        }
+    }
+}
+
 pub(crate) fn encode(instructions: &[asm::Instruction]) -> Vec<u8> {
     let mut res = Vec::with_capacity(instructions.len() * 5);
     for ins in instructions {
@@ -1862,7 +1897,16 @@ impl Instruction {
 
 impl Display for Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self)
+        f.write_str(self.kind.to_str())?;
+        self.operands.iter().enumerate().try_for_each(|(i, o)| {
+            if i == 0 {
+                f.write_str(" ")?;
+            } else {
+                f.write_str(", ")?;
+            }
+
+            write!(f, "{}", o)
+        })
     }
 }
 
