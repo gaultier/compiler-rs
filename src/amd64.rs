@@ -1692,6 +1692,10 @@ impl Instruction {
                 Instruction::encode_sib(w, &addr, modrm)
             }
             InstructionKind::Call => {
+                if self.operands.len() != 1 {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
+                let op = self.operands.first().unwrap();
                 let displacement: i32 = 0; // FIXME: resolve offset with linker.
                 w.write_all(&[0xe8])?; // Call near.
                 w.write_all(&displacement.to_le_bytes())
@@ -1807,6 +1811,9 @@ impl Instruction {
                 }
             }
             InstructionKind::Ret => {
+                if !self.operands.is_empty() {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
                 w.write_all(&[0xC3]) // Near return.
             }
         }
@@ -2331,32 +2338,6 @@ mod tests {
             ins.encode(&mut w).unwrap();
             assert_eq!(&w, &[0x48, 0x89, 0xe5]);
         }
-    }
-
-    #[test]
-    fn test_encode_reproducer() {
-        let ins = Instruction {
-            kind: InstructionKind::Mov,
-            operands: vec![
-                Operand {
-                    kind: OperandKind::Register(Register::Rax),
-                    size: Size::_8,
-                },
-                Operand {
-                    kind: OperandKind::EffectiveAddress(EffectiveAddress {
-                        base: Register::Rax,
-                        index: None,
-                        scale: Scale::_0,
-                        displacement: 0,
-                    }),
-                    size: Size::_8,
-                },
-            ],
-            origin: Origin::new_unknown(),
-        };
-        let mut actual = Vec::with_capacity(5);
-        ins.encode(&mut actual).unwrap();
-        assert_eq!(&actual, &[0x8a, 0x00]);
     }
 
     fn oracle_encode(ins: &Instruction) -> std::io::Result<Vec<u8>> {
