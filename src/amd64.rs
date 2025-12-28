@@ -34,9 +34,8 @@ pub enum Scale {
 
 #[derive(Serialize, Debug, Clone, Copy, Arbitrary)]
 pub struct EffectiveAddress {
-    base: Register,
-    index: Option<Register>,
-    scale: Scale,
+    base: Option<Register>,
+    index_scale: Option<(Register, Scale)>,
     displacement: i32,
 }
 
@@ -105,21 +104,31 @@ impl Display for Operand {
             OperandKind::FnName(name) => f.write_str(name),
             OperandKind::EffectiveAddress(EffectiveAddress {
                 base,
-                index,
-                scale,
+                index_scale,
                 displacement,
             }) => {
                 f.write_str(self.size.as_asm_addressing_str())?;
-                write!(f, " [{}", base.to_str(&self.size))?;
-                if let Some(index) = index {
-                    write!(f, "  + {}", index.to_str(&self.size))?;
+                f.write_str("[")?;
+
+                if let Some(base) = base {
+                    f.write_str(base.to_str(&self.size))?;
                 }
-                if *scale != Scale::_0 {
-                    write!(f, "  * {}", *scale as u8)?;
+
+                if base.is_some() && index_scale.is_some() {
+                    f.write_str(" + ")?;
                 }
+
+                if let Some((index, scale)) = index_scale {
+                    f.write_str(index.to_str(&self.size))?;
+                    if *scale != Scale::_0 {
+                        write!(f, "  * {}", *scale as u8)?;
+                    }
+                }
+
                 if *displacement > 0 {
                     write!(f, " {:+}", displacement)?;
                 }
+
                 write!(f, "]")
             }
         }
@@ -692,9 +701,8 @@ impl Emitter {
                         Operand {
                             size: *size,
                             kind: OperandKind::EffectiveAddress(EffectiveAddress {
-                                base: Register::Rsp,
-                                index: None,
-                                scale: Scale::_0,
+                                base: Some(Register::Rsp),
+                                index_scale: None,
                                 displacement: (*off).try_into().unwrap(),
                             }),
                         },
@@ -728,9 +736,8 @@ impl Emitter {
             (
                 MemoryLocation::Stack(dst),
                 OperandKind::EffectiveAddress(EffectiveAddress {
-                    base: Register::Rsp,
-                    index: None,
-                    scale: Scale::_0,
+                    base: Some(Register::Rsp),
+                    index_scale: None,
                     displacement,
                 }),
             ) if *dst == (*displacement as isize) => {
@@ -903,14 +910,15 @@ impl Instruction {
                 )
                 | (
                     OperandKind::EffectiveAddress(EffectiveAddress {
-                        base: Register::Rsp | Register::Rbp | Register::Rsi | Register::Rdi,
+                        base: Some(Register::Rsp | Register::Rbp | Register::Rsi | Register::Rdi),
                         ..
                     }),
                     Size::_8,
                 )
                 | (
                     OperandKind::EffectiveAddress(EffectiveAddress {
-                        index: Some(Register::Rsp | Register::Rbp | Register::Rsi | Register::Rdi),
+                        index_scale:
+                            Some((Register::Rsp | Register::Rbp | Register::Rsi | Register::Rdi, _)),
                         ..
                     }),
                     Size::_8,
@@ -920,10 +928,16 @@ impl Instruction {
                 }
 
                 (OperandKind::Register(reg), _)
-                | (OperandKind::EffectiveAddress(EffectiveAddress { base: reg, .. }), _)
                 | (
                     OperandKind::EffectiveAddress(EffectiveAddress {
-                        index: Some(reg), ..
+                        base: Some(reg), ..
+                    }),
+                    _,
+                )
+                | (
+                    OperandKind::EffectiveAddress(EffectiveAddress {
+                        index_scale: Some((reg, _)),
+                        ..
                     }),
                     _,
                 ) if reg.is_extended() => {
@@ -984,7 +998,8 @@ impl Instruction {
             Some(Operand {
                 kind:
                     OperandKind::EffectiveAddress(EffectiveAddress {
-                        index: Some(reg), ..
+                        index_scale: Some((reg, _)),
+                        ..
                     }),
                 ..
             }) if reg.is_extended() => true,
@@ -997,7 +1012,10 @@ impl Instruction {
                 ..
             }) if reg.is_extended() => true,
             Some(Operand {
-                kind: OperandKind::EffectiveAddress(EffectiveAddress { base: reg, .. }),
+                kind:
+                    OperandKind::EffectiveAddress(EffectiveAddress {
+                        base: Some(reg), ..
+                    }),
                 ..
             }) if reg.is_extended() => true,
             _ => false,
@@ -1038,118 +1056,99 @@ impl Instruction {
             OperandKind::Register(reg) => (0b11, reg.to_3_bits()),
             OperandKind::Immediate(_) => (0b00, 0b101),
             OperandKind::EffectiveAddress(EffectiveAddress {
-                base: Register::Rax,
-                index: None,
-                scale: Scale::_0,
+                base: Some(Register::Rax),
+                index_scale: None,
                 displacement: 0,
             }) => (0b00, 0b000),
             OperandKind::EffectiveAddress(EffectiveAddress {
-                base: Register::Rcx,
-                index: None,
-                scale: Scale::_0,
+                base: Some(Register::Rcx),
+                index_scale: None,
                 displacement: 0,
             }) => (0b00, 0b001),
             OperandKind::EffectiveAddress(EffectiveAddress {
-                base: Register::Rdx,
-                index: None,
-                scale: Scale::_0,
+                base: Some(Register::Rdx),
+                index_scale: None,
                 displacement: 0,
             }) => (0b00, 0b010),
             OperandKind::EffectiveAddress(EffectiveAddress {
-                base: Register::Rbx,
-                index: None,
-                scale: Scale::_0,
+                base: Some(Register::Rbx),
+                index_scale: None,
                 displacement: 0,
             }) => (0b00, 0b011),
             OperandKind::EffectiveAddress(EffectiveAddress {
-                base: Register::Rsi,
-                index: None,
-                scale: Scale::_0,
+                base: Some(Register::Rsi),
+                index_scale: None,
                 displacement: 0,
             }) => (0b00, 0b110),
             OperandKind::EffectiveAddress(EffectiveAddress {
-                base: Register::Rdi,
-                index: None,
-                scale: Scale::_0,
+                base: Some(Register::Rdi),
+                index_scale: None,
                 displacement: 0,
             }) => (0b00, 0b111),
             // TODO: case for disp32
             OperandKind::EffectiveAddress(EffectiveAddress {
-                base: Register::Rax,
-                index: None,
-                scale: Scale::_0,
+                base: Some(Register::Rax),
+                index_scale: None,
                 displacement,
             }) if displacement <= i8::MAX as i32 => (0b01, 0b000),
             OperandKind::EffectiveAddress(EffectiveAddress {
-                base: Register::Rcx,
-                index: None,
-                scale: Scale::_0,
+                base: Some(Register::Rcx),
+                index_scale: None,
                 displacement,
             }) if displacement <= i8::MAX as i32 => (0b01, 0b001),
             OperandKind::EffectiveAddress(EffectiveAddress {
-                base: Register::Rdx,
-                index: None,
-                scale: Scale::_0,
+                base: Some(Register::Rdx),
+                index_scale: None,
                 displacement,
             }) if displacement <= i8::MAX as i32 => (0b01, 0b010),
             OperandKind::EffectiveAddress(EffectiveAddress {
-                base: Register::Rbx,
-                index: None,
-                scale: Scale::_0,
+                base: Some(Register::Rbx),
+                index_scale: None,
                 displacement,
             }) if displacement <= i8::MAX as i32 => (0b01, 0b011),
             OperandKind::EffectiveAddress(EffectiveAddress {
-                base: Register::Rbp,
-                index: None,
-                scale: Scale::_0,
+                base: Some(Register::Rbp),
+                index_scale: None,
                 displacement,
             }) if displacement <= i8::MAX as i32 => (0b01, 0b101),
             OperandKind::EffectiveAddress(EffectiveAddress {
-                base: Register::Rsi,
-                index: None,
-                scale: Scale::_0,
+                base: Some(Register::Rsi),
+                index_scale: None,
                 displacement,
             }) if displacement <= i8::MAX as i32 => (0b01, 0b110),
             OperandKind::EffectiveAddress(EffectiveAddress {
-                base: Register::Rax,
-                index: None,
-                scale: Scale::_0,
+                base: Some(Register::Rax),
+                index_scale: None,
                 ..
             }) => (0b10, 0b000),
             OperandKind::EffectiveAddress(EffectiveAddress {
-                base: Register::Rcx,
-                index: None,
-                scale: Scale::_0,
+                base: Some(Register::Rcx),
+                index_scale: None,
                 ..
             }) => (0b10, 0b001),
             OperandKind::EffectiveAddress(EffectiveAddress {
-                base: Register::Rdx,
-                index: None,
-                scale: Scale::_0,
+                base: Some(Register::Rdx),
+                index_scale: None,
                 ..
             }) => (0b10, 0b010),
             OperandKind::EffectiveAddress(EffectiveAddress {
-                base: Register::Rbx,
-                index: None,
-                scale: Scale::_0,
+                base: Some(Register::Rbx),
+                index_scale: None,
                 ..
             }) => (0b10, 0b011),
             OperandKind::EffectiveAddress(EffectiveAddress {
-                base: Register::Rbp,
-                index: None,
-                scale: Scale::_0,
+                base: Some(Register::Rbp),
+                index_scale: None,
                 ..
             }) => (0b10, 0b101),
             OperandKind::EffectiveAddress(EffectiveAddress {
-                base: Register::Rsi,
-                index: None,
-                scale: Scale::_0,
+                base: Some(Register::Rsi),
+                index_scale: None,
                 ..
             }) => (0b10, 0b110),
             OperandKind::EffectiveAddress(EffectiveAddress {
-                base: Register::Rdi,
-                index: None,
-                scale: Scale::_0,
+                base: Some(Register::Rdi),
+                index_scale: None,
                 ..
             }) => (0b10, 0b111),
 
@@ -1189,10 +1188,18 @@ impl Instruction {
         );
 
         if is_sib_required {
-            let scale = addr.scale.to_2_bits() << 6;
-            let index = addr.index.map(|x| x.to_3_bits()).unwrap_or_default() << 3;
+            let scale = addr
+                .index_scale
+                .map(|(_, scale)| scale.to_2_bits())
+                .unwrap_or_default()
+                << 6;
+            let index = addr
+                .index_scale
+                .map(|(reg, _)| reg.to_3_bits())
+                .unwrap_or_default()
+                << 3;
 
-            let base = addr.base.to_3_bits();
+            let base = addr.base.map(|reg| reg.to_3_bits()).unwrap_or_default();
             let sib = scale | index | base;
             w.write_all(&[sib])?;
         }
@@ -2170,7 +2177,7 @@ impl EffectiveAddress {
     // > displacement, software must encode R13 + 0 using a 1-byte displacement
     // > of zero.
     fn can_base_be_mistaken_for_rel_addressing(&self) -> bool {
-        self.base == Register::R13 || self.base == Register::Rbp
+        self.base == Some(Register::R13) || self.base == Some(Register::Rbp)
     }
 }
 
@@ -2194,9 +2201,8 @@ impl From<&MemoryLocation> for OperandKind {
         match value {
             MemoryLocation::Register(asm::Register::Amd64(reg)) => OperandKind::Register(*reg),
             MemoryLocation::Stack(off) => OperandKind::EffectiveAddress(EffectiveAddress {
-                base: Register::Rsp,
-                index: None,
-                scale: Scale::_0,
+                base: Some(Register::Rsp),
+                index_scale: None,
                 displacement: (*off).try_into().unwrap(), // TODO: handle gracefully,
             }),
         }
@@ -2223,7 +2229,7 @@ impl From<&OperandKind> for MemoryLocation {
             }
             OperandKind::Immediate(_imm) => panic!(),
             OperandKind::EffectiveAddress(EffectiveAddress {
-                base: Register::Rsp,
+                base: Some(Register::Rsp),
                 displacement,
                 ..
             }) => MemoryLocation::Stack(*displacement as isize),
@@ -2281,9 +2287,8 @@ mod tests {
                     },
                     Operand {
                         kind: OperandKind::EffectiveAddress(EffectiveAddress {
-                            base: Register::R13,
-                            index: Some(Register::R14),
-                            scale: Scale::_8,
+                            base: Some(Register::R13),
+                            index_scale: Some((Register::R14, Scale::_8)),
                             displacement: 42,
                         }),
                         size: Size::_64,
@@ -2300,9 +2305,8 @@ mod tests {
                 kind: InstructionKind::Push,
                 operands: vec![Operand {
                     kind: OperandKind::EffectiveAddress(EffectiveAddress {
-                        base: Register::R12,
-                        index: Some(Register::Rbx),
-                        scale: Scale::_4,
+                        base: Some(Register::R12),
+                        index_scale: Some((Register::Rbx, Scale::_4)),
                         displacement: 1,
                     }),
                     size: Size::_64,
@@ -2318,9 +2322,8 @@ mod tests {
                 kind: InstructionKind::Pop,
                 operands: vec![Operand {
                     kind: OperandKind::EffectiveAddress(EffectiveAddress {
-                        base: Register::R12,
-                        index: Some(Register::Rbx),
-                        scale: Scale::_4,
+                        base: Some(Register::R12),
+                        index_scale: Some((Register::Rbx, Scale::_4)),
                         displacement: 1,
                     }),
                     size: Size::_64,
@@ -2336,9 +2339,8 @@ mod tests {
                 kind: InstructionKind::IDiv,
                 operands: vec![Operand {
                     kind: OperandKind::EffectiveAddress(EffectiveAddress {
-                        base: Register::R12,
-                        index: Some(Register::Rbx),
-                        scale: Scale::_4,
+                        base: Some(Register::R12),
+                        index_scale: Some((Register::Rbx, Scale::_4)),
                         displacement: 1,
                     }),
                     size: Size::_64,
