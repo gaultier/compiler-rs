@@ -1215,6 +1215,12 @@ impl Instruction {
             w.write_all(&[0x66])?; // 16 bits prefix.
         }
 
+        for op in &self.operands {
+            if op.is_effective_address() && (op.size == Size::_8 || op.size == Size::_16) {
+                return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+            }
+        }
+
         match self.kind {
             InstructionKind::Mov => {
                 if self.operands.len() != 2 {
@@ -2327,6 +2333,32 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_encode_reproducer() {
+        let ins = Instruction {
+            kind: InstructionKind::Mov,
+            operands: vec![
+                Operand {
+                    kind: OperandKind::Register(Register::Rax),
+                    size: Size::_8,
+                },
+                Operand {
+                    kind: OperandKind::EffectiveAddress(EffectiveAddress {
+                        base: Register::Rax,
+                        index: None,
+                        scale: Scale::_0,
+                        displacement: 0,
+                    }),
+                    size: Size::_8,
+                },
+            ],
+            origin: Origin::new_unknown(),
+        };
+        let mut actual = Vec::with_capacity(5);
+        ins.encode(&mut actual).unwrap();
+        assert_eq!(&actual, &[0x8a, 0x00]);
+    }
+
     fn oracle_encode(ins: &Instruction) -> std::io::Result<Vec<u8>> {
         let mut child = std::process::Command::new("clang")
             .args(&[
@@ -2403,7 +2435,7 @@ mod tests {
         match (ins.encode(&mut actual), oracle_encode(&ins)) {
             (Ok(()), Ok(expected)) => assert_eq!(actual, expected),
             (Err(_), Err(_)) => {},
-            (actual,oracle) => panic!("oracle and implementation do not agree: actual={:#?} oracle={:#?} ins={}",actual,oracle, ins )
+            (actual,oracle) => panic!("oracle and implementation disagree: actual={:#?} oracle={:#?} ins={}",actual,oracle, ins )
         }
         }
     }
