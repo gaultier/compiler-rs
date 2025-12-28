@@ -883,7 +883,7 @@ impl Instruction {
         r: bool,
         x: bool,
         b: bool,
-        operands: &[Operand],
+        operands: &[&Operand],
     ) -> std::io::Result<()> {
         let mut required = false;
         // > A REX prefix is necessary only if an instruction references
@@ -1009,14 +1009,12 @@ impl Instruction {
             _ => false,
         };
 
-        Instruction::encode_rex(
-            w,
-            wide,
-            r,
-            x,
-            b,
-            &[], // TODO
-        )
+        let ops: Vec<&Operand> = [op_modrm_rm, op_modrm_reg, op_sib, op_reg]
+            .into_iter()
+            .flatten()
+            .collect();
+
+        Instruction::encode_rex(w, wide, r, x, b, ops.as_slice())
     }
 
     // Format: `mod (2 bits) | reg (3 bits) | rm (3bits)`.
