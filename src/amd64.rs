@@ -1729,7 +1729,14 @@ impl Instruction {
                             return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                         }
 
-                        Instruction::encode_rex_from_operands(w, false, Some(op), None, None, None);
+                        Instruction::encode_rex_from_operands(
+                            w,
+                            false,
+                            Some(op),
+                            None,
+                            None,
+                            None,
+                        )?;
                         let modrm = Instruction::encode_modrm(ModRmEncoding::Slash6, op, None);
                         w.write_all(&[0xff, modrm])?;
                         Instruction::encode_sib(w, &addr, modrm)
