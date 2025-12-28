@@ -1299,7 +1299,7 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
-                    _ => panic!("invalid/unsupported operands"),
+                    _ => return Err(std::io::Error::from(io::ErrorKind::InvalidData)),
                 }
                 Ok(())
             }
@@ -1354,7 +1354,7 @@ impl Instruction {
                         w.write_all(&[modrm])?;
                         Instruction::encode_sib(w, addr, modrm)
                     }
-                    _ => panic!("invalid operands"),
+                    _ => return Err(std::io::Error::from(io::ErrorKind::InvalidData)),
                 }
             }
             InstructionKind::Lea => {
@@ -1408,7 +1408,7 @@ impl Instruction {
 
                 let op = self.operands.first().unwrap();
                 if op.size != Size::_64 {
-                    panic!("invalid size");
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
                 match op.kind {
                     OperandKind::Register(reg) => {
@@ -1444,7 +1444,7 @@ impl Instruction {
                         w.write_all(&[0xff, modrm])?;
                         Instruction::encode_sib(w, &addr, modrm)
                     }
-                    _ => panic!("invalid argument"),
+                    _ => return Err(std::io::Error::from(io::ErrorKind::InvalidData)),
                 }
             }
             InstructionKind::Pop => {
@@ -1454,7 +1454,7 @@ impl Instruction {
 
                 let op = self.operands.first().unwrap();
                 if op.size != Size::_64 {
-                    panic!("invalid size");
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
                 match op.kind {
                     OperandKind::Register(reg) => {
@@ -1478,7 +1478,7 @@ impl Instruction {
                         w.write_all(&[0x8f, modrm])?;
                         Instruction::encode_sib(w, &addr, modrm)
                     }
-                    _ => panic!("invalid argument"),
+                    _ => return Err(std::io::Error::from(io::ErrorKind::InvalidData)),
                 }
             }
             InstructionKind::Ret => {
@@ -2094,16 +2094,26 @@ mod tests {
         }
     }
 
+    prop_compose! {
+        fn arb_instruction()(
+            kind in any::<InstructionKind>(),
+            // Generates a Vec of Operand with size between 0 and 2
+            operands in prop::collection::vec(any::<Operand>(), 0..=2)
+        ) -> Instruction {
+            Instruction { kind, operands ,origin:Origin::new_unknown()}
+        }
+    }
+
     proptest! {
         #[test]
-        fn test_encode_proptest(ins in (any::<InstructionKind>(), any::<Operand>(), any::<Operand>()).prop_map(|(kind, op1,op2)| Instruction{kind,origin: Origin::new_unknown(), operands:vec![op1,op2]})){
+        fn test_encode_proptest(ins in arb_instruction()){
         let mut actual = Vec::with_capacity(15);
-        ins.encode(&mut actual).unwrap();
 
-        if let Ok(expected) = oracle_encode(&ins) {
-            assert_eq!(actual, expected);
+        match (ins.encode(&mut actual), oracle_encode(&ins)) {
+            (Ok(()), Ok(expected)) => assert_eq!(actual, expected),
+            (Err(_), Err(_)) => {},
+            (a,b) => panic!("oracle and implementation do not aggree: {:#?} vs {:#?}",a,b )
         }
-
         }
     }
 }
