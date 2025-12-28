@@ -959,7 +959,7 @@ impl Instruction {
                     reg.is_extended(),
                     false,
                     false,
-                    &[op.clone()],
+                    std::slice::from_ref(op),
                 )?;
             }
             OperandKind::EffectiveAddress(addr) => {
@@ -969,7 +969,7 @@ impl Instruction {
                     false,
                     addr.index.map(|x| x.is_extended()).unwrap_or_default(),
                     addr.base.is_extended(),
-                    &[op.clone()],
+                    std::slice::from_ref(op),
                 )?;
             }
 
