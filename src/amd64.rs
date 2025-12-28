@@ -5,6 +5,8 @@ use std::{
 };
 
 use log::trace;
+use proptest::proptest;
+use proptest_derive::Arbitrary;
 use serde::Serialize;
 
 use crate::{
@@ -15,14 +17,14 @@ use crate::{
     type_checker::Size,
 };
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Debug, Clone, Arbitrary)]
 pub struct Operand {
     pub size: Size,
     pub kind: OperandKind,
 }
 
-#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum Scale {
+#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Arbitrary)]
+pub enum Scale {
     _0 = 0,
     _1 = 1,
     _2 = 2,
@@ -30,7 +32,7 @@ enum Scale {
     _8 = 8,
 }
 
-#[derive(Serialize, Debug, Clone, Copy)]
+#[derive(Serialize, Debug, Clone, Copy, Arbitrary)]
 pub struct EffectiveAddress {
     base: Register,
     index: Option<Register>,
@@ -38,11 +40,13 @@ pub struct EffectiveAddress {
     displacement: i32,
 }
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Debug, Clone, Arbitrary)]
 pub enum OperandKind {
     Register(Register),
     Immediate(i64),
     EffectiveAddress(EffectiveAddress),
+    // For now.
+    #[proptest(skip)]
     FnName(String),
 }
 
@@ -53,7 +57,7 @@ pub struct Instruction {
     pub origin: Origin,
 }
 
-#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Arbitrary)]
 #[repr(u8)]
 pub enum Register {
     Rax,
@@ -157,7 +161,7 @@ pub(crate) fn abi() -> Abi {
     }
 }
 
-#[derive(Serialize, Debug, Clone, Copy)]
+#[derive(Serialize, Debug, Clone, Copy, Arbitrary)]
 #[allow(non_camel_case_types)]
 #[repr(u16)]
 pub enum InstructionKind {
@@ -1901,10 +1905,9 @@ impl From<&OperandKind> for MemoryLocation {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        io::{Read, Stdin},
-        process::{ChildStdin, Stdio},
-    };
+    use std::process::Stdio;
+
+    use proptest::prelude::*;
 
     use super::*;
 
@@ -2060,7 +2063,6 @@ mod tests {
 
         {
             let mut stdin = child.stdin.take().unwrap();
-            //write!(stdin, ".globl _start\n _start:\n")?;
             ins.write(&mut stdin)?;
         }
         let output = child.wait_with_output()?;
@@ -2089,6 +2091,19 @@ mod tests {
 
         if let Ok(expected) = oracle_encode(&ins) {
             assert_eq!(actual, expected);
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn test_encode_proptest(ins in (any::<InstructionKind>(), any::<Operand>(), any::<Operand>()).prop_map(|(kind, op1,op2)| Instruction{kind,origin: Origin::new_unknown(), operands:vec![op1,op2]})){
+        let mut actual = Vec::with_capacity(15);
+        ins.encode(&mut actual).unwrap();
+
+        if let Ok(expected) = oracle_encode(&ins) {
+            assert_eq!(actual, expected);
+        }
+
         }
     }
 }
