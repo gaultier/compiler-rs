@@ -434,7 +434,7 @@ impl EvalValue {
     }
 
     pub(crate) fn size(&self) -> Size {
-        self.typ.size
+        self.typ.size.unwrap()
     }
 
     pub(crate) fn new_int(n: i64) -> Self {

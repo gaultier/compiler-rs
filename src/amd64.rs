@@ -457,7 +457,7 @@ impl Emitter {
                 self.emit_store(
                     vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                     &OperandKind::Immediate(*num),
-                    &ins.typ.size,
+                    &ins.typ.size.unwrap(),
                     &ins.origin,
                 );
             }
@@ -850,7 +850,6 @@ impl Register {
             (Register::Rbp, Size::_16) => "bp",
             (Register::Rbp, Size::_32) => "ebp",
             (Register::Rbp, Size::_64) => "rbp",
-            (_, Size::_0) => panic!("zero size for register"),
         }
     }
 }
@@ -1235,7 +1234,7 @@ impl Instruction {
 
                 let lhs = &self.operands[0];
                 let rhs = &self.operands[1];
-                if lhs.size == Size::_0 || lhs.size != rhs.size {
+                if lhs.size != rhs.size {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
 
@@ -1301,9 +1300,6 @@ impl Instruction {
 
                 let lhs = &self.operands[0];
                 let rhs = &self.operands[1];
-                if lhs.size == Size::_0 {
-                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
-                }
 
                 if lhs.size == Size::_8 {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
@@ -1464,7 +1460,7 @@ impl Instruction {
                         Ok(())
                     }
                     OperandKind::EffectiveAddress(addr) => {
-                        if op.size == Size::_0 || op.size == Size::_8 {
+                        if op.size == Size::_8 {
                             return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                         }
 
@@ -1498,7 +1494,7 @@ impl Instruction {
                         w.write_all(&[0x58 | reg.to_3_bits()])
                     }
                     OperandKind::EffectiveAddress(addr) => {
-                        if op.size == Size::_0 || op.size == Size::_8 {
+                        if op.size == Size::_8 {
                             return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                         }
 
@@ -2070,7 +2066,11 @@ mod tests {
         }
         let output = child.wait_with_output()?;
 
-        Ok(output.stdout)
+        if output.status.success() {
+            Ok(output.stdout)
+        } else {
+            Err(io::Error::from(io::ErrorKind::InvalidData))
+        }
     }
 
     #[test]

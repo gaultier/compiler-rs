@@ -224,7 +224,7 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
     let vreg_to_size = ir_emitter
         .instructions
         .iter()
-        .filter_map(|x| x.res_vreg.map(|vreg| (vreg, x.typ.size)))
+        .filter_map(|x| x.res_vreg.map(|vreg| (vreg, x.typ.size.unwrap())))
         .collect::<BTreeMap<VirtualRegister, Size>>();
 
     let (vreg_to_memory_location, stack_offset) = register_alloc::regalloc(
