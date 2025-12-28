@@ -911,8 +911,7 @@ impl Instruction {
                         ..
                     }),
                     Size::_8,
-                )
-                | (_, Size::_64) => {
+                ) => {
                     required = true;
                     break;
                 }
@@ -1614,11 +1613,15 @@ impl Instruction {
                             false,
                             Some(op),
                             None,
-                            None,
+                            Some(op),
                             None,
                         )?;
                         w.write_all(&[0xf6])?;
-                        w.write_all(&[modrm])
+                        w.write_all(&[modrm])?;
+                        if let Some(addr) = op.as_effective_address() {
+                            Instruction::encode_sib(w, &addr, modrm)?;
+                        }
+                        Ok(())
                     }
                     (_, Size::_16 | Size::_32 | Size::_64) if op.is_rm() => {
                         Instruction::encode_rex_from_operands(
@@ -1626,11 +1629,15 @@ impl Instruction {
                             op.size == Size::_64,
                             Some(op),
                             None,
-                            None,
+                            Some(op),
                             None,
                         )?;
                         w.write_all(&[0xf7])?;
-                        w.write_all(&[modrm])
+                        w.write_all(&[modrm])?;
+                        if let Some(addr) = op.as_effective_address() {
+                            Instruction::encode_sib(w, &addr, modrm)?;
+                        }
+                        Ok(())
                     }
                     _ => Err(std::io::Error::from(io::ErrorKind::InvalidData)),
                 }
@@ -1665,7 +1672,7 @@ impl Instruction {
                     lhs.size == Size::_64,
                     Some(rhs),
                     Some(lhs),
-                    None,
+                    Some(rhs),
                     None,
                 )?;
 
