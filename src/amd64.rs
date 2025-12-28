@@ -196,7 +196,7 @@ pub(crate) fn abi() -> Abi {
     }
 }
 
-#[derive(Serialize, Debug, Clone, Copy, Arbitrary)]
+#[derive(Serialize, Debug, Clone, Copy, Arbitrary, PartialEq, Eq)]
 #[allow(non_camel_case_types)]
 #[repr(u16)]
 pub enum InstructionKind {
@@ -205,6 +205,8 @@ pub enum InstructionKind {
     IMul,
     IDiv,
     Lea,
+    // For now. Need basic linker to compute the relative displacement.
+    #[proptest(skip)]
     Call,
     Push,
     Pop,
@@ -1211,6 +1213,7 @@ impl Instruction {
         if let Some(Operand {
             size: Size::_16, ..
         }) = self.operands.first()
+            && self.kind != InstructionKind::Ret
         {
             w.write_all(&[0x66])?; // 16 bits prefix.
         }
@@ -1276,6 +1279,7 @@ impl Instruction {
                     // mov rm, r
                     // Encoding: MR 	ModRM:r/m (w) 	ModRM:reg (r)
                     (_, OperandKind::Register(reg), Size::_8) if lhs.is_rm() => {
+                        if lhs.size!=rhs.size
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1695,7 +1699,7 @@ impl Instruction {
                 if self.operands.len() != 1 {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
-                let op = self.operands.first().unwrap();
+                let _op = self.operands.first().unwrap();
                 let displacement: i32 = 0; // FIXME: resolve offset with linker.
                 w.write_all(&[0xe8])?; // Call near.
                 w.write_all(&displacement.to_le_bytes())
@@ -1811,10 +1815,24 @@ impl Instruction {
                 }
             }
             InstructionKind::Ret => {
-                if !self.operands.is_empty() {
+                if self.operands.len() > 1 {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
-                w.write_all(&[0xC3]) // Near return.
+                if self.operands.is_empty() {
+                    return w.write_all(&[0xC3]); // Near return.
+                }
+
+                let op = self.operands.first().unwrap();
+                if op.size != Size::_16 {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
+
+                if let Some(imm) = op.as_imm() {
+                    w.write_all(&[0xC2])?;
+                    w.write_all(&(imm as u16).to_le_bytes())
+                } else {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
             }
         }
     }
@@ -2123,6 +2141,13 @@ impl Operand {
     pub(crate) fn as_effective_address(&self) -> Option<EffectiveAddress> {
         match self.kind {
             OperandKind::EffectiveAddress(addr) => Some(addr),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn as_imm(&self) -> Option<i64> {
+        match self.kind {
+            OperandKind::Immediate(imm) => Some(imm),
             _ => None,
         }
     }
