@@ -1539,7 +1539,7 @@ impl Instruction {
                         w.write_all(&[modrm])?;
                         Instruction::encode_sib(w, addr, modrm)
                     }
-                    _ => return Err(std::io::Error::from(io::ErrorKind::InvalidData)),
+                    _ => Err(std::io::Error::from(io::ErrorKind::InvalidData)),
                 }
             }
             InstructionKind::Lea => {
@@ -1638,7 +1638,7 @@ impl Instruction {
                         w.write_all(&[0xff, modrm])?;
                         Instruction::encode_sib(w, &addr, modrm)
                     }
-                    _ => return Err(std::io::Error::from(io::ErrorKind::InvalidData)),
+                    _ => Err(std::io::Error::from(io::ErrorKind::InvalidData)),
                 }
             }
             InstructionKind::Pop => {
@@ -1680,7 +1680,7 @@ impl Instruction {
                         w.write_all(&[0x8f, modrm])?;
                         Instruction::encode_sib(w, &addr, modrm)
                     }
-                    _ => return Err(std::io::Error::from(io::ErrorKind::InvalidData)),
+                    _ => Err(std::io::Error::from(io::ErrorKind::InvalidData)),
                 }
             }
             InstructionKind::Ret => {
