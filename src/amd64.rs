@@ -1363,6 +1363,14 @@ impl Instruction {
                 }) if !(reg.is_64_bits() || reg.is_32_bits()) => {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
+
+                // At least base or index must be present.
+                Operand::EffectiveAddress(EffectiveAddress {
+                    base: None,
+                    index_scale: None,
+                    ..
+                }) => return Err(std::io::Error::from(io::ErrorKind::InvalidData)),
+
                 _ => {}
             }
         }
