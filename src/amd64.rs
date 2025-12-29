@@ -1922,7 +1922,9 @@ impl Instruction {
                     // push rm
                     // Encoding: M 	ModRM:r/m (r)
                     Operand::EffectiveAddress(addr) => {
-                        if op.size() == Size::_8 {
+                        assert!(op.size() == Size::_32 || op.size() == Size::_64);
+                        // Not supported in 64 bits mode.
+                        if op.size() == Size::_32 {
                             return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                         }
 
