@@ -1043,7 +1043,7 @@ impl Instruction {
         b: bool,
         operands: &[&Operand],
     ) -> std::io::Result<()> {
-        let mut required = false;
+        let mut required = w;
         // > A REX prefix is necessary only if an instruction references
         // > one of the extended registers or one of the byte registers SPL, BPL, SIL,
         // DIL;
