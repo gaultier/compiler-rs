@@ -31,6 +31,7 @@ pub struct EffectiveAddress {
     base: Option<Register>,
     index_scale: Option<(Register, Scale)>,
     displacement: i32,
+    size_override: Option<Size>,
 }
 
 #[derive(Serialize, Debug, Clone, Arbitrary)]
@@ -166,8 +167,13 @@ impl Display for Operand {
                 base,
                 index_scale,
                 displacement,
+                size_override,
             }) => {
-                f.write_str(self.size.as_asm_addressing_str())?;
+                if let Some(size) = size_override {
+                    f.write_str(size.as_asm_addressing_str())?;
+                    f.write_str(" ")?;
+                }
+
                 f.write_str("[")?;
 
                 if let Some(base) = base {
@@ -325,7 +331,6 @@ impl Emitter {
                 self.emit_store(
                     dst_loc,
                     &vreg_to_memory_location.get(lhs).unwrap().into(),
-                    &Size::_64,
                     &ins.origin,
                 );
                 let (kind, rhs_loc) = match (dst_loc, rhs_loc) {
@@ -342,7 +347,6 @@ impl Emitter {
                         self.emit_store(
                             &MemoryLocation::Register(asm::Register::Amd64(Register::R11)),
                             &((*rhs_loc).into()),
-                            &Size::_64,
                             &Origin::new_synth_codegen(),
                         );
                         (
@@ -355,11 +359,11 @@ impl Emitter {
                 self.asm.push(Instruction {
                     kind,
                     operands: vec![
-                        Operand::from_memory_location(
-                            &Size::_64,
-                            vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
-                        ),
-                        Operand::from_memory_location(&Size::_64, rhs_loc),
+                        vreg_to_memory_location
+                            .get(&ins.res_vreg.unwrap())
+                            .unwrap()
+                            .into(),
+                        rhs_loc.into(),
                     ],
                     origin: ins.origin,
                 });
@@ -378,20 +382,16 @@ impl Emitter {
                 self.emit_store(
                     vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                     &vreg_to_memory_location.get(lhs).unwrap().into(),
-                    &Size::_64,
                     &ins.origin,
                 );
                 self.asm.push(Instruction {
                     kind: InstructionKind::IMul,
                     operands: vec![
-                        Operand::from_memory_location(
-                            &Size::_64,
-                            vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
-                        ),
-                        Operand::from_memory_location(
-                            &Size::_64,
-                            vreg_to_memory_location.get(rhs).unwrap(),
-                        ),
+                        vreg_to_memory_location
+                            .get(&ins.res_vreg.unwrap())
+                            .unwrap()
+                            .into(),
+                        vreg_to_memory_location.get(rhs).unwrap().into(),
                     ],
                     origin: ins.origin,
                 });
@@ -425,7 +425,6 @@ impl Emitter {
                     self.emit_store(
                         &spill_slot,
                         &MemoryLocation::Register(asm::Register::Amd64(Register::Rdx)).into(),
-                        &Size::_64,
                         &Origin::new_synth_codegen(),
                     );
                     trace!("spill rdx before idiv: spill_slot={:#?}", spill_slot);
@@ -437,7 +436,6 @@ impl Emitter {
                     self.emit_store(
                         &spill_slot,
                         &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)).into(),
-                        &Size::_64,
                         &Origin::new_synth_codegen(),
                     );
                     trace!("spill rax before idiv: spill_slot={:#?}", spill_slot);
@@ -449,7 +447,6 @@ impl Emitter {
                 self.emit_store(
                     &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)),
                     &lhs.into(),
-                    &Size::_64,
                     &Origin::new_synth_codegen(),
                 );
 
@@ -458,15 +455,11 @@ impl Emitter {
                 self.emit_store(
                     &MemoryLocation::Register(asm::Register::Amd64(Register::Rdx)),
                     &Operand::Immediate(0),
-                    &Size::_64,
                     &ins.origin,
                 );
                 self.asm.push(Instruction {
                     kind: InstructionKind::IDiv,
-                    operands: vec![Operand::from_memory_location(
-                        &Size::_64,
-                        vreg_to_memory_location.get(rhs).unwrap(),
-                    )],
+                    operands: vec![vreg_to_memory_location.get(rhs).unwrap().into()],
                     origin: ins.origin,
                 });
 
@@ -478,7 +471,6 @@ impl Emitter {
                     self.emit_store(
                         dst,
                         &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)).into(),
-                        &Size::_64,
                         &ins.origin,
                     );
                 }
@@ -489,7 +481,6 @@ impl Emitter {
                     self.emit_store(
                         &MemoryLocation::Register(asm::Register::Amd64(Register::Rdx)),
                         &rdx_spill_slot.into(),
-                        &Size::_64,
                         &Origin::new_synth_codegen(),
                     );
 
@@ -497,7 +488,6 @@ impl Emitter {
                     self.emit_store(
                         &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)),
                         &rax_spill_slot.into(),
-                        &Size::_64,
                         &Origin::new_synth_codegen(),
                     );
                 }
@@ -513,7 +503,6 @@ impl Emitter {
                 self.emit_store(
                     vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                     &vreg_to_memory_location.get(lhs).unwrap().into(),
-                    &Size::_64,
                     &ins.origin,
                 );
             }
@@ -528,7 +517,6 @@ impl Emitter {
                 self.emit_store(
                     vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                     &Operand::Immediate(*num),
-                    &ins.typ.size.unwrap(),
                     &ins.origin,
                 );
             }
@@ -543,7 +531,6 @@ impl Emitter {
                 self.emit_store(
                     vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                     &Operand::Immediate(if *b { 1 } else { 0 }),
-                    &Size::_8,
                     &ins.origin,
                 );
             }
@@ -558,22 +545,17 @@ impl Emitter {
                     ..
                 }),
             ) if fn_name == "println_u64" => {
-                let arg = Operand::from_memory_location(
-                    &Size::_64,
-                    vreg_to_memory_location.get(vreg).unwrap(),
-                );
+                let arg: Operand = vreg_to_memory_location.get(vreg).unwrap().into();
 
                 let spill_slot = self.find_free_spill_slot(&Size::_64);
                 self.emit_store(
                     &spill_slot,
                     &MemoryLocation::Register(asm::Register::Amd64(Register::Rdi)).into(),
-                    &Size::_64,
                     &Origin::new_synth_codegen(),
                 );
                 self.emit_store(
                     &MemoryLocation::Register(asm::Register::Amd64(Register::Rdi)),
-                    &arg.kind,
-                    &Size::_64,
+                    &arg,
                     &Origin::new_synth_codegen(),
                 );
 
@@ -585,7 +567,6 @@ impl Emitter {
                 self.emit_store(
                     &MemoryLocation::Register(asm::Register::Amd64(Register::Rdi)),
                     &spill_slot.into(),
-                    &Size::_64,
                     &Origin::new_synth_codegen(),
                 );
             }
@@ -608,7 +589,6 @@ impl Emitter {
         self.emit_store(
             &MemoryLocation::Register(asm::Register::Amd64(Register::Rbp)),
             &Operand::Register(Register::Rsp),
-            &Size::_64,
             &Origin::new_synth_codegen(),
         );
 
@@ -658,13 +638,7 @@ impl Emitter {
         });
     }
 
-    pub(crate) fn emit_store(
-        &mut self,
-        dst: &MemoryLocation,
-        src: &Operand,
-        size: &Size,
-        origin: &Origin,
-    ) {
+    pub(crate) fn emit_store(&mut self, dst: &MemoryLocation, src: &Operand, origin: &Origin) {
         match (dst, src) {
             (_, Operand::FnName(_)) => {
                 todo!()
@@ -714,6 +688,7 @@ impl Emitter {
                             base: Some(Register::Rsp),
                             index_scale: None,
                             displacement: (*off).try_into().unwrap(),
+                            size_override: None, // TODO: Revisit,
                         }),
                         src.clone(),
                     ],
@@ -736,6 +711,7 @@ impl Emitter {
                     base: Some(Register::Rsp),
                     index_scale: None,
                     displacement,
+                    size_override: None, // TODO: Revisit,
                 }),
             ) if *dst == (*displacement as isize) => {
                 // noop.
@@ -835,6 +811,82 @@ impl Register {
             | Register::R14b
             | Register::R15b => true,
             _ => false,
+        }
+    }
+
+    fn size(&self) -> Size {
+        match self {
+            Register::Rax
+            | Register::Rbx
+            | Register::Rcx
+            | Register::Rdx
+            | Register::Rdi
+            | Register::Rsi
+            | Register::Rbp
+            | Register::Rsp
+            | Register::R8
+            | Register::R9
+            | Register::R10
+            | Register::R11
+            | Register::R12
+            | Register::R13
+            | Register::R14
+            | Register::R15 => Size::_64,
+
+            Register::Eax
+            | Register::Ebx
+            | Register::Ecx
+            | Register::Edx
+            | Register::Edi
+            | Register::Esi
+            | Register::Ebp
+            | Register::Esp
+            | Register::R8d
+            | Register::R9d
+            | Register::R10d
+            | Register::R11d
+            | Register::R12d
+            | Register::R13d
+            | Register::R14d
+            | Register::R15d => Size::_32,
+
+            Register::Ax
+            | Register::Bx
+            | Register::Cx
+            | Register::Dx
+            | Register::Di
+            | Register::Si
+            | Register::Bp
+            | Register::Sp
+            | Register::R8w
+            | Register::R9w
+            | Register::R10w
+            | Register::R11w
+            | Register::R12w
+            | Register::R13w
+            | Register::R14w
+            | Register::R15w => Size::_16,
+
+            Register::Ah
+            | Register::Al
+            | Register::Bh
+            | Register::Bl
+            | Register::Ch
+            | Register::Cl
+            | Register::Dh
+            | Register::Dl
+            | Register::Dil
+            | Register::Sil
+            | Register::Bpl
+            | Register::Spl
+            | Register::R8b
+            | Register::R9b
+            | Register::R10b
+            | Register::R11b
+            | Register::R12b
+            | Register::R13b
+            | Register::R14b
+            | Register::R15b => Size::_8,
         }
     }
 
@@ -1129,62 +1181,74 @@ impl Instruction {
                 base: Some(Register::Rax),
                 index_scale: None,
                 displacement: 0,
+                ..
             }) => (0b00, 0b000),
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rcx),
                 index_scale: None,
                 displacement: 0,
+                ..
             }) => (0b00, 0b001),
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rdx),
                 index_scale: None,
                 displacement: 0,
+                ..
             }) => (0b00, 0b010),
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rbx),
                 index_scale: None,
                 displacement: 0,
+                ..
             }) => (0b00, 0b011),
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rsi),
                 index_scale: None,
                 displacement: 0,
+                ..
             }) => (0b00, 0b110),
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rdi),
                 index_scale: None,
                 displacement: 0,
+                ..
             }) => (0b00, 0b111),
             // TODO: case for disp32
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rax),
                 index_scale: None,
                 displacement,
+                ..
             }) if *displacement <= i8::MAX as i32 => (0b01, 0b000),
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rcx),
                 index_scale: None,
                 displacement,
+                ..
             }) if *displacement <= i8::MAX as i32 => (0b01, 0b001),
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rdx),
                 index_scale: None,
                 displacement,
+                ..
             }) if *displacement <= i8::MAX as i32 => (0b01, 0b010),
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rbx),
                 index_scale: None,
                 displacement,
+                ..
             }) if *displacement <= i8::MAX as i32 => (0b01, 0b011),
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rbp),
                 index_scale: None,
                 displacement,
+                ..
             }) if *displacement <= i8::MAX as i32 => (0b01, 0b101),
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rsi),
                 index_scale: None,
                 displacement,
+                ..
             }) if *displacement <= i8::MAX as i32 => (0b01, 0b110),
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Rax),
@@ -1324,7 +1388,7 @@ impl Instruction {
                 //    }
                 //}
 
-                match (&lhs, &rhs) {
+                match (lhs, rhs) {
                     // mov r, imm
                     // Encoding: OI 	opcode + rd (w) 	imm8/16/32/64
                     (Operand::Register(reg), Operand::Immediate(imm)) if reg.is_8_bits() => {
@@ -1337,7 +1401,7 @@ impl Instruction {
                             Some(lhs),
                         )?;
                         w.write_all(&[0xB0 | reg.to_3_bits()])?;
-                        Instruction::encode_imm(w, *imm, &lhs.size)?;
+                        Instruction::encode_imm(w, *imm, &Size::_8)?;
                     }
                     (Operand::Register(reg), Operand::Immediate(imm)) if reg.is_16_bits() => {
                         Instruction::encode_rex_from_operands(
@@ -1393,7 +1457,9 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
-                    (_, Operand::Register(reg), Size::_16 | Size::_32) if lhs.is_rm() => {
+                    (_, Operand::Register(reg))
+                        if lhs.is_rm() && (reg.is_16_bits() || reg.is_32_bits()) =>
+                    {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1409,7 +1475,7 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
-                    (_, Operand::Register(reg), Size::_64) if lhs.is_rm() => {
+                    (_, Operand::Register(reg)) if lhs.is_rm() && reg.is_64_bits() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             true,
@@ -1428,7 +1494,7 @@ impl Instruction {
 
                     // mov r, rm
                     // Encoding: RM 	ModRM:reg (w) 	ModRM:r/m (r)
-                    (Operand::Register(reg), _, Size::_8) if rhs.is_rm() => {
+                    (Operand::Register(reg), _) if rhs.is_rm() && reg.is_8_bits() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1444,7 +1510,9 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
-                    (Operand::Register(reg), _, Size::_16 | Size::_32) if rhs.is_rm() => {
+                    (Operand::Register(reg), _)
+                        if rhs.is_rm() && (reg.is_16_bits() || reg.is_32_bits()) =>
+                    {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1460,7 +1528,7 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
-                    (Operand::Register(reg), _, Size::_64) if rhs.is_rm() => {
+                    (Operand::Register(reg), _) if rhs.is_rm() && reg.is_64_bits() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             true,
@@ -1479,7 +1547,7 @@ impl Instruction {
 
                     // mov rm, imm
                     // Encoding: MI 	ModRM:r/m (w) 	imm8/16/32/64
-                    (_, Operand::Immediate(imm), Size::_8) if lhs.is_rm() => {
+                    (_, Operand::Immediate(imm)) if lhs.is_rm() && lhs.size() == Size::_8 => {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1491,9 +1559,9 @@ impl Instruction {
 
                         let modrm = Instruction::encode_modrm(ModRmEncoding::Slash0, lhs, None);
                         w.write_all(&[0xC6, modrm])?;
-                        Instruction::encode_imm(w, *imm, &lhs.size)?;
+                        Instruction::encode_imm(w, *imm, &Size::_8)?;
                     }
-                    (_, Operand::Immediate(imm), Size::_16) if lhs.is_rm() => {
+                    (_, Operand::Immediate(imm)) if lhs.is_rm() && lhs.size() == Size::_16 => {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1505,9 +1573,9 @@ impl Instruction {
 
                         let modrm = Instruction::encode_modrm(ModRmEncoding::Slash0, lhs, None);
                         w.write_all(&[0xC7, modrm])?;
-                        Instruction::encode_imm(w, *imm, &lhs.size)?;
+                        Instruction::encode_imm(w, *imm, &Size::_16)?;
                     }
-                    (_, Operand::Immediate(imm), Size::_32) if lhs.is_rm() => {
+                    (_, Operand::Immediate(imm)) if lhs.is_rm() && lhs.size() == Size::_32 => {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1519,9 +1587,9 @@ impl Instruction {
 
                         let modrm = Instruction::encode_modrm(ModRmEncoding::Slash0, lhs, None);
                         w.write_all(&[0xC7, modrm])?;
-                        Instruction::encode_imm(w, *imm, &lhs.size)?;
+                        Instruction::encode_imm(w, *imm, &Size::_32)?;
                     }
-                    (_, Operand::Immediate(imm), Size::_64) if lhs.is_rm() => {
+                    (_, Operand::Immediate(imm)) if lhs.is_rm() && lhs.size() == Size::_64 => {
                         Instruction::encode_rex_from_operands(
                             w,
                             true,
@@ -1533,7 +1601,7 @@ impl Instruction {
 
                         let modrm = Instruction::encode_modrm(ModRmEncoding::Slash0, lhs, None);
                         w.write_all(&[0xC7, modrm])?;
-                        Instruction::encode_imm(w, *imm, &lhs.size)?;
+                        Instruction::encode_imm(w, *imm, &Size::_64)?;
                     }
 
                     _ => return Err(std::io::Error::from(io::ErrorKind::InvalidData)),
@@ -1547,14 +1615,14 @@ impl Instruction {
 
                 let lhs = &self.operands[0];
                 let rhs = &self.operands[1];
-                if lhs.size != rhs.size {
+                if lhs.size() != rhs.size() {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
 
-                match (&lhs.kind, &rhs.kind, lhs.size) {
+                match (lhs, rhs) {
                     // add rm, imm
                     // Encoding: MI 	ModRM:r/m (r, w) 	imm8/16/32
-                    (_, Operand::Immediate(imm), Size::_8) if lhs.is_rm() => {
+                    (_, Operand::Immediate(imm)) if lhs.is_rm() && lhs.size() == Size::_8 => {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1568,9 +1636,11 @@ impl Instruction {
                         if let Some(addr) = lhs.as_effective_address() {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
-                        Instruction::encode_imm(w, *imm, &lhs.size)?;
+                        Instruction::encode_imm(w, *imm, &lhs.size())?;
                     }
-                    (_, Operand::Immediate(imm), Size::_16 | Size::_32) if lhs.is_rm() => {
+                    (_, Operand::Immediate(imm))
+                        if lhs.is_rm() && (lhs.size() == Size::_16 || lhs.size() == Size::_32) =>
+                    {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1585,9 +1655,9 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
 
-                        Instruction::encode_imm(w, *imm, &lhs.size)?;
+                        Instruction::encode_imm(w, *imm, &lhs.size())?;
                     }
-                    (_, Operand::Immediate(imm), Size::_64) if lhs.is_rm() => {
+                    (_, Operand::Immediate(imm)) if lhs.is_rm() && lhs.size() == Size::_64 => {
                         Instruction::encode_rex_from_operands(
                             w,
                             true,
@@ -1601,11 +1671,11 @@ impl Instruction {
                         if let Some(addr) = lhs.as_effective_address() {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
-                        Instruction::encode_imm(w, *imm, &lhs.size)?;
+                        Instruction::encode_imm(w, *imm, &lhs.size())?;
                     }
                     // add rm, r
                     // Encoding: MR 	ModRM:r/m (r, w) 	ModRM:reg (r)
-                    (_, Operand::Register(reg), Size::_8) if lhs.is_rm() => {
+                    (_, Operand::Register(reg)) if lhs.is_rm() && lhs.size() == Size::_8 => {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1621,12 +1691,15 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
-                    (_, Operand::Register(reg), Size::_16 | Size::_32 | Size::_64)
-                        if lhs.is_rm() =>
+                    (_, Operand::Register(reg))
+                        if lhs.is_rm()
+                            && (lhs.size() == Size::_16
+                                || lhs.size() == Size::_32
+                                || lhs.size() == Size::_64) =>
                     {
                         Instruction::encode_rex_from_operands(
                             w,
-                            lhs.size == Size::_64,
+                            lhs.size() == Size::_64,
                             Some(lhs),
                             Some(rhs),
                             None,
@@ -1651,15 +1724,15 @@ impl Instruction {
                 let lhs = &self.operands[0];
                 let rhs = &self.operands[1];
 
-                if lhs.size == Size::_8 {
+                if lhs.size() == Size::_8 {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
 
-                if lhs.size != rhs.size {
+                if lhs.size() != rhs.size() {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
 
-                match (&lhs.kind, &rhs.kind, lhs.size) {
+                match (lhs, rhs, lhs.size()) {
                     // imul r, rm
                     // Encoding: RM 	ModRM:reg (r, w) 	ModRM:r/m (r)
                     (Operand::Register(reg), _, Size::_16)
@@ -1713,7 +1786,7 @@ impl Instruction {
 
                 let modrm = Instruction::encode_modrm(ModRmEncoding::Slash7, op, None);
 
-                match (&op.kind, op.size) {
+                match (&op, op.size()) {
                     // idiv rm
                     // Encoding: M 	ModRM:r/m (r)
                     (_, Size::_8) if op.is_rm() => {
@@ -1735,7 +1808,7 @@ impl Instruction {
                     (_, Size::_16 | Size::_32 | Size::_64) if op.is_rm() => {
                         Instruction::encode_rex_from_operands(
                             w,
-                            op.size == Size::_64,
+                            op.size() == Size::_64,
                             Some(op),
                             None,
                             Some(op),
@@ -1761,7 +1834,7 @@ impl Instruction {
                 let lhs = self.operands.first().unwrap();
                 let rhs = self.operands.get(1).unwrap();
 
-                if lhs.size == Size::_8 {
+                if lhs.size() == Size::_8 {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
 
@@ -1778,7 +1851,7 @@ impl Instruction {
 
                 Instruction::encode_rex_from_operands(
                     w,
-                    lhs.size == Size::_64,
+                    lhs.size() == Size::_64,
                     Some(rhs),
                     Some(lhs),
                     Some(rhs),
@@ -1808,10 +1881,10 @@ impl Instruction {
                 }
 
                 let op = self.operands.first().unwrap();
-                if op.size != Size::_64 {
+                if op.size() != Size::_64 {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
-                match op.kind {
+                match op {
                     // push r
                     // Encoding: O 	opcode + rd (r)
                     Operand::Register(reg) => {
@@ -1830,10 +1903,10 @@ impl Instruction {
                     // push imm
                     // Encoding: I 	imm8/16/32
                     Operand::Immediate(imm) => {
-                        if let Ok(imm) = u8::try_from(imm) {
+                        if let Ok(imm) = u8::try_from(*imm) {
                             w.write_all(&[0x6A])?;
                             w.write_all(&imm.to_le_bytes())?;
-                        } else if let Ok(imm) = u16::try_from(imm) {
+                        } else if let Ok(imm) = u16::try_from(*imm) {
                             w.write_all(&[0x68])?;
                             w.write_all(&imm.to_le_bytes())?;
                         } else {
@@ -1845,7 +1918,7 @@ impl Instruction {
                     // push rm
                     // Encoding: M 	ModRM:r/m (r)
                     Operand::EffectiveAddress(addr) => {
-                        if op.size == Size::_8 {
+                        if op.size() == Size::_8 {
                             return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                         }
 
@@ -1870,10 +1943,10 @@ impl Instruction {
                 }
 
                 let op = self.operands.first().unwrap();
-                if op.size != Size::_64 {
+                if op.size() != Size::_64 {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
-                match op.kind {
+                match op {
                     // pop r
                     // Encoding: O 	opcode + rd (w)
                     Operand::Register(reg) => {
@@ -1893,7 +1966,7 @@ impl Instruction {
                     // pop rm
                     // Encoding: M 	ModRM:r/m (w)
                     Operand::EffectiveAddress(addr) => {
-                        if op.size == Size::_8 {
+                        if op.size() == Size::_8 {
                             return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                         }
 
@@ -1921,7 +1994,7 @@ impl Instruction {
                 }
 
                 let op = self.operands.first().unwrap();
-                if op.size != Size::_16 {
+                if op.size() != Size::_16 {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
 
@@ -1984,9 +2057,9 @@ impl Interpreter {
     }
 
     fn store(&mut self, dst: &Operand, src: &Operand) {
-        assert_eq!(dst.size, src.size);
+        assert_eq!(dst.size(), src.size());
 
-        match (&dst.kind, &src.kind) {
+        match (dst, src) {
             (Operand::FnName(_), _) => panic!("invalid store to fn name"),
             (_, Operand::FnName(_)) => {
                 todo!()
@@ -1996,15 +2069,14 @@ impl Interpreter {
             | (Operand::Register(_), Operand::EffectiveAddress(_)) => {
                 let value = self
                     .state
-                    .get(&(&src.kind).into())
+                    .get(&(src).into())
                     .unwrap_or(&EvalValue::new_int(0))
                     .clone();
-                self.state.insert((&dst.kind).into(), value);
+                self.state.insert(dst.into(), value);
             }
             (Operand::Register(_), Operand::Immediate(imm))
             | (Operand::EffectiveAddress(_), Operand::Immediate(imm)) => {
-                self.state
-                    .insert((&dst.kind).into(), EvalValue::new_int(*imm));
+                self.state.insert(dst.into(), EvalValue::new_int(*imm));
             }
             (Operand::Immediate(_), _) => panic!("invalid store destination"),
             (Operand::EffectiveAddress(_), Operand::EffectiveAddress(_)) => {
@@ -2014,16 +2086,16 @@ impl Interpreter {
     }
 
     fn load(&mut self, dst: &Operand, src: &Operand) {
-        assert_eq!(dst.size, src.size);
+        assert_eq!(dst.size(), src.size());
 
-        match (&dst.kind, &src.kind) {
+        match (dst, src) {
             (Operand::Register(_), Operand::EffectiveAddress(_)) => {
                 let value = self
                     .state
-                    .get(&(&src.kind).into())
+                    .get(&src.into())
                     .unwrap_or(&EvalValue::new_int(0))
                     .clone();
-                self.state.insert((&dst.kind).into(), value);
+                self.state.insert(dst.into(), value);
             }
             _ => panic!("unsupported load"),
         };
@@ -2052,13 +2124,13 @@ impl Interpreter {
                 }
                 InstructionKind::Add => {
                     assert_eq!(ins.operands.len(), 2);
-                    let size = ins.operands[0].size;
-                    assert_eq!(size, ins.operands[1].size);
+                    let size = ins.operands[0].size();
+                    assert_eq!(size, ins.operands[1].size());
 
                     assert!(ins.operands[0].is_rm());
-                    let dst: MemoryLocation = (&ins.operands[0].kind).into();
+                    let dst: MemoryLocation = (&ins.operands[0]).into();
 
-                    let src: MemoryLocation = (&ins.operands[1].kind).into();
+                    let src: MemoryLocation = (&ins.operands[1]).into();
 
                     let op_value = self
                         .state
@@ -2075,18 +2147,15 @@ impl Interpreter {
                 }
                 InstructionKind::IMul => {
                     assert_eq!(ins.operands.len(), 2);
-                    let size = ins.operands[0].size;
-                    assert_eq!(size, ins.operands[1].size);
+                    let size = ins.operands[0].size();
+                    assert_eq!(size, ins.operands[1].size());
 
                     let dst_reg = match &ins.operands[0] {
-                        Operand {
-                            kind: Operand::Register(reg),
-                            ..
-                        } => reg,
+                        Operand::Register(reg) => reg,
                         _ => panic!("invalid dst"),
                     };
 
-                    match ins.operands[1].kind {
+                    match ins.operands[1] {
                         Operand::Register(reg) => {
                             let op_value = self
                                 .state
@@ -2106,7 +2175,7 @@ impl Interpreter {
                 }
                 InstructionKind::IDiv => {
                     assert_eq!(ins.operands.len(), 1);
-                    match ins.operands[0].kind {
+                    match ins.operands[0] {
                         Operand::Register(reg) => {
                             let divisor = self
                                 .state
@@ -2142,7 +2211,7 @@ impl Interpreter {
                     assert!(self.stack_offset() % 16 == 0, "{}", self.stack_offset());
 
                     assert_eq!(ins.operands.len(), 1);
-                    let fn_name = match &ins.operands.first().unwrap().kind {
+                    let fn_name = match &ins.operands.first().unwrap() {
                         Operand::FnName(fn_name) => fn_name,
                         _ => panic!("invalid call"),
                     };
@@ -2165,13 +2234,13 @@ impl Interpreter {
                     assert_eq!(ins.operands.len(), 1);
 
                     let op = ins.operands.first().unwrap();
-                    assert_eq!(op.size, Size::_64);
+                    assert_eq!(op.size(), Size::_64);
 
                     let sp = self.stack_offset();
-                    self.set_stack_offset(-(op.size.as_bytes_count() as isize));
+                    self.set_stack_offset(-(op.size().as_bytes_count() as isize));
                     let val = self
                         .state
-                        .get(&(&op.kind).into())
+                        .get(&op.into())
                         .unwrap_or(&EvalValue::new_int(0))
                         .clone();
                     self.state.insert(MemoryLocation::Stack(sp), val);
@@ -2180,9 +2249,9 @@ impl Interpreter {
                     assert_eq!(ins.operands.len(), 1);
 
                     let op = ins.operands.first().unwrap();
-                    assert_eq!(op.size, Size::_64);
+                    assert_eq!(op.size(), Size::_64);
 
-                    match op.kind {
+                    match op {
                         Operand::Register(_) | Operand::EffectiveAddress(_) => {}
                         _ => panic!("invalid push argument"),
                     };
@@ -2192,8 +2261,8 @@ impl Interpreter {
                         .get(&MemoryLocation::Stack(sp))
                         .unwrap_or(&EvalValue::new_int(0))
                         .clone();
-                    self.state.insert(op.kind.clone().into(), val);
-                    self.set_stack_offset(op.size.as_bytes_count() as isize);
+                    self.state.insert(op.clone().into(), val);
+                    self.set_stack_offset(op.size().as_bytes_count() as isize);
                 }
                 InstructionKind::Ret => {
                     assert_eq!(ins.operands.len(), 0);
@@ -2210,19 +2279,12 @@ impl Interpreter {
 }
 
 impl Operand {
-    pub(crate) fn from_memory_location(size: &Size, loc: &MemoryLocation) -> Self {
-        Self {
-            size: *size,
-            kind: loc.into(),
-        }
-    }
-
     pub(crate) fn is_reg(&self) -> bool {
-        matches!(self.kind, Operand::Register(_))
+        matches!(self, Operand::Register(_))
     }
 
     pub(crate) fn is_effective_address(&self) -> bool {
-        matches!(self.kind, Operand::EffectiveAddress(_))
+        matches!(self, Operand::EffectiveAddress(_))
     }
 
     pub(crate) fn is_rm(&self) -> bool {
@@ -2230,23 +2292,35 @@ impl Operand {
     }
 
     pub(crate) fn as_reg(&self) -> Option<Register> {
-        match self.kind {
-            Operand::Register(reg) => Some(reg),
+        match self {
+            Operand::Register(reg) => Some(*reg),
             _ => None,
         }
     }
 
     pub(crate) fn as_effective_address(&self) -> Option<EffectiveAddress> {
-        match self.kind {
-            Operand::EffectiveAddress(addr) => Some(addr),
+        match self {
+            Operand::EffectiveAddress(addr) => Some(*addr),
             _ => None,
         }
     }
 
     pub(crate) fn as_imm(&self) -> Option<i64> {
-        match self.kind {
-            Operand::Immediate(imm) => Some(imm),
+        match self {
+            Operand::Immediate(imm) => Some(*imm),
             _ => None,
+        }
+    }
+
+    fn size(&self) -> Size {
+        // TODO: Is the default 32 bits?
+        match self {
+            Operand::Register(reg) => reg.size(),
+            Operand::Immediate(_) => Size::_64,
+            Operand::EffectiveAddress(effective_address) => {
+                effective_address.size_override.unwrap_or(Size::_64)
+            }
+            Operand::FnName(_) => Size::_64,
         }
     }
 }
@@ -2290,6 +2364,7 @@ impl From<&MemoryLocation> for Operand {
                 base: Some(Register::Rsp),
                 index_scale: None,
                 displacement: (*off).try_into().unwrap(), // TODO: handle gracefully,
+                size_override: None,
             }),
         }
     }
@@ -2338,10 +2413,7 @@ mod tests {
         {
             let ins = Instruction {
                 kind: InstructionKind::Push,
-                operands: vec![Operand {
-                    kind: Operand::Register(Register::R15),
-                    size: Size::_64,
-                }],
+                operands: vec![Operand::Register(Register::R15)],
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(2);
@@ -2352,10 +2424,7 @@ mod tests {
         {
             let ins = Instruction {
                 kind: InstructionKind::Pop,
-                operands: vec![Operand {
-                    kind: Operand::Register(Register::Rbx),
-                    size: Size::_64,
-                }],
+                operands: vec![Operand::Register(Register::Rbx)],
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(2);
@@ -2367,18 +2436,13 @@ mod tests {
             let ins = Instruction {
                 kind: InstructionKind::Lea,
                 operands: vec![
-                    Operand {
-                        kind: Operand::Register(Register::R8),
-                        size: Size::_64,
-                    },
-                    Operand {
-                        kind: Operand::EffectiveAddress(EffectiveAddress {
-                            base: Some(Register::R13),
-                            index_scale: Some((Register::R14, Scale::_8)),
-                            displacement: 42,
-                        }),
-                        size: Size::_64,
-                    },
+                    Operand::Register(Register::R8),
+                    Operand::EffectiveAddress(EffectiveAddress {
+                        base: Some(Register::R13),
+                        index_scale: Some((Register::R14, Scale::_8)),
+                        displacement: 42,
+                        size_override: None,
+                    }),
                 ],
                 origin: Origin::new_unknown(),
             };
@@ -2389,14 +2453,12 @@ mod tests {
         {
             let ins = Instruction {
                 kind: InstructionKind::Push,
-                operands: vec![Operand {
-                    kind: Operand::EffectiveAddress(EffectiveAddress {
-                        base: Some(Register::R12),
-                        index_scale: Some((Register::Rbx, Scale::_4)),
-                        displacement: 1,
-                    }),
-                    size: Size::_64,
-                }],
+                operands: vec![Operand::EffectiveAddress(EffectiveAddress {
+                    base: Some(Register::R12),
+                    index_scale: Some((Register::Rbx, Scale::_4)),
+                    displacement: 1,
+                    size_override: None,
+                })],
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(5);
@@ -2406,14 +2468,12 @@ mod tests {
         {
             let ins = Instruction {
                 kind: InstructionKind::Pop,
-                operands: vec![Operand {
-                    kind: Operand::EffectiveAddress(EffectiveAddress {
-                        base: Some(Register::R12),
-                        index_scale: Some((Register::Rbx, Scale::_4)),
-                        displacement: 1,
-                    }),
-                    size: Size::_64,
-                }],
+                operands: vec![Operand::EffectiveAddress(EffectiveAddress {
+                    base: Some(Register::R12),
+                    index_scale: Some((Register::Rbx, Scale::_4)),
+                    displacement: 1,
+                    size_override: None,
+                })],
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(5);
@@ -2423,14 +2483,12 @@ mod tests {
         {
             let ins = Instruction {
                 kind: InstructionKind::IDiv,
-                operands: vec![Operand {
-                    kind: Operand::EffectiveAddress(EffectiveAddress {
-                        base: Some(Register::R12),
-                        index_scale: Some((Register::Rbx, Scale::_4)),
-                        displacement: 1,
-                    }),
-                    size: Size::_64,
-                }],
+                operands: vec![Operand::EffectiveAddress(EffectiveAddress {
+                    base: Some(Register::R12),
+                    index_scale: Some((Register::Rbx, Scale::_4)),
+                    displacement: 1,
+                    size_override: None,
+                })],
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(5);
@@ -2441,14 +2499,8 @@ mod tests {
             let ins = Instruction {
                 kind: InstructionKind::Mov,
                 operands: vec![
-                    Operand {
-                        kind: Operand::Register(Register::Rbp),
-                        size: Size::_64,
-                    },
-                    Operand {
-                        kind: Operand::Register(Register::Rsp),
-                        size: Size::_64,
-                    },
+                    Operand::Register(Register::Rbp),
+                    Operand::Register(Register::Rsp),
                 ],
                 origin: Origin::new_unknown(),
             };
@@ -2489,30 +2541,6 @@ mod tests {
             Ok(output.stdout)
         } else {
             Err(io::Error::from(io::ErrorKind::InvalidData))
-        }
-    }
-
-    #[test]
-    fn test_encode_oracle() {
-        let ins = Instruction {
-            kind: InstructionKind::Mov,
-            operands: vec![
-                Operand {
-                    kind: Operand::Register(Register::Rbp),
-                    size: Size::_64,
-                },
-                Operand {
-                    kind: Operand::Register(Register::Rsp),
-                    size: Size::_64,
-                },
-            ],
-            origin: Origin::new_unknown(),
-        };
-        let mut actual = Vec::with_capacity(5);
-        ins.encode(&mut actual).unwrap();
-
-        if let Ok(expected) = oracle_encode(&ins) {
-            assert_eq!(actual, expected);
         }
     }
 
