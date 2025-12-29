@@ -260,13 +260,16 @@ impl Size {
             Size::_64 => 64,
         }
     }
+}
 
-    pub fn as_asm_addressing_str(&self) -> &'static str {
-        match self {
+impl Display for Size {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
             Size::_8 => "BYTE PTR",
             Size::_16 => "WORD PTR",
             Size::_32 => "DWORD PTR",
             Size::_64 => "QWORD PTR",
-        }
+        };
+        f.write_str(s)
     }
 }

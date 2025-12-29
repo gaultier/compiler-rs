@@ -151,16 +151,10 @@ enum ModRmEncoding {
     SlashR,
 }
 
-impl Display for Size {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", *self as usize)
-    }
-}
-
 impl Display for Operand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
-            Operand::Register(reg) => write!(f, "{}", reg),
+            Operand::Register(reg) => reg.fmt(f),
             Operand::Immediate(n) => write!(f, "{}", n),
             Operand::FnName(name) => f.write_str(name),
             Operand::EffectiveAddress(EffectiveAddress {
@@ -170,7 +164,7 @@ impl Display for Operand {
                 size_override,
             }) => {
                 if let Some(size) = size_override {
-                    f.write_str(size.as_asm_addressing_str())?;
+                    write!(f, "{} ", size)?;
                     f.write_str(" ")?;
                 }
 
@@ -2550,7 +2544,7 @@ mod tests {
             // Generates a Vec of Operand with size between 0 and 2
             operands in prop::collection::vec(any::<Operand>(), 0..=2)
         ) -> Instruction {
-            Instruction { kind, operands ,origin:Origin::new_unknown()}
+            Instruction { kind, operands , origin:Origin::new_unknown()}
         }
     }
 
