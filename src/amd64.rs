@@ -2319,7 +2319,6 @@ impl Operand {
     }
 
     fn size(&self) -> Size {
-        // TODO: Is the default 32 bits?
         match self {
             Operand::Register(reg) => reg.size(),
             Operand::Immediate(_) => Size::_64,
