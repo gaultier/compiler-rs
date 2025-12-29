@@ -1706,7 +1706,7 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
-                    _ => unimplemented!(),
+                    _ => return Err(std::io::Error::from(io::ErrorKind::InvalidData)),
                 }
                 Ok(())
             }
@@ -1875,7 +1875,7 @@ impl Instruction {
                 }
 
                 let op = self.operands.first().unwrap();
-                if op.size() != Size::_64 {
+                if op.size() == Size::_8 || op.size() == Size::_32 {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
                 match op {
@@ -1900,12 +1900,14 @@ impl Instruction {
                         if let Ok(imm) = u8::try_from(*imm) {
                             w.write_all(&[0x6A])?;
                             w.write_all(&imm.to_le_bytes())?;
-                        } else if let Ok(imm) = u16::try_from(*imm) {
+                        }
+                        // In theory there is a "push imm16" rule but for reasons,
+                        // we use "push imm32".
+                        else if let Ok(imm) = u32::try_from(*imm) {
                             w.write_all(&[0x68])?;
                             w.write_all(&imm.to_le_bytes())?;
                         } else {
-                            w.write_all(&[0x68])?;
-                            w.write_all(&imm.to_le_bytes())?;
+                            return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                         }
                         Ok(())
                     }
