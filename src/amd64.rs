@@ -1932,7 +1932,7 @@ impl Instruction {
                         )?;
                         let modrm = Instruction::encode_modrm(ModRmEncoding::Slash6, op, None);
                         w.write_all(&[0xff, modrm])?;
-                        Instruction::encode_sib(w, &addr, modrm)
+                        Instruction::encode_sib(w, addr, modrm)
                     }
                     _ => Err(std::io::Error::from(io::ErrorKind::InvalidData)),
                 }
@@ -1980,7 +1980,7 @@ impl Instruction {
                         )?;
                         let modrm = Instruction::encode_modrm(ModRmEncoding::Slash0, op, None);
                         w.write_all(&[0x8f, modrm])?;
-                        Instruction::encode_sib(w, &addr, modrm)
+                        Instruction::encode_sib(w, addr, modrm)
                     }
                     _ => Err(std::io::Error::from(io::ErrorKind::InvalidData)),
                 }
@@ -2002,7 +2002,7 @@ impl Instruction {
                     w.write_all(&[0xC2])?;
                     w.write_all(&(imm as u16).to_le_bytes())
                 } else {
-                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                    Err(std::io::Error::from(io::ErrorKind::InvalidData))
                 }
             }
         }
