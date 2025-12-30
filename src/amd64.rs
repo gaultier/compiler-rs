@@ -1386,14 +1386,21 @@ impl Instruction {
                 ..
             }) => (0b10, 0b111),
 
+            // Special case of no base, with index+scale.
+            Operand::EffectiveAddress(EffectiveAddress {
+                base: None,
+                index_scale: Some(_),
+                ..
+            }) => (0b00, 0b100),
+
             Operand::EffectiveAddress(EffectiveAddress {
                 displacement: 0, ..
             }) => (0b00, 0b100),
-            Operand::EffectiveAddress(EffectiveAddress { displacement, .. })
-                if *displacement <= i8::MAX as i32 =>
-            {
-                (0b01, 0b100)
-            }
+            Operand::EffectiveAddress(EffectiveAddress {
+                base: Some(_),
+                displacement,
+                ..
+            }) if *displacement <= i8::MAX as i32 => (0b01, 0b100),
             Operand::EffectiveAddress(_) => (0b10, 0b100),
 
             Operand::FnName(_) => todo!(),
