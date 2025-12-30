@@ -2022,11 +2022,9 @@ impl Instruction {
                 }
 
                 let op = self.operands.first().unwrap();
-                if op.size() != Size::_16 {
-                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
-                }
-
-                if let Some(imm) = op.as_imm() {
+                if let Some(imm) = op.as_imm()
+                    && imm <= i16::MAX as i64
+                {
                     w.write_all(&[0xC2])?;
                     w.write_all(&(imm as u16).to_le_bytes())
                 } else {
