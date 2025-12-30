@@ -2345,22 +2345,6 @@ impl Operand {
     }
 }
 
-impl EffectiveAddress {
-    // Avoid accidentally using RIP-relative addressing:
-    // > The ModR/M encoding for RIP-relative addressing does not depend on
-    // > using a prefix. Specifically, the r/m bit field encoding of 101B (used
-    // > to select RIP-relative addressing) is not affected by the REX prefix.
-    // > For example, selecting
-    // > R13 (REX.B = 1, r/m = 101B) with mod = 00B still results in
-    // > RIP-relative addressing. The 4-bit r/m field of REX.B combined with
-    // > ModR/M is not fully decoded. In order to address R13 with no
-    // > displacement, software must encode R13 + 0 using a 1-byte displacement
-    // > of zero.
-    fn can_base_be_mistaken_for_rel_addressing(&self) -> bool {
-        self.base == Some(Register::R13) || self.base == Some(Register::Rbp)
-    }
-}
-
 impl Display for Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.kind.to_str())?;
