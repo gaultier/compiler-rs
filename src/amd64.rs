@@ -2573,7 +2573,7 @@ impl From<&Operand> for MemoryLocation {
 
 #[cfg(test)]
 mod tests {
-    use std::process::Stdio;
+    use std::process::{ExitStatus, Stdio};
 
     use proptest::prelude::*;
 
@@ -2741,7 +2741,7 @@ mod tests {
         }
     }
 
-    fn oracle_encode(ins: &Instruction) -> std::io::Result<Vec<u8>> {
+    fn oracle_encode(ins: &Instruction) -> Result<Vec<u8>, (ExitStatus, Vec<u8>)> {
         let mut child = std::process::Command::new("clang")
             .args(&[
                 "--target=x86_64-unknown-linux",
@@ -2760,18 +2760,22 @@ mod tests {
             ])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .spawn()?;
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|_| (ExitStatus::default(), vec![]))?;
 
         {
             let mut stdin = child.stdin.take().unwrap();
             write!(&mut stdin, "{}", ins)?;
         }
-        let output = child.wait_with_output()?;
+        let output = child
+            .wait_with_output()
+            .map_err(|_| (ExitStatus::default(), vec![]))?;
 
         if output.status.success() {
             Ok(output.stdout)
         } else {
-            Err(io::Error::from(io::ErrorKind::InvalidData))
+            Err((output.status, output.stderr))
         }
     }
 
