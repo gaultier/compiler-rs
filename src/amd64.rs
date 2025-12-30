@@ -19,7 +19,6 @@ use crate::{
 
 #[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Arbitrary)]
 pub enum Scale {
-    _0 = 0,
     _1 = 1,
     _2 = 2,
     _4 = 4,
