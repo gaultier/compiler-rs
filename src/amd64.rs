@@ -19,7 +19,6 @@ use crate::{
 
 #[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Arbitrary)]
 pub enum Scale {
-    _0 = 0,
     _1 = 1,
     _2 = 2,
     _4 = 4,
@@ -180,9 +179,7 @@ impl Display for Operand {
 
                 if let Some((index, scale)) = index_scale {
                     write!(f, "{}", index)?;
-                    if *scale != Scale::_0 {
-                        write!(f, "  * {}", *scale as u8)?;
-                    }
+                    write!(f, "  * {}", *scale as u8)?;
                 }
 
                 if *displacement > 0 {
@@ -208,7 +205,7 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> Vec<u8> {
 impl Scale {
     fn to_2_bits(&self) -> u8 {
         match self {
-            Scale::_0 | Scale::_1 => 0b00,
+            Scale::_1 => 0b00,
             Scale::_2 => 0b01,
             Scale::_4 => 0b10,
             Scale::_8 => 0b11,
@@ -1380,15 +1377,6 @@ impl Instruction {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
 
-                // This should be modelled as `base: Some(index), index_scale: None`.
-                Operand::EffectiveAddress(EffectiveAddress {
-                    base: None,
-                    index_scale: Some((_index, Scale::_0)),
-                    ..
-                }) => {
-                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
-                }
-
                 _ => {}
             }
         }
@@ -2445,6 +2433,21 @@ mod tests {
                 operands: vec![Operand::EffectiveAddress(EffectiveAddress {
                     base: Some(Register::Ebx),
                     index_scale: None,
+                    displacement: 0,
+                    size_override: None,
+                })],
+                origin: Origin::new_unknown(),
+            };
+            let mut w = Vec::with_capacity(5);
+            ins.encode(&mut w).unwrap();
+            assert_eq!(&w, &[0x67, 0xff, 0x33]);
+        }
+        {
+            let ins = Instruction {
+                kind: InstructionKind::Push,
+                operands: vec![Operand::EffectiveAddress(EffectiveAddress {
+                    base: None,
+                    index_scale: Some((Register::Ebx, Scale::_1)),
                     displacement: 0,
                     size_override: None,
                 })],
