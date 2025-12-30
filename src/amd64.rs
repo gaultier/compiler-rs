@@ -1821,9 +1821,7 @@ impl Instruction {
                     }
                     // add rm32, imm32
                     // add rm64, imm32
-                    (_, Operand::Immediate(imm))
-                        if lhs.is_rm() && (lhs.size() == Size::_32 || lhs.size() == Size::_64) =>
-                    {
+                    (_, Operand::Immediate(imm)) if lhs.is_rm() && i32::try_from(*imm).is_ok() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             lhs.size() == Size::_64,
@@ -1837,7 +1835,12 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
 
-                        Instruction::encode_imm(w, *imm, &Size::_32)?;
+                        let size = if lhs.size() > Size::_32 {
+                            Size::_32
+                        } else {
+                            lhs.size()
+                        };
+                        Instruction::encode_imm(w, *imm, &size)?;
                     }
                     // add rm, r
                     // Encoding: MR 	ModRM:r/m (r, w) 	ModRM:reg (r)
