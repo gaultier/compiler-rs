@@ -1172,110 +1172,110 @@ impl Instruction {
             Operand::Register(reg) => (0b11, reg.to_3_bits()),
             Operand::Immediate(_) => (0b00, 0b101),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Rax),
+                base: Some(Register::Eax | Register::Rax),
                 index_scale: None,
                 displacement: 0,
                 ..
             }) => (0b00, 0b000),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Rcx),
+                base: Some(Register::Ecx | Register::Rcx),
                 index_scale: None,
                 displacement: 0,
                 ..
             }) => (0b00, 0b001),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Rdx),
+                base: Some(Register::Edx | Register::Rdx),
                 index_scale: None,
                 displacement: 0,
                 ..
             }) => (0b00, 0b010),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Rbx),
+                base: Some(Register::Ebx | Register::Rbx),
                 index_scale: None,
                 displacement: 0,
                 ..
             }) => (0b00, 0b011),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Rsi),
+                base: Some(Register::Esi | Register::Rsi),
                 index_scale: None,
                 displacement: 0,
                 ..
             }) => (0b00, 0b110),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Rdi),
+                base: Some(Register::Edi | Register::Rdi),
                 index_scale: None,
                 displacement: 0,
                 ..
             }) => (0b00, 0b111),
             // TODO: case for disp32
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Rax),
+                base: Some(Register::Eax | Register::Rax),
                 index_scale: None,
                 displacement,
                 ..
             }) if *displacement <= i8::MAX as i32 => (0b01, 0b000),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Rcx),
+                base: Some(Register::Ecx | Register::Rcx),
                 index_scale: None,
                 displacement,
                 ..
             }) if *displacement <= i8::MAX as i32 => (0b01, 0b001),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Rdx),
+                base: Some(Register::Edx | Register::Rdx),
                 index_scale: None,
                 displacement,
                 ..
             }) if *displacement <= i8::MAX as i32 => (0b01, 0b010),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Rbx),
+                base: Some(Register::Ebx | Register::Rbx),
                 index_scale: None,
                 displacement,
                 ..
             }) if *displacement <= i8::MAX as i32 => (0b01, 0b011),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Rbp),
+                base: Some(Register::Ebp | Register::Rbp),
                 index_scale: None,
                 displacement,
                 ..
             }) if *displacement <= i8::MAX as i32 => (0b01, 0b101),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Rsi),
+                base: Some(Register::Esi | Register::Rsi),
                 index_scale: None,
                 displacement,
                 ..
             }) if *displacement <= i8::MAX as i32 => (0b01, 0b110),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Rax),
+                base: Some(Register::Eax | Register::Rax),
                 index_scale: None,
                 ..
             }) => (0b10, 0b000),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Rcx),
+                base: Some(Register::Ecx | Register::Rcx),
                 index_scale: None,
                 ..
             }) => (0b10, 0b001),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Rdx),
+                base: Some(Register::Edx | Register::Rdx),
                 index_scale: None,
                 ..
             }) => (0b10, 0b010),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Rbx),
+                base: Some(Register::Ebx | Register::Rbx),
                 index_scale: None,
                 ..
             }) => (0b10, 0b011),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Rbp),
+                base: Some(Register::Ebp | Register::Rbp),
                 index_scale: None,
                 ..
             }) => (0b10, 0b101),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Rsi),
+                base: Some(Register::Esi | Register::Rsi),
                 index_scale: None,
                 ..
             }) => (0b10, 0b110),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Rdi),
+                base: Some(Register::Edi | Register::Rdi),
                 index_scale: None,
                 ..
             }) => (0b10, 0b111),
@@ -2430,6 +2430,21 @@ mod tests {
 
     #[test]
     fn test_encoding() {
+        {
+            let ins = Instruction {
+                kind: InstructionKind::Push,
+                operands: vec![Operand::EffectiveAddress(EffectiveAddress {
+                    base: Some(Register::Ebx),
+                    index_scale: None,
+                    displacement: 0,
+                    size_override: None,
+                })],
+                origin: Origin::new_unknown(),
+            };
+            let mut w = Vec::with_capacity(5);
+            ins.encode(&mut w).unwrap();
+            assert_eq!(&w, &[0x67, 0xff, 0x33]);
+        }
         {
             let ins = Instruction {
                 kind: InstructionKind::Push,
