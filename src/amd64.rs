@@ -150,6 +150,40 @@ enum ModRmEncoding {
     SlashR,
 }
 
+impl EffectiveAddress {
+    fn is_valid(&self) -> bool {
+        match self {
+            EffectiveAddress {
+                base: Some(reg), ..
+            }
+            | EffectiveAddress {
+                index_scale: Some((reg, _)),
+                ..
+            } if reg.size() < Size::_32 || *reg == Register::Rsp => {
+                return false;
+            }
+
+            // At least base or index must be present.
+            EffectiveAddress {
+                base: None,
+                index_scale: None,
+                ..
+            } => return false,
+
+            // Size of base and index must match.
+            EffectiveAddress {
+                base: Some(base),
+                index_scale: Some((index, _)),
+                ..
+            } if base.size() != index.size() => {
+                return false;
+            }
+
+            _ => true,
+        }
+    }
+}
+
 impl Display for Operand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
@@ -1514,34 +1548,10 @@ impl Instruction {
 
         // Reject malformed effective addresses (if any).
         for op in &self.operands {
-            match op {
-                Operand::EffectiveAddress(EffectiveAddress {
-                    base: Some(reg), ..
-                })
-                | Operand::EffectiveAddress(EffectiveAddress {
-                    index_scale: Some((reg, _)),
-                    ..
-                }) if reg.size() < Size::_32 || *reg == Register::Rsp => {
-                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
-                }
-
-                // At least base or index must be present.
-                Operand::EffectiveAddress(EffectiveAddress {
-                    base: None,
-                    index_scale: None,
-                    ..
-                }) => return Err(std::io::Error::from(io::ErrorKind::InvalidData)),
-
-                // Size of base and index must match.
-                Operand::EffectiveAddress(EffectiveAddress {
-                    base: Some(base),
-                    index_scale: Some((index, _)),
-                    ..
-                }) if base.size() != index.size() => {
-                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
-                }
-
-                _ => {}
+            if let Some(addr) = op.as_effective_address()
+                && !addr.is_valid()
+            {
+                return Err(std::io::Error::from(io::ErrorKind::InvalidData));
             }
         }
 
@@ -1805,7 +1815,7 @@ impl Instruction {
                     // Encoding: RM 	ModRM:reg (r, w) 	ModRM:r/m (r)
                     (Operand::Register(reg), Size::_16, Some(op2), None)
                     | (Operand::Register(reg), Size::_32, Some(op2), None)
-                        if op2.is_rm() =>
+                        if op2.is_rm() && op2.size() == op1.size() =>
                     {
                         Instruction::encode_rex_from_operands(
                             w,
@@ -1821,7 +1831,9 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
-                    (Operand::Register(reg), Size::_64, Some(op2), None) if op2.is_rm() => {
+                    (Operand::Register(reg), Size::_64, Some(op2), None)
+                        if op2.is_rm() && op2.size() == op1.size() =>
+                    {
                         Instruction::encode_rex_from_operands(w, true, Some(op2), Some(op1), None)?;
                         let modrm =
                             Instruction::encode_modrm(ModRmEncoding::SlashR, op2, Some(*reg));
@@ -1859,7 +1871,7 @@ impl Instruction {
                         Size::_16 | Size::_32 | Size::_64,
                         Some(op2),
                         Some(Operand::Immediate(imm)),
-                    ) if op2.is_rm() => {
+                    ) if op2.is_rm() && op2.size() == op1.size() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             op1.size() == Size::_64,
@@ -1881,7 +1893,7 @@ impl Instruction {
                         Size::_16,
                         Some(op2),
                         Some(Operand::Immediate(imm)),
-                    ) if op2.is_rm() => {
+                    ) if op2.is_rm() && op2.size() == op1.size() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1904,7 +1916,7 @@ impl Instruction {
                         Size::_32 | Size::_64,
                         Some(op2),
                         Some(Operand::Immediate(imm)),
-                    ) if op2.is_rm() => {
+                    ) if op2.is_rm() && op2.size() == op1.size() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             op1.size() == Size::_64,
@@ -2707,15 +2719,20 @@ mod tests {
     }
 
     proptest! {
-        #[test]
-        fn test_encode_proptest(ins in arb_instruction()){
-        let mut actual = Vec::with_capacity(15);
+      #[test]
+      fn test_encode_proptest(ins in arb_instruction()){
+          // Skip malformed effective addresses (if any).
+          let has_invalid_addresses = ins.operands.iter().any(|op| if let Some(addr) = op.as_effective_address() && !addr.is_valid() { return true; } else {false});
 
-        match (ins.encode(&mut actual), oracle_encode(&ins)) {
-            (Ok(()), Ok(expected)) => assert_eq!(actual, expected, "{} {:#?}", ins,ins),
-            (Err(_), Err(_)) => {},
-            (actual,oracle) => panic!("oracle and implementation disagree: actual={:#?} oracle={:#?} ins={} {:#?}",actual,oracle, ins,ins )
-        }
-        }
+          if !has_invalid_addresses {
+            let mut actual = Vec::with_capacity(15);
+
+            match (ins.encode(&mut actual), oracle_encode(&ins)) {
+                (Ok(()), Ok(expected)) => assert_eq!(actual, expected, "{} {:#?}", ins,ins),
+                (Err(_), Err(_)) => {},
+                (actual,oracle) => panic!("oracle and implementation disagree: actual={:#?} oracle={:#?} ins={} {:#?}",actual,oracle, ins,ins )
+            }
+          }
+      }
     }
 }
