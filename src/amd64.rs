@@ -1388,7 +1388,13 @@ impl Instruction {
         // Reject malformed effective addresses (if any).
         for op in &self.operands {
             match op {
-                Operand::EffectiveAddress(_) if op.size() < Size::_32 => {
+                Operand::EffectiveAddress(EffectiveAddress {
+                    base: Some(reg), ..
+                })
+                | Operand::EffectiveAddress(EffectiveAddress {
+                    index_scale: Some((reg, _)),
+                    ..
+                }) if reg.size() < Size::_32 => {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
 
@@ -1959,12 +1965,6 @@ impl Instruction {
                     // push rm
                     // Encoding: M 	ModRM:r/m (r)
                     Operand::EffectiveAddress(addr) => {
-                        assert!(
-                            op.size() == Size::_32 || op.size() == Size::_64,
-                            "{:#?}",
-                            addr
-                        );
-
                         // Need Address Size Override Prefix.
                         if addr
                             .base
