@@ -1792,51 +1792,46 @@ impl Instruction {
                 Ok(())
             }
             InstructionKind::IMul => {
-                if self.operands.len() != 2 {
+                if self.operands.len() > 3 {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
 
-                let lhs = &self.operands[0];
-                let rhs = &self.operands[1];
+                let op1 = &self.operands[0];
+                let op2 = self.operands.iter().nth(1);
+                let op3 = self.operands.iter().nth(2);
 
-                if lhs.size() == Size::_8 {
-                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
-                }
-
-                if lhs.size() != rhs.size() {
-                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
-                }
-
-                match (lhs, rhs, lhs.size()) {
+                match (op1, op1.size(), op2, op3) {
                     // imul r, rm
                     // Encoding: RM 	ModRM:reg (r, w) 	ModRM:r/m (r)
-                    (Operand::Register(reg), _, Size::_16)
-                    | (Operand::Register(reg), _, Size::_32)
-                        if rhs.is_rm() =>
+                    (Operand::Register(reg), Size::_16, Some(op2), None)
+                    | (Operand::Register(reg), Size::_32, Some(op2), None)
+                        if op2.is_rm() =>
                     {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
-                            Some(rhs),
-                            Some(lhs),
+                            Some(op2),
+                            Some(op1),
                             None,
                         )?;
                         let modrm =
-                            Instruction::encode_modrm(ModRmEncoding::SlashR, rhs, Some(*reg));
+                            Instruction::encode_modrm(ModRmEncoding::SlashR, op2, Some(*reg));
                         w.write_all(&[0x0f, 0xaf, modrm])?;
-                        if let Some(addr) = rhs.as_effective_address() {
+                        if let Some(addr) = op2.as_effective_address() {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
-                    (Operand::Register(reg), _, Size::_64) if rhs.is_rm() => {
-                        Instruction::encode_rex_from_operands(w, true, Some(rhs), Some(lhs), None)?;
+                    (Operand::Register(reg), Size::_64, Some(op2), None) if op2.is_rm() => {
+                        Instruction::encode_rex_from_operands(w, true, Some(op2), Some(op1), None)?;
                         let modrm =
-                            Instruction::encode_modrm(ModRmEncoding::SlashR, rhs, Some(*reg));
+                            Instruction::encode_modrm(ModRmEncoding::SlashR, op2, Some(*reg));
                         w.write_all(&[0x0f, 0xaf, modrm])?;
-                        if let Some(addr) = rhs.as_effective_address() {
+                        if let Some(addr) = op2.as_effective_address() {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
+                    (_, _, None, None) if op1.is_rm() => todo!(),
+                    (_, _, Some(op2), Some(Operand::Immediate(imm))) if op2.is_rm() => todo!(),
                     _ => return Err(std::io::Error::from(io::ErrorKind::InvalidData)),
                 }
                 Ok(())
