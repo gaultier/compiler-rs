@@ -184,7 +184,7 @@ impl Display for Operand {
                     }
                 }
 
-                if *displacement > 0 {
+                if *displacement != 0 {
                     write!(f, " {:+}", displacement)?;
                 }
 
@@ -1792,7 +1792,7 @@ impl Instruction {
                 Ok(())
             }
             InstructionKind::IMul => {
-                if self.operands.len() > 3 {
+                if self.operands.is_empty() || self.operands.len() > 3 {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
 
