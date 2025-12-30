@@ -1759,9 +1759,6 @@ impl Instruction {
 
                 let lhs = &self.operands[0];
                 let rhs = &self.operands[1];
-                if lhs.size() != rhs.size() {
-                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
-                }
 
                 match (lhs, rhs) {
                     // add al, imm8
@@ -1819,7 +1816,9 @@ impl Instruction {
                     }
                     // add rm, r
                     // Encoding: MR 	ModRM:r/m (r, w) 	ModRM:reg (r)
-                    (_, Operand::Register(reg)) if lhs.is_rm() && lhs.size() == Size::_8 => {
+                    (_, Operand::Register(reg))
+                        if lhs.is_rm() && lhs.size() == Size::_8 && lhs.size() == rhs.size() =>
+                    {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1838,7 +1837,8 @@ impl Instruction {
                         if lhs.is_rm()
                             && (lhs.size() == Size::_16
                                 || lhs.size() == Size::_32
-                                || lhs.size() == Size::_64) =>
+                                || lhs.size() == Size::_64)
+                            && lhs.size() == rhs.size() =>
                     {
                         Instruction::encode_rex_from_operands(
                             w,
@@ -2176,9 +2176,7 @@ impl Instruction {
                 }
 
                 let op = self.operands.first().unwrap();
-                if let Some(imm) = op.as_imm()
-                    && imm <= i16::MAX as i64
-                {
+                if let Some(imm) = op.as_imm() {
                     w.write_all(&[0xC2])?;
                     w.write_all(&(imm as u16).to_le_bytes())
                 } else {
