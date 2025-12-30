@@ -1144,10 +1144,17 @@ impl Instruction {
             Some(Operand::Register(reg)) if reg.is_extended() => true,
             Some(Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(reg), ..
+            }))
+            | Some(Operand::EffectiveAddress(EffectiveAddress {
+                base: None,
+                index_scale: Some((reg, Scale::_1)),
+                ..
             })) if reg.is_extended() => true,
             _ => false,
         };
 
+        // Or, the register is embedded in the opcode, in which case,
+        // REX.B is set when this register is extended.
         b |= match op_reg {
             Some(Operand::Register(reg)) if reg.is_extended() => true,
             _ => false,
