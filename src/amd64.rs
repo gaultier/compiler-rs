@@ -19,6 +19,7 @@ use crate::{
 
 #[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Arbitrary)]
 pub enum Scale {
+    _0 = 0,
     _1 = 1,
     _2 = 2,
     _4 = 4,
@@ -1376,6 +1377,15 @@ impl Instruction {
                     index_scale: Some((index, _)),
                     ..
                 }) if base.size() != index.size() => {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
+
+                // This should be modelled as `base: Some(index), index_scale: None`.
+                Operand::EffectiveAddress(EffectiveAddress {
+                    base: None,
+                    index_scale: Some((_index, Scale::_0)),
+                    ..
+                }) => {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
 
