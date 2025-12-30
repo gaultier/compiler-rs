@@ -2762,15 +2762,23 @@ mod tests {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|_| (ExitStatus::default(), vec![]))?;
+            .map_err(|err| {
+                (
+                    ExitStatus::default(),
+                    format!("{}", err).as_bytes().to_vec(),
+                )
+            })?;
 
         {
             let mut stdin = child.stdin.take().unwrap();
             write!(&mut stdin, "{}", ins)?;
         }
-        let output = child
-            .wait_with_output()
-            .map_err(|_| (ExitStatus::default(), vec![]))?;
+        let output = child.wait_with_output().map_err(|err| {
+            (
+                ExitStatus::default(),
+                format!("{}", err).as_bytes().to_vec(),
+            )
+        })?;
 
         if output.status.success() {
             Ok(output.stdout)
