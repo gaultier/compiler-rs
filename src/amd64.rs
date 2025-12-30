@@ -1173,10 +1173,22 @@ impl Instruction {
                 index_scale: None,
                 displacement: 0,
                 ..
+            })
+            | Operand::EffectiveAddress(EffectiveAddress {
+                base: None,
+                index_scale: Some((Register::Eax | Register::Rax, Scale::_1)),
+                displacement: 0,
+                ..
             }) => (0b00, 0b000),
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Ecx | Register::Rcx),
                 index_scale: None,
+                displacement: 0,
+                ..
+            })
+            | Operand::EffectiveAddress(EffectiveAddress {
+                base: None,
+                index_scale: Some((Register::Ecx | Register::Rcx, Scale::_1)),
                 displacement: 0,
                 ..
             }) => (0b00, 0b001),
@@ -1185,10 +1197,22 @@ impl Instruction {
                 index_scale: None,
                 displacement: 0,
                 ..
+            })
+            | Operand::EffectiveAddress(EffectiveAddress {
+                base: None,
+                index_scale: Some((Register::Edx | Register::Rdx, Scale::_1)),
+                displacement: 0,
+                ..
             }) => (0b00, 0b010),
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Ebx | Register::Rbx),
                 index_scale: None,
+                displacement: 0,
+                ..
+            })
+            | Operand::EffectiveAddress(EffectiveAddress {
+                base: None,
+                index_scale: Some((Register::Ebx | Register::Rbx, Scale::_1)),
                 displacement: 0,
                 ..
             }) => (0b00, 0b011),
@@ -1197,10 +1221,22 @@ impl Instruction {
                 index_scale: None,
                 displacement: 0,
                 ..
+            })
+            | Operand::EffectiveAddress(EffectiveAddress {
+                base: None,
+                index_scale: Some((Register::Esi | Register::Rsi, Scale::_1)),
+                displacement: 0,
+                ..
             }) => (0b00, 0b110),
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Edi | Register::Rdi),
                 index_scale: None,
+                displacement: 0,
+                ..
+            })
+            | Operand::EffectiveAddress(EffectiveAddress {
+                base: None,
+                index_scale: Some((Register::Edi | Register::Rdi, Scale::_1)),
                 displacement: 0,
                 ..
             }) => (0b00, 0b111),
