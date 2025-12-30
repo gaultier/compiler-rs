@@ -1360,7 +1360,7 @@ impl Instruction {
                 .unwrap_or_default()
                 << 3;
 
-            let base = addr.base.map(|reg| reg.to_3_bits()).unwrap_or_default();
+            let base = addr.base.map(|reg| reg.to_3_bits()).unwrap_or(0b101);
             let sib = scale | index | base;
             w.write_all(&[sib])?;
         }
@@ -1373,11 +1373,11 @@ impl Instruction {
         // > In this mode, the > address is provided directly in the instruction encoding
         // > using a 4-byte displacement field. In 64-bit > mode this addressing mode is changed to RIP-relative.
         match (mod_, rm) {
-            (0b00, 0b100) => {} // Nothing to encode, displacement is an implicit 0,
+            (0b00, 0b100) if addr.base.is_some() => {} // Nothing to encode, displacement is an implicit 0.
             (0b01, 0b100) => {
                 w.write_all(&(addr.displacement as u8).to_le_bytes())?;
             }
-            (0b10, 0b100) => {
+            (0b10, 0b100) | (0b00, 0b100) if addr.base.is_none() => {
                 w.write_all(&(addr.displacement as u32).to_le_bytes())?;
             }
             (0b00, 0b101) => {
