@@ -1619,7 +1619,9 @@ impl Instruction {
                     }
                     // mov rm, r
                     // Encoding: MR 	ModRM:r/m (w) 	ModRM:reg (r)
-                    (_, Operand::Register(reg)) if lhs.is_rm() && reg.is_8_bits() => {
+                    (_, Operand::Register(reg))
+                        if lhs.is_rm() && reg.is_8_bits() && lhs.size() == rhs.size() =>
+                    {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1635,7 +1637,9 @@ impl Instruction {
                         }
                     }
                     (_, Operand::Register(reg))
-                        if lhs.is_rm() && (reg.is_16_bits() || reg.is_32_bits()) =>
+                        if lhs.is_rm()
+                            && (reg.is_16_bits() || reg.is_32_bits())
+                            && lhs.size() == rhs.size() =>
                     {
                         Instruction::encode_rex_from_operands(
                             w,
@@ -1651,7 +1655,9 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
-                    (_, Operand::Register(reg)) if lhs.is_rm() && reg.is_64_bits() => {
+                    (_, Operand::Register(reg))
+                        if lhs.is_rm() && reg.is_64_bits() && lhs.size() == rhs.size() =>
+                    {
                         Instruction::encode_rex_from_operands(w, true, Some(lhs), Some(rhs), None)?;
                         let modrm =
                             Instruction::encode_modrm(ModRmEncoding::SlashR, lhs, Some(*reg));
@@ -1663,7 +1669,9 @@ impl Instruction {
 
                     // mov r, rm
                     // Encoding: RM 	ModRM:reg (w) 	ModRM:r/m (r)
-                    (Operand::Register(reg), _) if rhs.is_rm() && reg.is_8_bits() => {
+                    (Operand::Register(reg), _)
+                        if rhs.is_rm() && reg.is_8_bits() && lhs.size() == rhs.size() =>
+                    {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1679,7 +1687,9 @@ impl Instruction {
                         }
                     }
                     (Operand::Register(reg), _)
-                        if rhs.is_rm() && (reg.is_16_bits() || reg.is_32_bits()) =>
+                        if rhs.is_rm()
+                            && (reg.is_16_bits() || reg.is_32_bits())
+                            && lhs.size() == rhs.size() =>
                     {
                         Instruction::encode_rex_from_operands(
                             w,
@@ -1695,7 +1705,9 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
-                    (Operand::Register(reg), _) if rhs.is_rm() && reg.is_64_bits() => {
+                    (Operand::Register(reg), _)
+                        if rhs.is_rm() && reg.is_64_bits() && lhs.size() == rhs.size() =>
+                    {
                         Instruction::encode_rex_from_operands(w, true, Some(rhs), Some(lhs), None)?;
                         let modrm =
                             Instruction::encode_modrm(ModRmEncoding::SlashR, rhs, Some(*reg));
@@ -1752,6 +1764,27 @@ impl Instruction {
                 }
 
                 match (lhs, rhs) {
+                    // add al, imm8
+                    (Operand::Register(Register::Al), Operand::Immediate(imm)) => {
+                        w.write_all(&[0x04, *imm as u8])?;
+                    }
+                    // add ax, imm16
+                    (Operand::Register(Register::Ax), Operand::Immediate(imm)) => {
+                        w.write_all(&[0x05])?;
+                        w.write_all(&(*imm as u16).to_le_bytes())?;
+                    }
+                    // add eax, imm32
+                    (Operand::Register(Register::Eax), Operand::Immediate(imm)) => {
+                        w.write_all(&[0x05])?;
+                        w.write_all(&(*imm as u32).to_le_bytes())?;
+                    }
+                    // add rax, imm32
+                    (Operand::Register(Register::Rax), Operand::Immediate(imm)) => {
+                        Instruction::encode_rex_from_operands(w, true, None, None, None)?;
+                        w.write_all(&[0x05])?;
+                        w.write_all(&(*imm as u32).to_le_bytes())?;
+                    }
+
                     // add rm, imm
                     // Encoding: MI 	ModRM:r/m (r, w) 	imm8/16/32
                     (_, Operand::Immediate(imm)) if lhs.is_rm() && lhs.size() == Size::_8 => {
