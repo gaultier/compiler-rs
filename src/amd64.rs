@@ -1417,7 +1417,7 @@ impl Instruction {
     fn encode_sib<W: Write>(w: &mut W, addr: &EffectiveAddress, modrm: u8) -> std::io::Result<()> {
         let mod_ = modrm >> 6;
         let rm = modrm & 0b111;
-        let is_sib_required = matches!((mod_, rm), (0b00, 0b100) | (0b01, _) | (0b10, _));
+        let is_sib_required = matches!((mod_, rm), (0b00, 0b100) | (0b01, 0b100) | (0b10, 0b100));
 
         if is_sib_required {
             let scale = addr
@@ -1435,9 +1435,9 @@ impl Instruction {
             let sib = scale | index | base;
             w.write_all(&[sib])?;
         } else {
-            // If there is no SIB, then it's impossible for the displacement to be non-zero, and
+            // If there is no SIB, then it's impossible for both base and index to be present, and
             // for the scale to not be 1.
-            assert_eq!(addr.displacement, 0);
+            assert!(!(addr.base.is_some() && addr.index_scale.is_some()));
             assert_eq!(
                 addr.index_scale
                     .map(|(_, scale)| scale)
