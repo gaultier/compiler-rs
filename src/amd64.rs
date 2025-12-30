@@ -1815,7 +1815,7 @@ impl Instruction {
                     // Encoding: RM 	ModRM:reg (r, w) 	ModRM:r/m (r)
                     (Operand::Register(reg), Size::_16, Some(op2), None)
                     | (Operand::Register(reg), Size::_32, Some(op2), None)
-                        if op2.is_rm() && op2.size() == op1.size() =>
+                        if op2.is_rm() && op2.size() == op1.size() && !op2.has_ambiguous_size() =>
                     {
                         Instruction::encode_rex_from_operands(
                             w,
@@ -1832,7 +1832,7 @@ impl Instruction {
                         }
                     }
                     (Operand::Register(reg), Size::_64, Some(op2), None)
-                        if op2.is_rm() && op2.size() == op1.size() =>
+                        if op2.is_rm() && op2.size() == op1.size() && !op2.has_ambiguous_size() =>
                     {
                         Instruction::encode_rex_from_operands(w, true, Some(op2), Some(op1), None)?;
                         let modrm =
@@ -1843,7 +1843,7 @@ impl Instruction {
                         }
                     }
                     // imul rm
-                    (_, Size::_8, None, None) if op1.is_rm() => {
+                    (_, Size::_8, None, None) if op1.is_rm() && !op1.has_ambiguous_size() => {
                         Instruction::encode_rex_from_operands(w, false, Some(op1), None, None)?;
                         let modrm = Instruction::encode_modrm(ModRmEncoding::Slash5, op1, None);
                         w.write_all(&[0xf6, modrm])?;
@@ -1851,7 +1851,9 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
-                    (_, Size::_16 | Size::_32 | Size::_64, None, None) if op1.is_rm() => {
+                    (_, Size::_16 | Size::_32 | Size::_64, None, None)
+                        if op1.is_rm() && !op1.has_ambiguous_size() =>
+                    {
                         Instruction::encode_rex_from_operands(
                             w,
                             op1.size() == Size::_64,
@@ -1871,7 +1873,7 @@ impl Instruction {
                         Size::_16 | Size::_32 | Size::_64,
                         Some(op2),
                         Some(Operand::Immediate(imm)),
-                    ) if op2.is_rm() && op2.size() == op1.size() => {
+                    ) if op2.is_rm() && op2.size() == op1.size() && !op2.has_ambiguous_size() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             op1.size() == Size::_64,
@@ -1893,7 +1895,7 @@ impl Instruction {
                         Size::_16,
                         Some(op2),
                         Some(Operand::Immediate(imm)),
-                    ) if op2.is_rm() && op2.size() == op1.size() => {
+                    ) if op2.is_rm() && op2.size() == op1.size() && !op2.has_ambiguous_size() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -1916,7 +1918,7 @@ impl Instruction {
                         Size::_32 | Size::_64,
                         Some(op2),
                         Some(Operand::Immediate(imm)),
-                    ) if op2.is_rm() && op2.size() == op1.size() => {
+                    ) if op2.is_rm() && op2.size() == op1.size() && !op2.has_ambiguous_size() => {
                         Instruction::encode_rex_from_operands(
                             w,
                             op1.size() == Size::_64,
@@ -2406,6 +2408,16 @@ impl Operand {
 
     pub(crate) fn is_effective_address(&self) -> bool {
         matches!(self, Operand::EffectiveAddress(_))
+    }
+
+    pub(crate) fn has_ambiguous_size(&self) -> bool {
+        matches!(
+            self,
+            Operand::EffectiveAddress(EffectiveAddress {
+                size_override: None,
+                ..
+            })
+        )
     }
 
     pub(crate) fn is_rm(&self) -> bool {
