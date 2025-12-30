@@ -159,25 +159,21 @@ impl EffectiveAddress {
             | EffectiveAddress {
                 index_scale: Some((reg, _)),
                 ..
-            } if reg.size() < Size::_32 || *reg == Register::Rsp => {
-                return false;
-            }
+            } if reg.size() < Size::_32 || *reg == Register::Rsp => false,
 
             // At least base or index must be present.
             EffectiveAddress {
                 base: None,
                 index_scale: None,
                 ..
-            } => return false,
+            } => false,
 
             // Size of base and index must match.
             EffectiveAddress {
                 base: Some(base),
                 index_scale: Some((index, _)),
                 ..
-            } if base.size() != index.size() => {
-                return false;
-            }
+            } if base.size() != index.size() => false,
 
             _ => true,
         }
@@ -1785,24 +1781,24 @@ impl Instruction {
                         Instruction::encode_imm(w, *imm, &lhs.size())?;
                     }
                     (_, Operand::Immediate(imm))
-                        if lhs.is_rm() && (lhs.size() == Size::_16 || lhs.size() == Size::_32) =>
+                        if lhs.is_rm()
+                            && (lhs.size() == Size::_16
+                                || lhs.size() == Size::_32
+                                || lhs.size() == Size::_64) =>
                     {
-                        Instruction::encode_rex_from_operands(w, false, Some(lhs), None, None)?;
-                        let modrm = Instruction::encode_modrm(ModRmEncoding::Slash0, lhs, None);
-                        w.write_all(&[0x81, modrm])?;
-                        if let Some(addr) = lhs.as_effective_address() {
-                            Instruction::encode_sib(w, &addr, modrm)?;
-                        }
-
-                        Instruction::encode_imm(w, *imm, &lhs.size())?;
-                    }
-                    (_, Operand::Immediate(imm)) if lhs.is_rm() && lhs.size() == Size::_64 => {
-                        Instruction::encode_rex_from_operands(w, true, Some(lhs), None, None)?;
+                        Instruction::encode_rex_from_operands(
+                            w,
+                            lhs.size() == Size::_64,
+                            Some(lhs),
+                            None,
+                            None,
+                        )?;
                         let modrm = Instruction::encode_modrm(ModRmEncoding::Slash0, lhs, None);
                         w.write_all(&[0x83, modrm])?;
                         if let Some(addr) = lhs.as_effective_address() {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
+
                         Instruction::encode_imm(w, *imm, &lhs.size())?;
                     }
                     // add rm, r
