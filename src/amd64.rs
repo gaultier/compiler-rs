@@ -1164,6 +1164,11 @@ impl Instruction {
         // > The REX.X bit adds a 1-bit (msb) extension to the SIB.index field.
         let x = match op_modrm_rm {
             Some(Operand::EffectiveAddress(EffectiveAddress {
+                base: None,
+                index_scale: Some((_, Scale::_1)),
+                ..
+            })) => false, // Treat as: [base].
+            Some(Operand::EffectiveAddress(EffectiveAddress {
                 index_scale: Some((reg, _)),
                 ..
             })) if reg.is_extended() => true,
