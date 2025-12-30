@@ -1769,7 +1769,7 @@ impl Instruction {
                         w.write_all(&(*imm as u32).to_le_bytes())?;
                     }
 
-                    // add rm, imm
+                    // add rm8, imm8
                     // Encoding: MI 	ModRM:r/m (r, w) 	imm8/16/32
                     (_, Operand::Immediate(imm)) if lhs.is_rm() && lhs.size() == Size::_8 => {
                         Instruction::encode_rex_from_operands(w, false, Some(lhs), None, None)?;
@@ -1780,11 +1780,13 @@ impl Instruction {
                         }
                         Instruction::encode_imm(w, *imm, &lhs.size())?;
                     }
+                    // add rm, imm8
                     (_, Operand::Immediate(imm))
                         if lhs.is_rm()
                             && (lhs.size() == Size::_16
                                 || lhs.size() == Size::_32
-                                || lhs.size() == Size::_64) =>
+                                || lhs.size() == Size::_64)
+                            && i8::try_from(*imm).is_ok() =>
                     {
                         Instruction::encode_rex_from_operands(
                             w,
@@ -1799,7 +1801,42 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
 
+                        Instruction::encode_imm(w, *imm, &Size::_8)?;
+                    }
+                    // add rm16, imm16
+                    (_, Operand::Immediate(imm))
+                        if lhs.is_rm()
+                            && (lhs.size() == Size::_16)
+                            && i16::try_from(*imm).is_ok() =>
+                    {
+                        Instruction::encode_rex_from_operands(w, false, Some(lhs), None, None)?;
+                        let modrm = Instruction::encode_modrm(ModRmEncoding::Slash0, lhs, None);
+                        w.write_all(&[0x81, modrm])?;
+                        if let Some(addr) = lhs.as_effective_address() {
+                            Instruction::encode_sib(w, &addr, modrm)?;
+                        }
+
                         Instruction::encode_imm(w, *imm, &lhs.size())?;
+                    }
+                    // add rm32, imm32
+                    // add rm64, imm32
+                    (_, Operand::Immediate(imm))
+                        if lhs.is_rm() && (lhs.size() == Size::_32 || lhs.size() == Size::_64) =>
+                    {
+                        Instruction::encode_rex_from_operands(
+                            w,
+                            lhs.size() == Size::_64,
+                            Some(lhs),
+                            None,
+                            None,
+                        )?;
+                        let modrm = Instruction::encode_modrm(ModRmEncoding::Slash0, lhs, None);
+                        w.write_all(&[0x81, modrm])?;
+                        if let Some(addr) = lhs.as_effective_address() {
+                            Instruction::encode_sib(w, &addr, modrm)?;
+                        }
+
+                        Instruction::encode_imm(w, *imm, &Size::_32)?;
                     }
                     // add rm, r
                     // Encoding: MR 	ModRM:r/m (r, w) 	ModRM:reg (r)
@@ -2568,6 +2605,16 @@ mod tests {
 
     #[test]
     fn test_encoding() {
+        {
+            let ins = Instruction {
+                kind: InstructionKind::Add,
+                operands: vec![Operand::Register(Register::Bx), Operand::Immediate(0)],
+                origin: Origin::new_unknown(),
+            };
+            let mut w = Vec::with_capacity(5);
+            ins.encode(&mut w).unwrap();
+            assert_eq!(&w, &[0x66, 0x83, 0xc3, 0x00]);
+        }
         {
             let ins = Instruction {
                 kind: InstructionKind::IMul,
