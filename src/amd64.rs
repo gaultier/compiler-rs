@@ -1303,7 +1303,9 @@ impl Instruction {
                 index_scale: Some((reg, Scale::_1)),
                 displacement,
                 ..
-            }) if reg.to_3_bits() == 0b000 && *displacement <= i8::MAX as i32 => (0b01, 0b000),
+            }) if reg.to_3_bits() == 0b000 && *displacement as usize <= u8::MAX as usize => {
+                (0b01, 0b000)
+            }
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(reg),
                 index_scale: None,
@@ -1315,7 +1317,9 @@ impl Instruction {
                 index_scale: Some((reg, Scale::_1)),
                 displacement,
                 ..
-            }) if reg.to_3_bits() == 0b001 && *displacement <= i8::MAX as i32 => (0b01, 0b001),
+            }) if reg.to_3_bits() == 0b001 && *displacement as usize <= u8::MAX as usize => {
+                (0b01, 0b001)
+            }
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(reg),
                 index_scale: None,
@@ -1327,7 +1331,9 @@ impl Instruction {
                 index_scale: Some((reg, Scale::_1)),
                 displacement,
                 ..
-            }) if reg.to_3_bits() == 0b010 && *displacement <= i8::MAX as i32 => (0b01, 0b010),
+            }) if reg.to_3_bits() == 0b010 && *displacement as usize <= u8::MAX as usize => {
+                (0b01, 0b010)
+            }
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(reg),
                 index_scale: None,
@@ -1339,7 +1345,9 @@ impl Instruction {
                 index_scale: Some((reg, Scale::_1)),
                 displacement,
                 ..
-            }) if reg.to_3_bits() == 0b011 && *displacement <= i8::MAX as i32 => (0b01, 0b011),
+            }) if reg.to_3_bits() == 0b011 && *displacement as usize <= u8::MAX as usize => {
+                (0b01, 0b011)
+            }
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(reg),
                 index_scale: None,
@@ -1351,7 +1359,9 @@ impl Instruction {
                 index_scale: Some((reg, Scale::_1)),
                 displacement,
                 ..
-            }) if reg.to_3_bits() == 0b101 && *displacement <= i8::MAX as i32 => (0b01, 0b101),
+            }) if reg.to_3_bits() == 0b101 && *displacement as usize <= u8::MAX as usize => {
+                (0b01, 0b101)
+            }
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(reg),
                 index_scale: None,
@@ -1363,7 +1373,9 @@ impl Instruction {
                 index_scale: Some((reg, Scale::_1)),
                 displacement,
                 ..
-            }) if reg.to_3_bits() == 0b110 && *displacement <= i8::MAX as i32 => (0b01, 0b110),
+            }) if reg.to_3_bits() == 0b110 && *displacement as usize <= u8::MAX as usize => {
+                (0b01, 0b110)
+            }
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(reg),
                 index_scale: None,
@@ -1449,7 +1461,7 @@ impl Instruction {
                 base: Some(_),
                 displacement,
                 ..
-            }) if *displacement <= i8::MAX as i32 => (0b01, 0b100),
+            }) if *displacement as usize <= u8::MAX as usize => (0b01, 0b100),
             Operand::EffectiveAddress(_) => (0b10, 0b100),
 
             Operand::FnName(_) => todo!(),
@@ -2026,7 +2038,7 @@ impl Instruction {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
                 let _op = self.operands.first().unwrap();
-                let displacement: i32 = 0; // FIXME: resolve offset with linker.
+                let displacement: u32 = 0; // FIXME: resolve offset with linker.
                 w.write_all(&[0xe8])?; // Call near.
                 w.write_all(&displacement.to_le_bytes())
             }
