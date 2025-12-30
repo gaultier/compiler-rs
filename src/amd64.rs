@@ -179,7 +179,9 @@ impl Display for Operand {
 
                 if let Some((index, scale)) = index_scale {
                     write!(f, "{}", index)?;
-                    write!(f, "  * {}", *scale as u8)?;
+                    if *scale > Scale::_1 {
+                        write!(f, "  * {}", *scale as u8)?;
+                    }
                 }
 
                 if *displacement > 0 {
@@ -1342,11 +1344,9 @@ impl Instruction {
 
     // Encoding: `Scale(2 bits) | Index(3 bits) | Base (3bits)`.
     fn encode_sib<W: Write>(w: &mut W, addr: &EffectiveAddress, modrm: u8) -> std::io::Result<()> {
-        let is_sib_required = matches!(
-            // (mod, rm)
-            (modrm >> 6, modrm & 0b111),
-            (0b00, 0b100) | (0b01, 0b100) | (0b10, 0b100)
-        );
+        let mod_ = modrm >> 6;
+        let rm = modrm & 0b111;
+        let is_sib_required = matches!((mod_, rm), (0b00, 0b100) | (0b01, 0b100) | (0b10, 0b100));
 
         if is_sib_required {
             let scale = addr
@@ -1366,20 +1366,44 @@ impl Instruction {
         }
 
         // Displacement.
-        if addr.displacement > 0 || addr.can_base_be_mistaken_for_rel_addressing() {
-            if let Ok(disp) = i8::try_from(addr.displacement) {
-                w.write_all(&disp.to_le_bytes())?;
-            } else {
-                w.write_all(&addr.displacement.to_le_bytes())?;
+        // > If {mod, r/m} = 00100b, the offset portion of the formula is set to 0.
+        // > For {mod, r/m} = 01100b and {mod, r/m} =10100b, offset is encoded in
+        // > the one- or 4-byte displacement field of the instruction.
+        // > Finally, the encoding {mod, r/m} = 00101b specifies an absolute addressing mode.
+        // > In this mode, the > address is provided directly in the instruction encoding
+        // > using a 4-byte displacement field. In 64-bit > mode this addressing mode is changed to RIP-relative.
+        match (mod_, rm) {
+            (0b00, 0b100) => {} // Nothing to encode, displacement is an implicit 0,
+            (0b01, 0b100) => {
+                w.write_all(&(addr.displacement as u8).to_le_bytes())?;
             }
+            (0b10, 0b100) => {
+                w.write_all(&(addr.displacement as u32).to_le_bytes())?;
+            }
+            (0b00, 0b101) => {
+                todo!()
+            }
+            _ => {}
         }
-
         Ok(())
     }
 
     pub(crate) fn encode<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
-        if let Some(Operand::Register(reg)) = self.operands.first()
-            && reg.is_16_bits()
+        // Need Address Size Override Prefix?
+        if self.operands.iter().any(|op| match op {
+            Operand::EffectiveAddress(EffectiveAddress {
+                base: Some(reg), ..
+            })
+            | Operand::EffectiveAddress(EffectiveAddress {
+                index_scale: Some((reg, _)),
+                ..
+            }) if reg.size() == Size::_32 => true,
+            _ => false,
+        }) {
+            w.write_all(&[0x67])?;
+        }
+
+        if self.operands.iter().any(|op| op.size() == Size::_16)
             && self.kind != InstructionKind::Ret
         {
             w.write_all(&[0x66])?; // 16 bits prefix.
@@ -1965,16 +1989,6 @@ impl Instruction {
                     // push rm
                     // Encoding: M 	ModRM:r/m (r)
                     Operand::EffectiveAddress(addr) => {
-                        // Need Address Size Override Prefix.
-                        if addr
-                            .base
-                            .map(|x| x.size() == Size::_32)
-                            .or(addr.index_scale.map(|(x, _)| x.size() == Size::_32))
-                            .unwrap_or_default()
-                        {
-                            w.write_all(&[0x67])?;
-                        }
-
                         Instruction::encode_rex_from_operands(
                             w,
                             false,
@@ -2491,6 +2505,21 @@ mod tests {
             let mut w = Vec::with_capacity(5);
             ins.encode(&mut w).unwrap();
             assert_eq!(&w, &[0x67, 0xff, 0x33]);
+        }
+        {
+            let ins = Instruction {
+                kind: InstructionKind::Push,
+                operands: vec![Operand::EffectiveAddress(EffectiveAddress {
+                    base: None,
+                    index_scale: Some((Register::Ebx, Scale::_2)),
+                    displacement: 0,
+                    size_override: Some(Size::_16),
+                })],
+                origin: Origin::new_unknown(),
+            };
+            let mut w = Vec::with_capacity(5);
+            ins.encode(&mut w).unwrap();
+            assert_eq!(&w, &[0x67, 0x66, 0xff, 0x34, 0x5d, 0, 0, 0, 0]);
         }
         {
             let ins = Instruction {
