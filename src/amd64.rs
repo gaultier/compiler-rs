@@ -1797,8 +1797,8 @@ impl Instruction {
                 }
 
                 let op1 = &self.operands[0];
-                let op2 = self.operands.iter().nth(1);
-                let op3 = self.operands.iter().nth(2);
+                let op2 = self.operands.get(1);
+                let op3 = self.operands.get(2);
 
                 match (op1, op1.size(), op2, op3) {
                     // imul r, rm
