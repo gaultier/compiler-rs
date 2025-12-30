@@ -1499,7 +1499,7 @@ impl Instruction {
                 | Operand::EffectiveAddress(EffectiveAddress {
                     index_scale: Some((reg, _)),
                     ..
-                }) if reg.size() < Size::_32 => {
+                }) if reg.size() < Size::_32 || *reg == Register::Rsp => {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
 
@@ -2767,9 +2767,9 @@ mod tests {
         let mut actual = Vec::with_capacity(15);
 
         match (ins.encode(&mut actual), oracle_encode(&ins)) {
-            (Ok(()), Ok(expected)) => assert_eq!(actual, expected),
+            (Ok(()), Ok(expected)) => assert_eq!(actual, expected, "{} {:#?}", ins,ins),
             (Err(_), Err(_)) => {},
-            (actual,oracle) => panic!("oracle and implementation disagree: actual={:#?} oracle={:#?} ins={}",actual,oracle, ins )
+            (actual,oracle) => panic!("oracle and implementation disagree: actual={:#?} oracle={:#?} ins={} {:#?}",actual,oracle, ins,ins )
         }
         }
     }
