@@ -1830,8 +1830,96 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
-                    (_, _, None, None) if op1.is_rm() => todo!(),
-                    (_, _, Some(op2), Some(Operand::Immediate(imm))) if op2.is_rm() => todo!(),
+                    // imul rm
+                    (_, Size::_8, None, None) if op1.is_rm() => {
+                        Instruction::encode_rex_from_operands(w, false, Some(op1), None, None)?;
+                        let modrm = Instruction::encode_modrm(ModRmEncoding::Slash5, op1, None);
+                        w.write_all(&[0xf6, modrm])?;
+                        if let Some(addr) = op1.as_effective_address() {
+                            Instruction::encode_sib(w, &addr, modrm)?;
+                        }
+                    }
+                    (_, Size::_16 | Size::_32 | Size::_64, None, None) if op1.is_rm() => {
+                        Instruction::encode_rex_from_operands(
+                            w,
+                            op1.size() == Size::_64,
+                            Some(op1),
+                            None,
+                            None,
+                        )?;
+                        let modrm = Instruction::encode_modrm(ModRmEncoding::Slash5, op1, None);
+                        w.write_all(&[0xf7, modrm])?;
+                        if let Some(addr) = op1.as_effective_address() {
+                            Instruction::encode_sib(w, &addr, modrm)?;
+                        }
+                    }
+                    // imul r, rm, imm8
+                    (
+                        Operand::Register(reg),
+                        Size::_16 | Size::_32 | Size::_64,
+                        Some(op2),
+                        Some(Operand::Immediate(imm)),
+                    ) if op2.is_rm() => {
+                        Instruction::encode_rex_from_operands(
+                            w,
+                            op1.size() == Size::_64,
+                            Some(op2),
+                            Some(op1),
+                            None,
+                        )?;
+                        let modrm =
+                            Instruction::encode_modrm(ModRmEncoding::SlashR, op2, Some(*reg));
+                        w.write_all(&[0x6B, modrm])?;
+                        if let Some(addr) = op2.as_effective_address() {
+                            Instruction::encode_sib(w, &addr, modrm)?;
+                        }
+                        w.write_all(&(*imm as u8).to_le_bytes())?;
+                    }
+                    // imul r16, rm, imm16
+                    (
+                        Operand::Register(reg),
+                        Size::_16,
+                        Some(op2),
+                        Some(Operand::Immediate(imm)),
+                    ) if op2.is_rm() => {
+                        Instruction::encode_rex_from_operands(
+                            w,
+                            false,
+                            Some(op2),
+                            Some(op1),
+                            None,
+                        )?;
+                        let modrm =
+                            Instruction::encode_modrm(ModRmEncoding::SlashR, op2, Some(*reg));
+                        w.write_all(&[0x69, modrm])?;
+                        if let Some(addr) = op2.as_effective_address() {
+                            Instruction::encode_sib(w, &addr, modrm)?;
+                        }
+                        w.write_all(&(*imm as u16).to_le_bytes())?;
+                    }
+                    // imul r32, rm, imm32
+                    // imul r64, rm, imm32
+                    (
+                        Operand::Register(reg),
+                        Size::_32 | Size::_64,
+                        Some(op2),
+                        Some(Operand::Immediate(imm)),
+                    ) if op2.is_rm() => {
+                        Instruction::encode_rex_from_operands(
+                            w,
+                            op1.size() == Size::_64,
+                            Some(op2),
+                            Some(op1),
+                            None,
+                        )?;
+                        let modrm =
+                            Instruction::encode_modrm(ModRmEncoding::SlashR, op2, Some(*reg));
+                        w.write_all(&[0x69, modrm])?;
+                        if let Some(addr) = op2.as_effective_address() {
+                            Instruction::encode_sib(w, &addr, modrm)?;
+                        }
+                        w.write_all(&(*imm as u32).to_le_bytes())?;
+                    }
                     _ => return Err(std::io::Error::from(io::ErrorKind::InvalidData)),
                 }
                 Ok(())
