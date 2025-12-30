@@ -1504,7 +1504,7 @@ impl Instruction {
             w.write_all(&[sib])?;
         } else {
             // If there is no SIB, then it's impossible for both base and index to be present, and
-            // for the scale to not be 1.
+            // for the scale not to be 1.
             assert!(!(addr.base.is_some() && addr.index_scale.is_some()));
             assert_eq!(
                 addr.index_scale
@@ -1526,7 +1526,10 @@ impl Instruction {
             (0b01, _) => {
                 w.write_all(&(addr.displacement as u8).to_le_bytes())?;
             }
-            (0b10, _) | (0b00, 0b100) if addr.base.is_none() => {
+            (0b10, _) => {
+                w.write_all(&(addr.displacement as u32).to_le_bytes())?;
+            }
+            (0b00, 0b100) if addr.base.is_none() => {
                 w.write_all(&(addr.displacement as u32).to_le_bytes())?;
             }
             (0b00, 0b101) => {
@@ -2569,6 +2572,21 @@ mod tests {
 
     #[test]
     fn test_encoding() {
+        {
+            let ins = Instruction {
+                kind: InstructionKind::IMul,
+                operands: vec![Operand::EffectiveAddress(EffectiveAddress {
+                    base: Some(Register::Ebx),
+                    index_scale: None,
+                    displacement: -129,
+                    size_override: Some(Size::_8),
+                })],
+                origin: Origin::new_unknown(),
+            };
+            let mut w = Vec::with_capacity(15);
+            ins.encode(&mut w).unwrap();
+            assert_eq!(&w, &[0x67, 0xf6, 0xab, 0x7f, 0xff, 0xff, 0xff]);
+        }
         {
             let ins = Instruction {
                 kind: InstructionKind::Push,
