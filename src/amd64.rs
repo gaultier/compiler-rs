@@ -917,16 +917,23 @@ impl Register {
         }
     }
 
+    fn is_high_byte(&self) -> bool {
+        matches!(
+            self,
+            Register::Ah | Register::Ch | Register::Dh | Register::Bh
+        )
+    }
+
     fn to_3_bits(&self) -> u8 {
         let res = match self {
-            Register::Al | Register::Ah | Register::Ax | Register::Eax | Register::Rax => 0b000,
-            Register::Bl | Register::Bh | Register::Bx | Register::Ebx | Register::Rbx => 0b011,
-            Register::Cl | Register::Ch | Register::Cx | Register::Ecx | Register::Rcx => 0b001,
-            Register::Dl | Register::Dh | Register::Dx | Register::Edx | Register::Rdx => 0b010,
-            Register::Dil | Register::Di | Register::Edi | Register::Rdi => 0b111,
-            Register::Si | Register::Sil | Register::Esi | Register::Rsi => 0b110,
-            Register::Bpl | Register::Bp | Register::Ebp | Register::Rbp => 0b101,
-            Register::Spl | Register::Sp | Register::Esp | Register::Rsp => 0b100,
+            Register::Al | Register::Ax | Register::Eax | Register::Rax => 0b000,
+            Register::Bl | Register::Bx | Register::Ebx | Register::Rbx => 0b011,
+            Register::Cl | Register::Cx | Register::Ecx | Register::Rcx => 0b001,
+            Register::Dl | Register::Dx | Register::Edx | Register::Rdx => 0b010,
+            Register::Bh | Register::Dil | Register::Di | Register::Edi | Register::Rdi => 0b111,
+            Register::Dh | Register::Si | Register::Sil | Register::Esi | Register::Rsi => 0b110,
+            Register::Ch | Register::Bpl | Register::Bp | Register::Ebp | Register::Rbp => 0b101,
+            Register::Ah | Register::Spl | Register::Sp | Register::Esp | Register::Rsp => 0b100,
             Register::R8b | Register::R8w | Register::R8d | Register::R8 => 0b000,
             Register::R9b | Register::R9w | Register::R9d | Register::R9 => 0b001,
             Register::R10b | Register::R10w | Register::R10d | Register::R10 => 0b010,
