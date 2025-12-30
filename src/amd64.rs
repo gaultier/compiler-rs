@@ -1248,10 +1248,22 @@ impl Instruction {
                 index_scale: None,
                 displacement,
                 ..
+            })
+            | Operand::EffectiveAddress(EffectiveAddress {
+                base: None,
+                index_scale: Some((Register::Eax | Register::Rax, Scale::_1)),
+                displacement,
+                ..
             }) if *displacement <= i8::MAX as i32 => (0b01, 0b000),
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Ecx | Register::Rcx),
                 index_scale: None,
+                displacement,
+                ..
+            })
+            | Operand::EffectiveAddress(EffectiveAddress {
+                base: None,
+                index_scale: Some((Register::Ecx | Register::Rcx, Scale::_1)),
                 displacement,
                 ..
             }) if *displacement <= i8::MAX as i32 => (0b01, 0b001),
@@ -1260,10 +1272,22 @@ impl Instruction {
                 index_scale: None,
                 displacement,
                 ..
+            })
+            | Operand::EffectiveAddress(EffectiveAddress {
+                base: None,
+                index_scale: Some((Register::Edx | Register::Rdx, Scale::_1)),
+                displacement,
+                ..
             }) if *displacement <= i8::MAX as i32 => (0b01, 0b010),
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Ebx | Register::Rbx),
                 index_scale: None,
+                displacement,
+                ..
+            })
+            | Operand::EffectiveAddress(EffectiveAddress {
+                base: None,
+                index_scale: Some((Register::Ebx | Register::Rbx, Scale::_1)),
                 displacement,
                 ..
             }) if *displacement <= i8::MAX as i32 => (0b01, 0b011),
@@ -1272,10 +1296,22 @@ impl Instruction {
                 index_scale: None,
                 displacement,
                 ..
+            })
+            | Operand::EffectiveAddress(EffectiveAddress {
+                base: None,
+                index_scale: Some((Register::Ebp | Register::Rbp, Scale::_1)),
+                displacement,
+                ..
             }) if *displacement <= i8::MAX as i32 => (0b01, 0b101),
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Esi | Register::Rsi),
                 index_scale: None,
+                displacement,
+                ..
+            })
+            | Operand::EffectiveAddress(EffectiveAddress {
+                base: None,
+                index_scale: Some((Register::Esi | Register::Rsi, Scale::_1)),
                 displacement,
                 ..
             }) if *displacement <= i8::MAX as i32 => (0b01, 0b110),
@@ -1283,35 +1319,70 @@ impl Instruction {
                 base: Some(Register::Eax | Register::Rax),
                 index_scale: None,
                 ..
+            })
+            | Operand::EffectiveAddress(EffectiveAddress {
+                base: None,
+                index_scale: Some((Register::Eax | Register::Rax, Scale::_1)),
+                ..
             }) => (0b10, 0b000),
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Ecx | Register::Rcx),
                 index_scale: None,
+                ..
+            })
+            | Operand::EffectiveAddress(EffectiveAddress {
+                base: None,
+                index_scale: Some((Register::Ecx | Register::Rcx, Scale::_1)),
                 ..
             }) => (0b10, 0b001),
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Edx | Register::Rdx),
                 index_scale: None,
                 ..
+            })
+            | Operand::EffectiveAddress(EffectiveAddress {
+                base: None,
+                index_scale: Some((Register::Edx | Register::Rdx, Scale::_1)),
+                ..
             }) => (0b10, 0b010),
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Ebx | Register::Rbx),
                 index_scale: None,
+                ..
+            })
+            | Operand::EffectiveAddress(EffectiveAddress {
+                base: None,
+                index_scale: Some((Register::Ebx | Register::Rbx, Scale::_1)),
                 ..
             }) => (0b10, 0b011),
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Ebp | Register::Rbp),
                 index_scale: None,
                 ..
+            })
+            | Operand::EffectiveAddress(EffectiveAddress {
+                base: None,
+                index_scale: Some((Register::Ebp | Register::Rbp, Scale::_1)),
+                ..
             }) => (0b10, 0b101),
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Esi | Register::Rsi),
                 index_scale: None,
                 ..
+            })
+            | Operand::EffectiveAddress(EffectiveAddress {
+                base: None,
+                index_scale: Some((Register::Esi | Register::Rsi, Scale::_1)),
+                ..
             }) => (0b10, 0b110),
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(Register::Edi | Register::Rdi),
                 index_scale: None,
+                ..
+            })
+            | Operand::EffectiveAddress(EffectiveAddress {
+                base: None,
+                index_scale: Some((Register::Edi | Register::Rdi, Scale::_1)),
                 ..
             }) => (0b10, 0b111),
 
@@ -1346,7 +1417,7 @@ impl Instruction {
     fn encode_sib<W: Write>(w: &mut W, addr: &EffectiveAddress, modrm: u8) -> std::io::Result<()> {
         let mod_ = modrm >> 6;
         let rm = modrm & 0b111;
-        let is_sib_required = matches!((mod_, rm), (0b00, 0b100) | (0b01, 0b100) | (0b10, 0b100));
+        let is_sib_required = matches!((mod_, rm), (0b00, 0b100) | (0b01, _) | (0b10, _));
 
         if is_sib_required {
             let scale = addr
@@ -1363,6 +1434,16 @@ impl Instruction {
             let base = addr.base.map(|reg| reg.to_3_bits()).unwrap_or(0b101);
             let sib = scale | index | base;
             w.write_all(&[sib])?;
+        } else {
+            // If there is no SIB, then it's impossible for the displacement to be non-zero, and
+            // for the scale to not be 1.
+            assert_eq!(addr.displacement, 0);
+            assert_eq!(
+                addr.index_scale
+                    .map(|(_, scale)| scale)
+                    .unwrap_or(Scale::_1),
+                Scale::_1
+            );
         }
 
         // Displacement.
@@ -1374,10 +1455,10 @@ impl Instruction {
         // > using a 4-byte displacement field. In 64-bit > mode this addressing mode is changed to RIP-relative.
         match (mod_, rm) {
             (0b00, 0b100) if addr.base.is_some() => {} // Nothing to encode, displacement is an implicit 0.
-            (0b01, 0b100) => {
+            (0b01, _) => {
                 w.write_all(&(addr.displacement as u8).to_le_bytes())?;
             }
-            (0b10, 0b100) | (0b00, 0b100) if addr.base.is_none() => {
+            (0b10, _) | (0b00, 0b100) if addr.base.is_none() => {
                 w.write_all(&(addr.displacement as u32).to_le_bytes())?;
             }
             (0b00, 0b101) => {
@@ -2476,6 +2557,21 @@ mod tests {
 
     #[test]
     fn test_encoding() {
+        {
+            let ins = Instruction {
+                kind: InstructionKind::Push,
+                operands: vec![Operand::EffectiveAddress(EffectiveAddress {
+                    base: None,
+                    index_scale: Some((Register::Ebx, Scale::_1)),
+                    displacement: 1,
+                    size_override: None,
+                })],
+                origin: Origin::new_unknown(),
+            };
+            let mut w = Vec::with_capacity(5);
+            ins.encode(&mut w).unwrap();
+            assert_eq!(&w, &[0x67, 0xff, 0x73, 0x01]);
+        }
         {
             let ins = Instruction {
                 kind: InstructionKind::Push,
