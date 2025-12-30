@@ -1385,15 +1385,10 @@ impl Instruction {
             w.write_all(&[0x66])?; // 16 bits prefix.
         }
 
+        // Reject malformed effective addresses (if any).
         for op in &self.operands {
             match op {
-                Operand::EffectiveAddress(EffectiveAddress {
-                    base: Some(reg), ..
-                })
-                | Operand::EffectiveAddress(EffectiveAddress {
-                    index_scale: Some((reg, _)),
-                    ..
-                }) if !(reg.is_64_bits() || reg.is_32_bits()) => {
+                Operand::EffectiveAddress(_) if op.size() < Size::_32 => {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
 
@@ -1964,7 +1959,11 @@ impl Instruction {
                     // push rm
                     // Encoding: M 	ModRM:r/m (r)
                     Operand::EffectiveAddress(addr) => {
-                        assert!(op.size() == Size::_32 || op.size() == Size::_64);
+                        assert!(
+                            op.size() == Size::_32 || op.size() == Size::_64,
+                            "{:#?}",
+                            addr
+                        );
 
                         // Need Address Size Override Prefix.
                         if addr
