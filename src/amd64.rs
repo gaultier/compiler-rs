@@ -1118,11 +1118,17 @@ impl Instruction {
         op_sib: Option<&Operand>,
         op_reg: Option<&Operand>,
     ) -> std::io::Result<()> {
+        // > The REX.R bit adds a 1-bit extension (in the most significant bit position)
+        // > to the ModRM.reg field when that field encodes a GPR, YMM/XMM, control,
+        // > or debug register. REX.R does not modify ModRM.reg
+        // > when that field specifies other registers or is used to extend the opcode.
+        // > REX.R is ignored in such cases.
         let r = match op_modrm_reg {
             Some(Operand::Register(reg)) if reg.is_extended() => true,
             _ => false,
         };
 
+        // > The REX.X bit adds a 1-bit (msb) extension to the SIB.index field.
         let x = match op_sib {
             Some(Operand::EffectiveAddress(EffectiveAddress {
                 index_scale: Some((reg, _)),
@@ -1131,6 +1137,9 @@ impl Instruction {
             _ => false,
         };
 
+        // > The REX.B bit adds a 1-bit (msb) extension to either the
+        // > ModRM.r/m field to specify a GPR or XMM register,
+        // > or to the SIB.base field to specify a GPR.
         let mut b = match op_modrm_rm {
             Some(Operand::Register(reg)) if reg.is_extended() => true,
             Some(Operand::EffectiveAddress(EffectiveAddress {
@@ -1171,220 +1180,220 @@ impl Instruction {
             Operand::Register(reg) => (0b11, reg.to_3_bits()),
             Operand::Immediate(_) => (0b00, 0b101),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Eax | Register::Rax),
+                base: Some(reg),
                 index_scale: None,
                 displacement: 0,
                 ..
             })
             | Operand::EffectiveAddress(EffectiveAddress {
                 base: None,
-                index_scale: Some((Register::Eax | Register::Rax, Scale::_1)),
+                index_scale: Some((reg, Scale::_1)),
                 displacement: 0,
                 ..
-            }) => (0b00, 0b000),
+            }) if reg.to_3_bits() == 0b000 => (0b00, 0b000),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Ecx | Register::Rcx),
+                base: Some(reg),
                 index_scale: None,
                 displacement: 0,
                 ..
             })
             | Operand::EffectiveAddress(EffectiveAddress {
                 base: None,
-                index_scale: Some((Register::Ecx | Register::Rcx, Scale::_1)),
+                index_scale: Some((reg, Scale::_1)),
                 displacement: 0,
                 ..
-            }) => (0b00, 0b001),
+            }) if reg.to_3_bits() == 0b001 => (0b00, 0b001),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Edx | Register::Rdx),
+                base: Some(reg),
                 index_scale: None,
                 displacement: 0,
                 ..
             })
             | Operand::EffectiveAddress(EffectiveAddress {
                 base: None,
-                index_scale: Some((Register::Edx | Register::Rdx, Scale::_1)),
+                index_scale: Some((reg, Scale::_1)),
                 displacement: 0,
                 ..
-            }) => (0b00, 0b010),
+            }) if reg.to_3_bits() == 0b010 => (0b00, 0b010),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Ebx | Register::Rbx),
+                base: Some(reg),
                 index_scale: None,
                 displacement: 0,
                 ..
             })
             | Operand::EffectiveAddress(EffectiveAddress {
                 base: None,
-                index_scale: Some((Register::Ebx | Register::Rbx, Scale::_1)),
+                index_scale: Some((reg, Scale::_1)),
                 displacement: 0,
                 ..
-            }) => (0b00, 0b011),
+            }) if reg.to_3_bits() == 0b011 => (0b00, 0b011),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Esi | Register::Rsi),
+                base: Some(reg),
                 index_scale: None,
                 displacement: 0,
                 ..
             })
             | Operand::EffectiveAddress(EffectiveAddress {
                 base: None,
-                index_scale: Some((Register::Esi | Register::Rsi, Scale::_1)),
+                index_scale: Some((reg, Scale::_1)),
                 displacement: 0,
                 ..
-            }) => (0b00, 0b110),
+            }) if reg.to_3_bits() == 0b110 => (0b00, 0b110),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Edi | Register::Rdi),
+                base: Some(reg),
                 index_scale: None,
                 displacement: 0,
                 ..
             })
             | Operand::EffectiveAddress(EffectiveAddress {
                 base: None,
-                index_scale: Some((Register::Edi | Register::Rdi, Scale::_1)),
+                index_scale: Some((reg, Scale::_1)),
                 displacement: 0,
                 ..
-            }) => (0b00, 0b111),
+            }) if reg.to_3_bits() == 0b111 => (0b00, 0b111),
             // TODO: case for disp32
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Eax | Register::Rax),
+                base: Some(reg),
                 index_scale: None,
                 displacement,
                 ..
             })
             | Operand::EffectiveAddress(EffectiveAddress {
                 base: None,
-                index_scale: Some((Register::Eax | Register::Rax, Scale::_1)),
+                index_scale: Some((reg, Scale::_1)),
                 displacement,
                 ..
-            }) if *displacement <= i8::MAX as i32 => (0b01, 0b000),
+            }) if reg.to_3_bits() == 0b000 && *displacement <= i8::MAX as i32 => (0b01, 0b000),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Ecx | Register::Rcx),
-                index_scale: None,
-                displacement,
-                ..
-            })
-            | Operand::EffectiveAddress(EffectiveAddress {
-                base: None,
-                index_scale: Some((Register::Ecx | Register::Rcx, Scale::_1)),
-                displacement,
-                ..
-            }) if *displacement <= i8::MAX as i32 => (0b01, 0b001),
-            Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Edx | Register::Rdx),
+                base: Some(reg),
                 index_scale: None,
                 displacement,
                 ..
             })
             | Operand::EffectiveAddress(EffectiveAddress {
                 base: None,
-                index_scale: Some((Register::Edx | Register::Rdx, Scale::_1)),
+                index_scale: Some((reg, Scale::_1)),
                 displacement,
                 ..
-            }) if *displacement <= i8::MAX as i32 => (0b01, 0b010),
+            }) if reg.to_3_bits() == 0b001 && *displacement <= i8::MAX as i32 => (0b01, 0b001),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Ebx | Register::Rbx),
-                index_scale: None,
-                displacement,
-                ..
-            })
-            | Operand::EffectiveAddress(EffectiveAddress {
-                base: None,
-                index_scale: Some((Register::Ebx | Register::Rbx, Scale::_1)),
-                displacement,
-                ..
-            }) if *displacement <= i8::MAX as i32 => (0b01, 0b011),
-            Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Ebp | Register::Rbp),
+                base: Some(reg),
                 index_scale: None,
                 displacement,
                 ..
             })
             | Operand::EffectiveAddress(EffectiveAddress {
                 base: None,
-                index_scale: Some((Register::Ebp | Register::Rbp, Scale::_1)),
+                index_scale: Some((reg, Scale::_1)),
                 displacement,
                 ..
-            }) if *displacement <= i8::MAX as i32 => (0b01, 0b101),
+            }) if reg.to_3_bits() == 0b010 && *displacement <= i8::MAX as i32 => (0b01, 0b010),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Esi | Register::Rsi),
+                base: Some(reg),
                 index_scale: None,
                 displacement,
                 ..
             })
             | Operand::EffectiveAddress(EffectiveAddress {
                 base: None,
-                index_scale: Some((Register::Esi | Register::Rsi, Scale::_1)),
+                index_scale: Some((reg, Scale::_1)),
                 displacement,
                 ..
-            }) if *displacement <= i8::MAX as i32 => (0b01, 0b110),
+            }) if reg.to_3_bits() == 0b011 && *displacement <= i8::MAX as i32 => (0b01, 0b011),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Eax | Register::Rax),
+                base: Some(reg),
+                index_scale: None,
+                displacement,
+                ..
+            })
+            | Operand::EffectiveAddress(EffectiveAddress {
+                base: None,
+                index_scale: Some((reg, Scale::_1)),
+                displacement,
+                ..
+            }) if reg.to_3_bits() == 0b101 && *displacement <= i8::MAX as i32 => (0b01, 0b101),
+            Operand::EffectiveAddress(EffectiveAddress {
+                base: Some(reg),
+                index_scale: None,
+                displacement,
+                ..
+            })
+            | Operand::EffectiveAddress(EffectiveAddress {
+                base: None,
+                index_scale: Some((reg, Scale::_1)),
+                displacement,
+                ..
+            }) if reg.to_3_bits() == 0b110 && *displacement <= i8::MAX as i32 => (0b01, 0b110),
+            Operand::EffectiveAddress(EffectiveAddress {
+                base: Some(reg),
                 index_scale: None,
                 ..
             })
             | Operand::EffectiveAddress(EffectiveAddress {
                 base: None,
-                index_scale: Some((Register::Eax | Register::Rax, Scale::_1)),
+                index_scale: Some((reg, Scale::_1)),
                 ..
-            }) => (0b10, 0b000),
+            }) if reg.to_3_bits() == 0b000 => (0b10, 0b000),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Ecx | Register::Rcx),
+                base: Some(reg),
                 index_scale: None,
                 ..
             })
             | Operand::EffectiveAddress(EffectiveAddress {
                 base: None,
-                index_scale: Some((Register::Ecx | Register::Rcx, Scale::_1)),
+                index_scale: Some((reg, Scale::_1)),
                 ..
-            }) => (0b10, 0b001),
+            }) if reg.to_3_bits() == 0b001 => (0b10, 0b001),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Edx | Register::Rdx),
+                base: Some(reg),
                 index_scale: None,
                 ..
             })
             | Operand::EffectiveAddress(EffectiveAddress {
                 base: None,
-                index_scale: Some((Register::Edx | Register::Rdx, Scale::_1)),
+                index_scale: Some((reg, Scale::_1)),
                 ..
-            }) => (0b10, 0b010),
+            }) if reg.to_3_bits() == 0b010 => (0b10, 0b010),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Ebx | Register::Rbx),
+                base: Some(reg),
                 index_scale: None,
                 ..
             })
             | Operand::EffectiveAddress(EffectiveAddress {
                 base: None,
-                index_scale: Some((Register::Ebx | Register::Rbx, Scale::_1)),
+                index_scale: Some((reg, Scale::_1)),
                 ..
-            }) => (0b10, 0b011),
+            }) if reg.to_3_bits() == 0b011 => (0b10, 0b011),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Ebp | Register::Rbp),
+                base: Some(reg),
                 index_scale: None,
                 ..
             })
             | Operand::EffectiveAddress(EffectiveAddress {
                 base: None,
-                index_scale: Some((Register::Ebp | Register::Rbp, Scale::_1)),
+                index_scale: Some((reg, Scale::_1)),
                 ..
-            }) => (0b10, 0b101),
+            }) if reg.to_3_bits() == 0b101 => (0b10, 0b101),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Esi | Register::Rsi),
+                base: Some(reg),
                 index_scale: None,
                 ..
             })
             | Operand::EffectiveAddress(EffectiveAddress {
                 base: None,
-                index_scale: Some((Register::Esi | Register::Rsi, Scale::_1)),
+                index_scale: Some((reg, Scale::_1)),
                 ..
-            }) => (0b10, 0b110),
+            }) if reg.to_3_bits() == 0b110 => (0b10, 0b110),
             Operand::EffectiveAddress(EffectiveAddress {
-                base: Some(Register::Edi | Register::Rdi),
+                base: Some(reg),
                 index_scale: None,
                 ..
             })
             | Operand::EffectiveAddress(EffectiveAddress {
                 base: None,
-                index_scale: Some((Register::Edi | Register::Rdi, Scale::_1)),
+                index_scale: Some((reg, Scale::_1)),
                 ..
-            }) => (0b10, 0b111),
+            }) if reg.to_3_bits() == 0b111 => (0b10, 0b111),
 
             // Special case of no base, with index+scale.
             Operand::EffectiveAddress(EffectiveAddress {
