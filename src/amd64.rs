@@ -1371,6 +1371,15 @@ impl Instruction {
                     ..
                 }) => return Err(std::io::Error::from(io::ErrorKind::InvalidData)),
 
+                // Size of base and index must match.
+                Operand::EffectiveAddress(EffectiveAddress {
+                    base: Some(base),
+                    index_scale: Some((index, _)),
+                    ..
+                }) if base.size() != index.size() => {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
+
                 _ => {}
             }
         }
@@ -1923,9 +1932,15 @@ impl Instruction {
                     // Encoding: M 	ModRM:r/m (r)
                     Operand::EffectiveAddress(addr) => {
                         assert!(op.size() == Size::_32 || op.size() == Size::_64);
-                        // Not supported in 64 bits mode.
-                        if op.size() == Size::_32 {
-                            return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+
+                        // Need Address Size Override Prefix.
+                        if addr
+                            .base
+                            .map(|x| x.size() == Size::_32)
+                            .or(addr.index_scale.map(|(x, _)| x.size() == Size::_32))
+                            .unwrap_or_default()
+                        {
+                            w.write_all(&[0x67])?;
                         }
 
                         Instruction::encode_rex_from_operands(
