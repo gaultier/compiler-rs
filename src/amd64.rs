@@ -1472,7 +1472,8 @@ impl Instruction {
     fn encode_imm<W: Write>(w: &mut W, imm: i64, size: &Size) -> std::io::Result<()> {
         match size {
             Size::_8 => w.write_all(&(imm as u8).to_le_bytes()),
-            Size::_16 | Size::_32 => w.write_all(&(imm as u32).to_le_bytes()),
+            Size::_16 => w.write_all(&(imm as u16).to_le_bytes()),
+            Size::_32 => w.write_all(&(imm as u32).to_le_bytes()),
             Size::_64 => w.write_all(&imm.to_le_bytes()),
         }
     }
