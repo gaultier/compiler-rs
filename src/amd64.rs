@@ -2771,7 +2771,12 @@ mod tests {
 
         {
             let mut stdin = child.stdin.take().unwrap();
-            write!(&mut stdin, "{}", ins)?;
+            write!(&mut stdin, "{}", ins).map_err(|err| {
+                (
+                    ExitStatus::default(),
+                    format!("{}", err).as_bytes().to_vec(),
+                )
+            })?;
         }
         let output = child.wait_with_output().map_err(|err| {
             (
