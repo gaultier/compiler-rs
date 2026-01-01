@@ -744,7 +744,7 @@ impl Emitter {
     }
 }
 
-fn imm_fits_in_1_byte(imm: i64) -> bool {
+fn imm_fits_in_1_byte_sign_extended(imm: i64) -> bool {
     let sign_extended_eq = (imm << 56) >> 56;
 
     sign_extended_eq == imm as i8 as i64
@@ -1805,7 +1805,7 @@ impl Instruction {
                             && (lhs.size() == Size::_16
                                 || lhs.size() == Size::_32
                                 || lhs.size() == Size::_64)
-                            && imm_fits_in_1_byte(*imm) =>
+                            && imm_fits_in_1_byte_sign_extended(*imm) =>
                     {
                         Instruction::encode_rex_from_operands(
                             w,
@@ -2625,7 +2625,7 @@ mod tests {
 
     #[test]
     fn test_fits() {
-        assert!(imm_fits_in_1_byte(4294967168));
+        assert!(imm_fits_in_1_byte_sign_extended(4294967168));
     }
 
     #[test]
