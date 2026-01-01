@@ -747,7 +747,7 @@ impl Emitter {
 fn imm_fits_in_1_byte_sign_extended(imm: i64) -> bool {
     let sign_extended_eq = (imm << 56) >> 56;
 
-    sign_extended_eq == imm as i8 as i64
+    sign_extended_eq == imm
 }
 
 fn imm_fits_in_4_bytes(imm: i64) -> bool {
@@ -757,7 +757,7 @@ fn imm_fits_in_4_bytes(imm: i64) -> bool {
 
 fn imm_fits_in_4_bytes_sign_extended(imm: i64) -> bool {
     let sign_extended_eq = (imm << 32) >> 32;
-    sign_extended_eq == imm as i32 as i64
+    sign_extended_eq == imm
 }
 
 impl Register {
