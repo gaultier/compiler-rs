@@ -1,7 +1,6 @@
 use std::{
     fmt::Display,
     io::{self, ErrorKind, Write},
-    mem::transmute,
     panic,
 };
 
@@ -746,11 +745,9 @@ impl Emitter {
 }
 
 fn imm_fits_in_1_byte(imm: i64) -> bool {
-    let n = imm as u32 as i32;
-    let fits = i8::MIN as i32 <= n && n < i8::MAX as i32;
-    let sign_extended_eq = (imm as i8 as i64) == imm;
+    let sign_extended_eq = (imm << 56) >> 56;
 
-    fits && sign_extended_eq
+    sign_extended_eq == imm as i8 as i64
 }
 
 fn imm_fits_in_4_bytes(imm: i64) -> bool {
@@ -759,7 +756,8 @@ fn imm_fits_in_4_bytes(imm: i64) -> bool {
 }
 
 fn imm_fits_in_4_bytes_sign_extended(imm: i64) -> bool {
-    i32::MIN as i64 <= imm && imm < i64::MAX
+    let sign_extended_eq = (imm << 32) >> 32;
+    sign_extended_eq == imm as i32 as i64
 }
 
 impl Register {
@@ -1837,7 +1835,7 @@ impl Instruction {
                     }
                     // add rm32, imm32
                     // add rm64, imm32
-                    (_, Operand::Immediate(imm)) if lhs.is_rm() => {
+                    (_, Operand::Immediate(imm)) if lhs.is_rm() && lhs.size() >= Size::_32 => {
                         if lhs.size() == Size::_32 && !imm_fits_in_4_bytes(*imm) {
                             return Err(io::Error::from(ErrorKind::InvalidData));
                         } else if lhs.size() == Size::_64
@@ -2627,7 +2625,7 @@ mod tests {
 
     #[test]
     fn test_fits() {
-        assert!(!imm_fits_in_1_byte(4294967168));
+        assert!(imm_fits_in_1_byte(4294967168));
     }
 
     #[test]
