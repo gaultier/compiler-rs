@@ -2625,6 +2625,10 @@ mod tests {
 
     #[test]
     fn test_fits() {
+        assert!(!imm_fits_in_1_byte_sign_extended(128));
+        assert!(!imm_fits_in_1_byte_sign_extended(4294967168));
+
+        assert!(imm_fits_in_1_byte_sign_extended(-128));
         assert!(imm_fits_in_1_byte_sign_extended(4294967168));
     }
 
