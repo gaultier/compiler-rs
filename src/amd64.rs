@@ -1,6 +1,7 @@
 use std::{
     fmt::Display,
-    io::{self, Write},
+    io::{self, ErrorKind, Write},
+    mem::transmute,
     panic,
 };
 
@@ -742,6 +743,23 @@ impl Emitter {
             (MemoryLocation::Stack(_), Operand::EffectiveAddress(_)) => todo!(),
         }
     }
+}
+
+fn imm_fits_in_1_byte(imm: i64) -> bool {
+    let n = imm as u32 as i32;
+    let fits = i8::MIN as i32 <= n && n < i8::MAX as i32;
+    let sign_extended_eq = (imm as i8 as i64) == imm;
+
+    fits && sign_extended_eq
+}
+
+fn imm_fits_in_4_bytes(imm: i64) -> bool {
+    let n = imm as usize;
+    u32::MIN as usize <= n && n < u32::MAX as usize
+}
+
+fn imm_fits_in_4_bytes_sign_extended(imm: i64) -> bool {
+    i32::MIN as i64 <= imm && imm < i64::MAX
 }
 
 impl Register {
@@ -1781,13 +1799,15 @@ impl Instruction {
                         }
                         Instruction::encode_imm(w, *imm, &lhs.size())?;
                     }
-                    // add rm, imm8
+                    // add rm16, imm8
+                    // add rm32, imm8
+                    // add rm64, imm8
                     (_, Operand::Immediate(imm))
                         if lhs.is_rm()
                             && (lhs.size() == Size::_16
                                 || lhs.size() == Size::_32
                                 || lhs.size() == Size::_64)
-                            && i8::try_from(*imm).is_ok() =>
+                            && imm_fits_in_1_byte(*imm) =>
                     {
                         Instruction::encode_rex_from_operands(
                             w,
@@ -1805,11 +1825,7 @@ impl Instruction {
                         Instruction::encode_imm(w, *imm, &Size::_8)?;
                     }
                     // add rm16, imm16
-                    (_, Operand::Immediate(imm))
-                        if lhs.is_rm()
-                            && (lhs.size() == Size::_16)
-                            && i16::try_from(*imm).is_ok() =>
-                    {
+                    (_, Operand::Immediate(imm)) if lhs.is_rm() && (lhs.size() == Size::_16) => {
                         Instruction::encode_rex_from_operands(w, false, Some(lhs), None, None)?;
                         let modrm = Instruction::encode_modrm(ModRmEncoding::Slash0, lhs, None);
                         w.write_all(&[0x81, modrm])?;
@@ -1821,7 +1837,14 @@ impl Instruction {
                     }
                     // add rm32, imm32
                     // add rm64, imm32
-                    (_, Operand::Immediate(imm)) if lhs.is_rm() && i32::try_from(*imm).is_ok() => {
+                    (_, Operand::Immediate(imm)) if lhs.is_rm() => {
+                        if lhs.size() == Size::_32 && !imm_fits_in_4_bytes(*imm) {
+                            return Err(io::Error::from(ErrorKind::InvalidData));
+                        } else if lhs.size() == Size::_64
+                            && !imm_fits_in_4_bytes_sign_extended(*imm)
+                        {
+                            return Err(io::Error::from(ErrorKind::InvalidData));
+                        }
                         Instruction::encode_rex_from_operands(
                             w,
                             lhs.size() == Size::_64,
@@ -1835,12 +1858,7 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
 
-                        let size = if lhs.size() > Size::_32 {
-                            Size::_32
-                        } else {
-                            lhs.size()
-                        };
-                        Instruction::encode_imm(w, *imm, &size)?;
+                        Instruction::encode_imm(w, *imm, &Size::_32)?;
                     }
                     // add rm, r
                     // Encoding: MR 	ModRM:r/m (r, w) 	ModRM:reg (r)
@@ -2606,6 +2624,11 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
+
+    #[test]
+    fn test_fits() {
+        assert!(!imm_fits_in_1_byte(4294967168));
+    }
 
     #[test]
     fn test_encoding() {
