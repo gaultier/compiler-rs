@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::ffi::CStr;
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -6,6 +7,7 @@ use std::os::unix::fs::OpenOptionsExt;
 use crate::error::{Error, ErrorKind};
 use crate::origin;
 
+#[derive(Debug)]
 enum ProgramHeaderType {
     Load = 1,
 }
@@ -16,6 +18,7 @@ enum ProgramHeaderFlags {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 struct ProgramHeader {
     typ: ProgramHeaderType,
     flags: u32,
@@ -27,7 +30,7 @@ struct ProgramHeader {
     alignment: u64,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 enum SectionHeaderKind {
     #[default]
     Null = 0,
@@ -51,7 +54,7 @@ enum SectionHeaderFlag {
     Maskproc = 0xf000000,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(C)]
 struct SectionHeader {
     name: u32,
@@ -90,16 +93,22 @@ pub fn write(asm_encoded: &[u8]) -> Result<(), Error> {
         CStr::from_bytes_with_nul(b".text\0").unwrap(),
     ];
 
+    let mut string_indexes = BTreeMap::new();
+    {
+        let mut idx = 0;
+        for s in &strings {
+            string_indexes.insert(s.to_string_lossy(), idx as u32);
+            idx += s.to_bytes_with_nul().len();
+        }
+    }
+
     let strings_size: usize = strings.iter().map(|s| s.count_bytes() + 1).sum();
 
     let section_headers = [
         SectionHeader::default(), // null
         // Text (code).
         SectionHeader {
-            name: strings
-                .iter()
-                .position(|s| s.to_str().unwrap() == ".text")
-                .unwrap() as u32,
+            name: *string_indexes.get(".text").unwrap() as u32,
             kind: SectionHeaderKind::Progbits,
             flags: SectionHeaderFlag::Execinstr as u64 | SectionHeaderFlag::Alloc as u64,
             addr: page_size as u64,
@@ -110,10 +119,7 @@ pub fn write(asm_encoded: &[u8]) -> Result<(), Error> {
         },
         // Strings.
         SectionHeader {
-            name: strings
-                .iter()
-                .position(|s| s.to_str().unwrap() == ".shstrtab")
-                .unwrap() as u32,
+            name: *string_indexes.get(".shstrtab").unwrap() as u32,
             kind: SectionHeaderKind::Strtab,
             flags: 0,
             addr: 0,
@@ -123,6 +129,7 @@ pub fn write(asm_encoded: &[u8]) -> Result<(), Error> {
             ..Default::default()
         },
     ];
+    dbg!(&section_headers.last().unwrap());
 
     let mut sb = Vec::with_capacity(12 * 1024);
     {
