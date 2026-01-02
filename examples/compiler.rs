@@ -3,8 +3,15 @@ use std::{
     io::{Write, stdout},
 };
 
-use compiler_rs_lib::{asm, compile};
+use compiler_rs_lib::{
+    asm::{self, Os},
+    compile,
+};
 use log::{LevelFilter, Log};
+use object::{
+    Architecture, BinaryFormat, Endianness, SymbolScope,
+    write::{Object, StandardSection, Symbol},
+};
 
 struct Logger {}
 
@@ -32,7 +39,18 @@ fn main() {
     let mut file_id_to_names = HashMap::new();
     file_id_to_names.insert(1, file_name.clone());
 
-    let compiled = compile(&file_content, 1, asm::ArchKind::Amd64);
+    let target_arch = asm::ArchKind::Amd64;
+    let os_str = std::env::args()
+        .skip(2)
+        .next()
+        .unwrap_or_else(|| std::env::consts::OS.to_owned());
+
+    let target_os = match os_str.as_str() {
+        "linux" => Os::Linux,
+        "macos" => Os::MacOS,
+        x => unimplemented!("{}", x),
+    };
+    let compiled = compile(&file_content, 1, target_arch);
 
     println!("--- Lex ---");
     println!("tokens: {:#?}", &compiled.lex_tokens);
@@ -68,5 +86,31 @@ fn main() {
 
     println!("eval: {:#?}", &compiled.asm_eval);
 
-    std::process::exit(if compiled.errors.is_empty() { 0 } else { 1 });
+    if !compiled.errors.is_empty() {
+        std::process::exit(1)
+    };
+
+    let bin_format = match target_os {
+        Os::Linux => BinaryFormat::Elf,
+        Os::MacOS => BinaryFormat::MachO,
+    };
+    let mut obj = Object::new(bin_format, Architecture::X86_64, Endianness::Little);
+    obj.add_file_symbol(file_name.into());
+
+    let main_symbol = obj.add_symbol(Symbol {
+        name: "main".into(),
+        value: 0,
+        size: 0,
+        kind: object::SymbolKind::Text,
+        scope: SymbolScope::Compilation,
+        weak: false,
+        section: object::write::SymbolSection::Undefined,
+        flags: object::SymbolFlags::None,
+    });
+    // Add the main function in its own subsection (equivalent to -ffunction-sections).
+    let main_section = obj.add_subsection(StandardSection::Text, b"main");
+    let _main_offset = obj.add_symbol_data(main_symbol, main_section, &compiled.asm_encoded, 1);
+    // Finally, write the object file.
+    let file = std::fs::File::create("hello.bin").unwrap();
+    obj.write_stream(file).unwrap();
 }

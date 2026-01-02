@@ -1582,6 +1582,8 @@ impl Instruction {
     }
 
     pub(crate) fn encode<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+        trace!("amd64: action=encode ins={}", self);
+
         // Need Address Size Override Prefix?
         if self.operands.iter().any(|op| match op {
             Operand::EffectiveAddress(EffectiveAddress {

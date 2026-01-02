@@ -18,6 +18,11 @@ pub enum ArchKind {
     // TODO
 }
 
+pub enum Os {
+    Linux,
+    MacOS,
+}
+
 pub(crate) struct Abi {
     pub(crate) gprs: Vec<Register>,
 }
