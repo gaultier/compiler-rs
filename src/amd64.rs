@@ -2856,7 +2856,7 @@ mod tests {
         }
     }
 
-    fn oracle_encode(ins: &Instruction) -> Result<Vec<u8>, (ExitStatus, Vec<u8>)> {
+    fn oracle_encode(ins: &Instruction) -> Result<Vec<u8>, (ExitStatus, String, Vec<u8>)> {
         let mut child = std::process::Command::new("clang")
             .args(&[
                 "--target=x86_64-unknown-linux",
@@ -2869,6 +2869,7 @@ mod tests {
                 "-O0",
                 "-nostdlib",
                 "-Wl,--oformat=binary",
+                "-Wl,--build-id=none", // no build id.
                 "-o",
                 "/dev/stdout", // FIXME: Windows.
                 "-",
@@ -2880,6 +2881,7 @@ mod tests {
             .map_err(|err| {
                 (
                     ExitStatus::default(),
+                    String::new(),
                     format!("{}", err).as_bytes().to_vec(),
                 )
             })?;
@@ -2889,6 +2891,7 @@ mod tests {
             write!(&mut stdin, "{}", ins).map_err(|err| {
                 (
                     ExitStatus::default(),
+                    String::new(),
                     format!("{}", err).as_bytes().to_vec(),
                 )
             })?;
@@ -2896,6 +2899,7 @@ mod tests {
         let output = child.wait_with_output().map_err(|err| {
             (
                 ExitStatus::default(),
+                String::new(),
                 format!("{}", err).as_bytes().to_vec(),
             )
         })?;
@@ -2903,7 +2907,11 @@ mod tests {
         if output.status.success() {
             Ok(output.stdout)
         } else {
-            Err((output.status, output.stderr))
+            Err((
+                output.status,
+                String::from_utf8_lossy(&output.stdout).to_string(),
+                output.stderr,
+            ))
         }
     }
 
@@ -2927,9 +2935,10 @@ mod tests {
             let mut actual = Vec::with_capacity(15);
 
             match (ins.encode(&mut actual), oracle_encode(&ins)) {
-                (Ok(()), Ok(expected)) => assert_eq!(actual, expected, "{} {:#?}", ins,ins),
+                (Ok(()), Ok(expected)) => assert_eq!(actual, expected, "ins={}, {:#?} actual={:x?} expected={:x?}", ins,ins, &actual, &expected),
                 (Err(_), Err(_)) => {},
-                (actual,oracle) => panic!("oracle and implementation disagree: actual={:#?} oracle={:#?} ins={} {:#?}",actual,oracle, ins,ins )
+                (Ok(actual),Err((status, stdout, stderr))) => panic!("oracle and implementation disagree: actual={:#?} oracle_status={} oracle_stdout={} oracle_stderr={} ins={} {:#?}",actual,status,stdout, String::from_utf8_lossy(&stderr), ins,ins ),
+                (Err(actual),Ok(oracle)) => panic!("oracle and implementation disagree: actual={:#?} oracle={:x?} ins={} {:#?}",actual,&oracle, ins,ins ),
             }
           }
       }
