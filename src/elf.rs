@@ -79,13 +79,14 @@ fn round_up(n: usize, rnd: usize) -> usize {
 
 pub fn write(asm_encoded: &[u8]) -> Result<(), Error> {
     let page_size: usize = 4 * 1024; // FIXME
+    let vm_start = 1 << 22;
 
     let program_headers = [ProgramHeader {
         typ: ProgramHeaderType::Load,
         flags: ProgramHeaderFlags::Executable as u32 | ProgramHeaderFlags::Readable as u32,
         p_offset: 0,
-        p_vaddr: 0,
-        p_paddr: 0,
+        p_vaddr: vm_start,
+        p_paddr: vm_start,
         p_filesz: page_size as u64 + asm_encoded.len() as u64,
         p_memsz: page_size as u64 + asm_encoded.len() as u64,
         alignment: page_size as u64,
@@ -116,7 +117,7 @@ pub fn write(asm_encoded: &[u8]) -> Result<(), Error> {
             name: *string_indexes.get(".text").unwrap() as u32,
             kind: SectionHeaderKind::Progbits,
             flags: SectionHeaderFlag::Execinstr as u64 | SectionHeaderFlag::Alloc as u64,
-            addr: page_size as u64,
+            addr: vm_start + page_size as u64,
             offset: page_size as u64,
             size: asm_encoded.len() as u64,
             align: 16,

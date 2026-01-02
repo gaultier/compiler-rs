@@ -86,7 +86,7 @@ fn main() {
         std::process::exit(1)
     };
 
-    let dummy_asm = &[0xb8, 0x3c, 0, 0, 0, 0xba, 0, 0, 0, 0, 0x0f, 0x05];
+    let dummy_asm = &[0xb8, 0x3c, 0, 0, 0, 0xbf, 0, 0, 0, 0, 0x0f, 0x05];
 
     match target_os {
         Os::Linux => elf::write(dummy_asm).unwrap(),
