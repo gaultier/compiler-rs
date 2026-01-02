@@ -91,8 +91,8 @@ pub fn write(asm_encoded: &[u8]) -> Result<(), Error> {
         CStr::from_bytes_with_nul(b"\0").unwrap(),
         CStr::from_bytes_with_nul(b".shstrtab\0").unwrap(),
         CStr::from_bytes_with_nul(b".text\0").unwrap(),
-        CStr::from_bytes_with_nul(b".data\0").unwrap(),
-        CStr::from_bytes_with_nul(b".rodata\0").unwrap(),
+        //CStr::from_bytes_with_nul(b".data\0").unwrap(),
+        //CStr::from_bytes_with_nul(b".rodata\0").unwrap(),
     ];
 
     let mut string_indexes = BTreeMap::new();
@@ -103,6 +103,7 @@ pub fn write(asm_encoded: &[u8]) -> Result<(), Error> {
             strings_size += s.to_bytes_with_nul().len();
         }
     }
+    dbg!(strings_size);
 
     let section_headers = [
         SectionHeader::default(), // null
