@@ -108,7 +108,6 @@ pub fn write(asm_encoded: &[u8]) -> Result<(), Error> {
             strings_size += s.to_bytes_with_nul().len();
         }
     }
-    dbg!(strings_size);
 
     let section_headers = [
         SectionHeader::default(), // null
@@ -135,7 +134,6 @@ pub fn write(asm_encoded: &[u8]) -> Result<(), Error> {
             ..Default::default()
         },
     ];
-    dbg!(&section_headers.last().unwrap());
 
     let mut sb = Vec::with_capacity(12 * 1024);
     {
@@ -203,8 +201,6 @@ pub fn write(asm_encoded: &[u8]) -> Result<(), Error> {
                 std::mem::size_of::<ProgramHeader>(),
             )
         };
-        dbg!(ph);
-        dbg!(bytes);
         sb.extend_from_slice(bytes);
     }
 
