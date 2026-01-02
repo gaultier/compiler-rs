@@ -744,10 +744,33 @@ impl Emitter {
     }
 }
 
-fn imm_fits_in_1_byte_sign_extended(imm: i64) -> bool {
-    let sign_extended_eq = (imm << 56) >> 56;
+fn imm_sign_extend_8_to_32(imm: i32) -> i32 {
+    imm as i8 as i32
+}
 
-    sign_extended_eq == imm
+fn imm_sign_extend_8_to_16(imm: i8) -> i16 {
+    let extended = ((imm as i64) << 56) >> 56;
+    extended as i16
+}
+
+fn imm_sign_extend_8_to_64(imm: i64) -> i64 {
+    let extended = (imm << 56) >> 56;
+    extended as i64
+}
+
+fn imm_fits_in_1_byte_sign_extended_to_size(imm: i64, size: Size) -> bool {
+    match size {
+        Size::_8 => panic!(""),
+        Size::_16 => todo!(),
+        Size::_32 => {
+            if imm > u32::MAX as i64 {
+                false
+            } else {
+                imm as i32 == imm_sign_extend_8_to_32(imm as i32)
+            }
+        }
+        Size::_64 => imm == imm_sign_extend_8_to_64(imm),
+    }
 }
 
 fn imm_fits_in_4_bytes(imm: i64) -> bool {
@@ -756,8 +779,7 @@ fn imm_fits_in_4_bytes(imm: i64) -> bool {
 }
 
 fn imm_fits_in_4_bytes_sign_extended(imm: i64) -> bool {
-    let sign_extended_eq = (imm << 32) >> 32;
-    sign_extended_eq == imm
+    todo!()
 }
 
 impl Register {
@@ -1805,7 +1827,7 @@ impl Instruction {
                             && (lhs.size() == Size::_16
                                 || lhs.size() == Size::_32
                                 || lhs.size() == Size::_64)
-                            && imm_fits_in_1_byte_sign_extended(*imm) =>
+                            && imm_fits_in_1_byte_sign_extended_to_size(*imm, lhs.size()) =>
                     {
                         Instruction::encode_rex_from_operands(
                             w,
@@ -2625,11 +2647,26 @@ mod tests {
 
     #[test]
     fn test_fits() {
-        assert!(!imm_fits_in_1_byte_sign_extended(128));
-        assert!(!imm_fits_in_1_byte_sign_extended(4294967168));
+        assert!(!imm_fits_in_1_byte_sign_extended_to_size(128, Size::_32));
+        assert!(!imm_fits_in_1_byte_sign_extended_to_size(
+            4294967296,
+            Size::_32
+        ));
 
-        assert!(imm_fits_in_1_byte_sign_extended(-128));
-        assert!(imm_fits_in_1_byte_sign_extended(4294967168));
+        assert!(imm_fits_in_1_byte_sign_extended_to_size(-128, Size::_32));
+        assert!(imm_fits_in_1_byte_sign_extended_to_size(
+            4294967168,
+            Size::_32
+        ));
+    }
+
+    #[test]
+    fn test_sext() {
+        assert_eq!(imm_sign_extend_8_to_32(128), -128);
+        assert_eq!(
+            &imm_sign_extend_8_to_32(-128).to_be_bytes(),
+            &[0xff, 0xff, 0xff, 0x80]
+        );
     }
 
     #[test]
