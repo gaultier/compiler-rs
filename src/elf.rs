@@ -4,6 +4,8 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
 
+use log::trace;
+
 use crate::error::{Error, ErrorKind};
 use crate::origin;
 
@@ -245,6 +247,8 @@ pub fn write(asm_encoded: &[u8]) -> Result<(), Error> {
             err.to_string(),
         )
     })?;
+
+    trace!("elf: action=write file={} size={}", file_name, sb.len());
 
     file.write_all(&sb).map_err(|err| {
         Error::new(
