@@ -91,18 +91,18 @@ pub fn write(asm_encoded: &[u8]) -> Result<(), Error> {
         CStr::from_bytes_with_nul(b"\0").unwrap(),
         CStr::from_bytes_with_nul(b".shstrtab\0").unwrap(),
         CStr::from_bytes_with_nul(b".text\0").unwrap(),
+        CStr::from_bytes_with_nul(b".data\0").unwrap(),
+        CStr::from_bytes_with_nul(b".rodata\0").unwrap(),
     ];
 
     let mut string_indexes = BTreeMap::new();
+    let mut strings_size = 0;
     {
-        let mut idx = 0;
         for s in &strings {
-            string_indexes.insert(s.to_string_lossy(), idx as u32);
-            idx += s.to_bytes_with_nul().len();
+            string_indexes.insert(s.to_string_lossy(), strings_size as u32);
+            strings_size += s.to_bytes_with_nul().len();
         }
     }
-
-    let strings_size: usize = strings.iter().map(|s| s.count_bytes() + 1).sum();
 
     let section_headers = [
         SectionHeader::default(), // null
