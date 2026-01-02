@@ -4,7 +4,7 @@ use std::{
     panic,
 };
 
-use log::trace;
+use log::{error, trace};
 use proptest::proptest;
 use proptest_derive::Arbitrary;
 use serde::Serialize;
@@ -154,9 +154,6 @@ impl EffectiveAddress {
     fn is_valid(&self) -> bool {
         match self {
             EffectiveAddress {
-                base: Some(reg), ..
-            }
-            | EffectiveAddress {
                 index_scale: Some((reg, _)),
                 ..
             } if reg.size() < Size::_32 || *reg == Register::Rsp => false,
@@ -1609,6 +1606,10 @@ impl Instruction {
             if let Some(addr) = op.as_effective_address()
                 && !addr.is_valid()
             {
+                error!(
+                    "amd64: action=encode msg='effective address not valid' addr={:?}",
+                    addr
+                );
                 return Err(std::io::Error::from(io::ErrorKind::InvalidData));
             }
         }
@@ -1621,12 +1622,6 @@ impl Instruction {
 
                 let lhs = &self.operands[0];
                 let rhs = &self.operands[1];
-
-                //if (lhs.is_reg() && rhs.is_rm()) || (lhs.is_rm() && rhs.is_reg()) {
-                //    if lhs.size != rhs.size {
-                //        return Err(std::io::Error::from(io::ErrorKind::InvalidData));
-                //    }
-                //}
 
                 match (lhs, rhs) {
                     // mov r, imm
@@ -1689,9 +1684,11 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
+                    // 	mov r/m64, r64
                     (_, Operand::Register(reg))
-                        if lhs.is_rm() && reg.is_64_bits() && lhs.size() == rhs.size() =>
+                        if lhs.is_rm() && lhs.size() == Size::_64 && lhs.size() == rhs.size() =>
                     {
+                        trace!("foo");
                         Instruction::encode_rex_from_operands(w, true, Some(lhs), Some(rhs), None)?;
                         let modrm =
                             Instruction::encode_modrm(ModRmEncoding::SlashR, lhs, Some(*reg));
