@@ -8,10 +8,12 @@ use crate::error::{Error, ErrorKind};
 use crate::origin;
 
 #[derive(Debug)]
+#[repr(u32)]
 enum ProgramHeaderType {
     Load = 1,
 }
 
+#[repr(u32)]
 enum ProgramHeaderFlags {
     Executable = 1,
     Readable = 4,
@@ -31,6 +33,7 @@ struct ProgramHeader {
 }
 
 #[derive(Default, Debug)]
+#[repr(u32)]
 enum SectionHeaderKind {
     #[default]
     Null = 0,
@@ -47,6 +50,7 @@ enum SectionHeaderKind {
     Dynsym = 11,
 }
 
+#[repr(u64)]
 enum SectionHeaderFlag {
     Write = 1 << 0,
     Alloc = 1 << 1,
@@ -63,8 +67,8 @@ struct SectionHeader {
     addr: u64,
     offset: u64,
     size: u64,
-    link: u64,
-    info: u64,
+    link: u32,
+    info: u32,
     align: u64,
     entsize: u64,
 }
@@ -170,12 +174,14 @@ pub fn write(asm_encoded: &[u8]) -> Result<(), Error> {
         sb.extend_from_slice(&64u16.to_le_bytes());
 
         // Size of Program Header.
+        assert_eq!(std::mem::size_of::<ProgramHeader>(), 56);
         sb.extend_from_slice(&56u16.to_le_bytes());
 
         // Number of entries in the program header table.
         sb.extend_from_slice(&(program_headers.len() as u16).to_le_bytes());
 
         // Size of Section Header.
+        assert_eq!(std::mem::size_of::<SectionHeader>(), 64);
         sb.extend_from_slice(&64u16.to_le_bytes());
 
         // Number of entries in the program header table.
@@ -183,19 +189,22 @@ pub fn write(asm_encoded: &[u8]) -> Result<(), Error> {
 
         // Section index in the section
         // header table.
-        let section_header_table_index = section_headers.len() as u16 - 1;
-        sb.extend_from_slice(&section_header_table_index.to_le_bytes());
+        let section_header_string_table_index = section_headers.len() as u16 - 1;
+        sb.extend_from_slice(&section_header_string_table_index.to_le_bytes());
 
         assert_eq!(sb.len(), 64);
     }
 
     for ph in &program_headers {
-        sb.extend_from_slice(unsafe {
+        let bytes = unsafe {
             std::slice::from_raw_parts(
                 ph as *const ProgramHeader as *const u8,
                 std::mem::size_of::<ProgramHeader>(),
             )
-        });
+        };
+        dbg!(ph);
+        dbg!(bytes);
+        sb.extend_from_slice(bytes);
     }
 
     // Pad.
