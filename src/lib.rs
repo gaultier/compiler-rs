@@ -1,6 +1,7 @@
 pub mod amd64;
 pub mod asm;
 pub mod ast;
+pub mod elf;
 pub mod error;
 pub mod ir;
 pub mod lex;

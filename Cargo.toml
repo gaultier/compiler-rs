@@ -5,7 +5,6 @@ edition = "2024"
 
 [dependencies]
 log = "0.4.29"
-object = {version="0.38.1",features=["elf","macho","write","write_std", "std"]}
 proptest = "1.9.0"
 proptest-derive = "0.7.0"
 serde = {version="1.0.228", features=["std","derive"]}

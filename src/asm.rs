@@ -23,6 +23,11 @@ pub enum Os {
     MacOS,
 }
 
+pub enum BinaryFormat {
+    Elf,
+    MachO,
+}
+
 pub(crate) struct Abi {
     pub(crate) gprs: Vec<Register>,
 }

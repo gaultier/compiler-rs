@@ -5,13 +5,9 @@ use std::{
 
 use compiler_rs_lib::{
     asm::{self, Os},
-    compile,
+    compile, elf,
 };
 use log::{LevelFilter, Log};
-use object::{
-    Architecture, BinaryFormat, Endianness, SymbolScope,
-    write::{Object, StandardSection, Symbol},
-};
 
 struct Logger {}
 
@@ -90,27 +86,10 @@ fn main() {
         std::process::exit(1)
     };
 
-    let bin_format = match target_os {
-        Os::Linux => BinaryFormat::Elf,
-        Os::MacOS => BinaryFormat::MachO,
-    };
-    let mut obj = Object::new(bin_format, Architecture::X86_64, Endianness::Little);
-    obj.add_file_symbol(file_name.into());
+    let dummy_asm = &[0xb8, 0x3c, 0, 0, 0, 0xba, 0, 0, 0, 0, 0x0f, 0x05];
 
-    let main_symbol = obj.add_symbol(Symbol {
-        name: "main".into(),
-        value: 0,
-        size: 0,
-        kind: object::SymbolKind::Text,
-        scope: SymbolScope::Compilation,
-        weak: false,
-        section: object::write::SymbolSection::Undefined,
-        flags: object::SymbolFlags::None,
-    });
-    // Add the main function in its own subsection (equivalent to -ffunction-sections).
-    let main_section = obj.add_subsection(StandardSection::Text, b"main");
-    let _main_offset = obj.add_symbol_data(main_symbol, main_section, &compiled.asm_encoded, 1);
-    // Finally, write the object file.
-    let file = std::fs::File::create("hello.bin").unwrap();
-    obj.write_stream(file).unwrap();
+    match target_os {
+        Os::Linux => elf::write(dummy_asm).unwrap(),
+        Os::MacOS => todo!(),
+    };
 }

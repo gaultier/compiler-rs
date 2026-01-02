@@ -20,6 +20,7 @@ pub enum ErrorKind {
     IncompatibleTypes,
     IncompatibleArgumentsCount,
     UnknownIdentifier,
+    IO,
 }
 
 #[derive(Serialize, Debug, Clone)]
