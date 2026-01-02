@@ -748,8 +748,8 @@ fn imm_sign_extend_8_to_32(imm: i32) -> i32 {
     imm as i8 as i32
 }
 
-fn imm_sign_extend_8_to_16(imm: i8) -> i16 {
-    let extended = ((imm as i64) << 56) >> 56;
+fn imm_sign_extend_8_to_16(imm: i16) -> i16 {
+    let extended = ((imm as i64) << 48) >> 48;
     extended as i16
 }
 
@@ -761,7 +761,13 @@ fn imm_sign_extend_8_to_64(imm: i64) -> i64 {
 fn imm_fits_in_1_byte_sign_extended_to_size(imm: i64, size: Size) -> bool {
     match size {
         Size::_8 => panic!(""),
-        Size::_16 => todo!(),
+        Size::_16 => {
+            if imm > u16::MAX as i64 {
+                false
+            } else {
+                imm as i16 == imm_sign_extend_8_to_16(imm as i16)
+            }
+        }
         Size::_32 => {
             if imm > u32::MAX as i64 {
                 false
