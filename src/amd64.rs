@@ -1,6 +1,8 @@
 use std::{
+    collections::BTreeMap,
     fmt::Display,
     io::{self, ErrorKind, Write},
+    ops::Neg,
     panic,
 };
 
@@ -223,9 +225,11 @@ impl Display for Operand {
 
 pub(crate) fn encode(instructions: &[asm::Instruction]) -> Vec<u8> {
     let mut res = Vec::with_capacity(instructions.len() * 5);
+    let fn_name_to_location = BTreeMap::new();
+
     for ins in instructions {
         let asm::Instruction::Amd64(ins) = ins;
-        ins.encode(&mut res).unwrap();
+        ins.encode(&mut res, &fn_name_to_location).unwrap();
     }
 
     res
@@ -1597,7 +1601,11 @@ impl Instruction {
         Ok(())
     }
 
-    pub(crate) fn encode<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+    pub(crate) fn encode(
+        &self,
+        w: &mut Vec<u8>,
+        fn_name_to_location: &BTreeMap<String, usize>,
+    ) -> std::io::Result<()> {
         trace!("amd64: action=encode ins={}", self);
 
         // Need Address Size Override Prefix?
@@ -2170,10 +2178,16 @@ impl Instruction {
                 if self.operands.len() != 1 {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
-                let _op = self.operands.first().unwrap();
-                let displacement: u32 = 0; // FIXME: resolve offset with linker.
+                let name = self.operands.first().unwrap().as_fn_name().unwrap();
+                let location = fn_name_to_location
+                    .get(name)
+                    .expect("function location not found");
+                let displacement = (w.len() + 5/* sizeof(call_ins_encoded) */)
+                    .checked_sub(*location)
+                    .unwrap() as isize;
+                let disp32 = i32::try_from(displacement.neg()).expect("function too far");
                 w.write_all(&[0xe8])?; // Call near.
-                w.write_all(&displacement.to_le_bytes())
+                w.write_all(&disp32.to_le_bytes())
             }
             InstructionKind::Push => {
                 if self.operands.len() != 1 {
@@ -2588,6 +2602,13 @@ impl Operand {
         }
     }
 
+    pub(crate) fn as_fn_name(&self) -> Option<&str> {
+        match self {
+            Operand::FnName(name) => Some(name),
+            _ => None,
+        }
+    }
+
     fn size(&self) -> Size {
         match self {
             Operand::Register(reg) => reg.size(),
@@ -2694,13 +2715,54 @@ mod tests {
     #[test]
     fn test_encoding() {
         {
+            let mut w = Vec::with_capacity(15);
+
+            let mut fn_name_to_location = BTreeMap::new();
+
+            fn_name_to_location.insert(String::from("println_u64"), w.len());
+            {
+                let ins_mov = Instruction {
+                    kind: InstructionKind::Mov,
+                    operands: vec![Operand::Register(Register::Edx), Operand::Immediate(1)],
+                    origin: Origin::new_unknown(),
+                };
+                ins_mov.encode(&mut w, &fn_name_to_location).unwrap();
+
+                let ins_ret = Instruction {
+                    kind: InstructionKind::Ret,
+                    operands: vec![],
+                    origin: Origin::new_unknown(),
+                };
+                ins_ret.encode(&mut w, &fn_name_to_location).unwrap();
+            }
+
+            {
+                let ins_call = Instruction {
+                    kind: InstructionKind::Call,
+                    operands: vec![Operand::FnName(String::from("println_u64"))],
+                    origin: Origin::new_unknown(),
+                };
+                ins_call.encode(&mut w, &fn_name_to_location).unwrap();
+            }
+
+            assert_eq!(
+                &w,
+                &[
+                    0xba, 0x01, 0x00, 0x00, 0x00, // mov edx, 1
+                    0xc3, // ret
+                    0xe8, 0xf5, 0xff, 0xff, 0xff // call println_u64
+                ]
+            );
+        }
+        {
             let ins = Instruction {
                 kind: InstructionKind::Add,
                 operands: vec![Operand::Register(Register::Bx), Operand::Immediate(0)],
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(5);
-            ins.encode(&mut w).unwrap();
+            let fn_name_to_location = BTreeMap::new();
+            ins.encode(&mut w, &fn_name_to_location).unwrap();
             assert_eq!(&w, &[0x66, 0x83, 0xc3, 0x00]);
         }
         {
@@ -2715,7 +2777,8 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(15);
-            ins.encode(&mut w).unwrap();
+            let fn_name_to_location = BTreeMap::new();
+            ins.encode(&mut w, &fn_name_to_location).unwrap();
             assert_eq!(&w, &[0x67, 0xf6, 0xab, 0x7f, 0xff, 0xff, 0xff]);
         }
         {
@@ -2730,7 +2793,8 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(5);
-            ins.encode(&mut w).unwrap();
+            let fn_name_to_location = BTreeMap::new();
+            ins.encode(&mut w, &fn_name_to_location).unwrap();
             assert_eq!(&w, &[0x67, 0xff, 0x73, 0x01]);
         }
         {
@@ -2745,7 +2809,8 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(5);
-            ins.encode(&mut w).unwrap();
+            let fn_name_to_location = BTreeMap::new();
+            ins.encode(&mut w, &fn_name_to_location).unwrap();
             assert_eq!(&w, &[0x67, 0xff, 0x33]);
         }
         {
@@ -2760,7 +2825,8 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(5);
-            ins.encode(&mut w).unwrap();
+            let fn_name_to_location = BTreeMap::new();
+            ins.encode(&mut w, &fn_name_to_location).unwrap();
             assert_eq!(&w, &[0x67, 0xff, 0x33]);
         }
         {
@@ -2775,7 +2841,8 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(5);
-            ins.encode(&mut w).unwrap();
+            let fn_name_to_location = BTreeMap::new();
+            ins.encode(&mut w, &fn_name_to_location).unwrap();
             assert_eq!(&w, &[0x67, 0x66, 0xff, 0x34, 0x5d, 0, 0, 0, 0]);
         }
         {
@@ -2785,7 +2852,8 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(2);
-            ins.encode(&mut w).unwrap();
+            let fn_name_to_location = BTreeMap::new();
+            ins.encode(&mut w, &fn_name_to_location).unwrap();
             assert_eq!(&w, &[0x41, 0x57]);
         }
 
@@ -2796,7 +2864,8 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(2);
-            ins.encode(&mut w).unwrap();
+            let fn_name_to_location = BTreeMap::new();
+            ins.encode(&mut w, &fn_name_to_location).unwrap();
             assert_eq!(&w, &[0x5b]);
         }
 
@@ -2815,7 +2884,8 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(5);
-            ins.encode(&mut w).unwrap();
+            let fn_name_to_location = BTreeMap::new();
+            ins.encode(&mut w, &fn_name_to_location).unwrap();
             assert_eq!(&w, &[0x4f, 0x8d, 0x44, 0xf5, 0x2a]);
         }
         {
@@ -2830,7 +2900,8 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(5);
-            ins.encode(&mut w).unwrap();
+            let fn_name_to_location = BTreeMap::new();
+            ins.encode(&mut w, &fn_name_to_location).unwrap();
             assert_eq!(&w, &[0x41, 0xff, 0x74, 0x9c, 0x01]);
         }
         {
@@ -2845,7 +2916,8 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(5);
-            ins.encode(&mut w).unwrap();
+            let fn_name_to_location = BTreeMap::new();
+            ins.encode(&mut w, &fn_name_to_location).unwrap();
             assert_eq!(&w, &[0x41, 0x8f, 0x44, 0x9c, 0x01]);
         }
         {
@@ -2860,7 +2932,8 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(5);
-            ins.encode(&mut w).unwrap();
+            let fn_name_to_location = BTreeMap::new();
+            ins.encode(&mut w, &fn_name_to_location).unwrap();
             assert_eq!(&w, &[0x49, 0xf7, 0x7c, 0x9c, 0x01]);
         }
         {
@@ -2873,7 +2946,8 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(5);
-            ins.encode(&mut w).unwrap();
+            let fn_name_to_location = BTreeMap::new();
+            ins.encode(&mut w, &fn_name_to_location).unwrap();
             assert_eq!(&w, &[0x48, 0x89, 0xe5]);
         }
     }
@@ -2956,7 +3030,8 @@ mod tests {
           if !has_invalid_addresses {
             let mut actual = Vec::with_capacity(15);
 
-            match (ins.encode(&mut actual), oracle_encode(&ins)) {
+            let fn_name_to_location = BTreeMap::new();
+            match (ins.encode(&mut actual, &fn_name_to_location), oracle_encode(&ins)) {
                 (Ok(()), Ok(expected)) => assert_eq!(actual, expected, "ins={}, {:#?} actual={:x?} expected={:x?}", ins,ins, &actual, &expected),
                 (Err(_), Err(_)) => {},
                 (Ok(actual),Err((status, stdout, stderr))) => panic!("oracle and implementation disagree: actual={:#?} oracle_status={} oracle_stdout={} oracle_stderr={} ins={} {:#?}",actual,status,stdout, String::from_utf8_lossy(&stderr), ins,ins ),
