@@ -79,7 +79,7 @@ fn round_up(n: usize, rnd: usize) -> usize {
     (n + (rnd - 1)) & !(rnd - 1)
 }
 
-pub fn write(asm_encoded: &[u8]) -> Result<(), Error> {
+pub fn write<W: Write>(w: &mut W, asm_encoded: &[u8]) -> std::io::Result<()> {
     let page_size: usize = 4 * 1024; // FIXME
     let vm_start = 1 << 22;
 
@@ -137,64 +137,59 @@ pub fn write(asm_encoded: &[u8]) -> Result<(), Error> {
         },
     ];
 
-    let mut sb = Vec::with_capacity(12 * 1024);
     {
         // Magic.
-        sb.push(0x7f);
-        sb.extend_from_slice(b"ELF");
+        w.write_all(&[0x7f])?;
+        w.write_all(b"ELF")?;
 
-        sb.push(2); // 64 bit.
-        sb.push(1); // Little-endian.
-        sb.push(1); // ELF header version = 1.
-        sb.push(0); // OS ABI (0 = System V).
+        w.write_all(&[2])?; // 64 bit.
+        w.write_all(&[1])?; // Little-endian.
+        w.write_all(&[1])?; // ELF header version = 1.
+        w.write_all(&[0])?; // OS ABI (0 = System V).
 
-        sb.extend_from_slice(&0u64.to_le_bytes()); // Padding.
-        sb.extend_from_slice(&2u16.to_le_bytes()); // Type: Executable.
-        sb.extend_from_slice(&0x3eu16.to_le_bytes()); // ISA: x86_64.
-        sb.extend_from_slice(&0x1u32.to_le_bytes()); // ELF: version=1.
-        assert_eq!(sb.len(), 24);
+        w.write_all(&0u64.to_le_bytes())?; // Padding.
+        w.write_all(&2u16.to_le_bytes())?; // Type: Executable.
+        w.write_all(&0x3eu16.to_le_bytes())?; // ISA: x86_64.
+        w.write_all(&0x1u32.to_le_bytes())?; // ELF: version=1.
 
         // Program entry offset.
         let program_entry_offset = program_headers[0].p_vaddr + page_size as u64;
-        sb.extend_from_slice(&program_entry_offset.to_le_bytes());
+        w.write_all(&program_entry_offset.to_le_bytes())?;
         // Program header table offset.
         let elf_header_size = 64u64;
-        sb.extend_from_slice(&elf_header_size.to_le_bytes());
+        w.write_all(&elf_header_size.to_le_bytes())?;
 
         // Section header table offset.
         let section_header_table_offset =
             page_size as u64 + round_up(asm_encoded.len(), page_size) as u64 + strings_size as u64;
-        sb.extend_from_slice(&section_header_table_offset.to_le_bytes());
+        w.write_all(&section_header_table_offset.to_le_bytes())?;
 
         // Flags.
-        sb.extend_from_slice(&0u32.to_le_bytes());
-
-        assert_eq!(sb.len(), 52);
+        w.write_all(&0u32.to_le_bytes())?;
 
         // Elf header size.
-        sb.extend_from_slice(&64u16.to_le_bytes());
+        w.write_all(&64u16.to_le_bytes())?;
 
         // Size of Program Header.
         assert_eq!(std::mem::size_of::<ProgramHeader>(), 56);
-        sb.extend_from_slice(&56u16.to_le_bytes());
+        w.write_all(&56u16.to_le_bytes())?;
 
         // Number of entries in the program header table.
-        sb.extend_from_slice(&(program_headers.len() as u16).to_le_bytes());
+        w.write_all(&(program_headers.len() as u16).to_le_bytes())?;
 
         // Size of Section Header.
         assert_eq!(std::mem::size_of::<SectionHeader>(), 64);
-        sb.extend_from_slice(&64u16.to_le_bytes());
+        w.write_all(&64u16.to_le_bytes())?;
 
         // Number of entries in the program header table.
-        sb.extend_from_slice(&(section_headers.len() as u16).to_le_bytes());
+        w.write_all(&(section_headers.len() as u16).to_le_bytes())?;
 
         // Section index in the section
         // header table.
         let section_header_string_table_index = section_headers.len() as u16 - 1;
-        sb.extend_from_slice(&section_header_string_table_index.to_le_bytes());
-
-        assert_eq!(sb.len(), 64);
+        w.write_all(&section_header_string_table_index.to_le_bytes())?;
     }
+    let mut written = 64;
 
     for ph in &program_headers {
         let bytes = unsafe {
@@ -203,58 +198,48 @@ pub fn write(asm_encoded: &[u8]) -> Result<(), Error> {
                 std::mem::size_of::<ProgramHeader>(),
             )
         };
-        sb.extend_from_slice(bytes);
+        w.write_all(bytes)?;
+        written += bytes.len();
     }
 
     // Pad.
-    for _ in sb.len()..page_size {
-        sb.push(0);
+    for _ in written..page_size {
+        w.write_all(&[0])?;
     }
 
     // Text.
-    sb.extend(asm_encoded);
+    w.write_all(asm_encoded)?;
 
     // Pad.
     for _ in asm_encoded.len()..round_up(asm_encoded.len(), page_size) {
-        sb.push(0);
+        w.write_all(&[0])?;
     }
 
     // Strings.
     for s in &strings {
-        sb.extend(s.to_bytes_with_nul());
+        w.write_all(s.to_bytes_with_nul())?;
     }
 
     // Section headers.
     for sh in &section_headers {
-        sb.extend_from_slice(unsafe {
+        w.write_all(unsafe {
             std::slice::from_raw_parts(
                 sh as *const SectionHeader as *const u8,
                 std::mem::size_of::<SectionHeader>(),
             )
-        });
+        })?;
     }
+    Ok(())
+}
 
+pub fn write_to_file(asm_encoded: &[u8], file_name: &str) -> std::io::Result<()> {
     let mut opts = OpenOptions::new();
     opts.create(true).write(true);
     #[cfg(unix)]
     opts.mode(0o755);
 
-    let file_name = "hello.bin";
-    let mut file = opts.open(file_name).map_err(|err| {
-        Error::new(
-            ErrorKind::IO,
-            origin::Origin::new_unknown(),
-            err.to_string(),
-        )
-    })?;
+    let mut file = opts.open(file_name)?;
+    trace!("elf: action=write file={}", file_name);
 
-    trace!("elf: action=write file={} size={}", file_name, sb.len());
-
-    file.write_all(&sb).map_err(|err| {
-        Error::new(
-            ErrorKind::IO,
-            origin::Origin::new_unknown(),
-            err.to_string(),
-        )
-    })
+    write(&mut file, asm_encoded)
 }

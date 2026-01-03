@@ -89,7 +89,7 @@ fn main() {
     let dummy_asm = &[0xb8, 0x3c, 0, 0, 0, 0xbf, 0, 0, 0, 0, 0x0f, 0x05];
 
     match target_os {
-        Os::Linux => elf::write(dummy_asm).unwrap(),
+        Os::Linux => elf::write_to_file(dummy_asm, "hello.bin").unwrap(),
         Os::MacOS => todo!(),
     };
 }
