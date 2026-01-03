@@ -227,36 +227,6 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> (Vec<u8>, usize) {
     let mut w = Vec::with_capacity(instructions.len() * 5);
     let mut fn_name_to_location = BTreeMap::new();
 
-    //0000000000000000 <print_u64>:
-    //   0:	55                   	push   rbp
-    //   1:	48 89 e5             	mov    rbp,rsp
-    //   4:	48 81 ec 00 01 00 00 	sub    rsp,0x100
-    //   b:	4c 8d 8d 00 ff ff ff 	lea    r9,[rbp-0x100]
-    //  12:	4d 31 c0             	xor    r8,r8
-    //  15:	48 89 f0             	mov    rax,rsi
-    //
-    //0000000000000018 <print_u64.int_to_string_loop>:
-    //  18:	48 83 f8 00          	cmp    rax,0x0
-    //  1c:	74 1a                	je     38 <print_u64.int_to_string_end>
-    //  1e:	b9 0a 00 00 00       	mov    ecx,0xa
-    //  23:	48 31 d2             	xor    rdx,rdx
-    //  26:	48 f7 f1             	div    rcx
-    //  29:	48 83 c2 30          	add    rdx,0x30
-    //  2d:	49 ff c9             	dec    r9
-    //  30:	41 88 11             	mov    BYTE PTR [r9],dl
-    //  33:	49 ff c0             	inc    r8
-    //  36:	eb e0                	jmp    18 <print_u64.int_to_string_loop>
-    //
-    //0000000000000038 <print_u64.int_to_string_end>:
-    //  38:	4c 89 c0             	mov    rax,r8
-    //  3b:	b8 01 00 00 00       	mov    eax,0x1
-    //  40:	48 89 ff             	mov    rdi,rdi
-    //  43:	4c 89 ce             	mov    rsi,r9
-    //  46:	4c 89 c2             	mov    rdx,r8
-    //  49:	0f 05                	syscall
-    //  4b:	48 81 c4 00 01 00 00 	add    rsp,0x100
-    //  52:	5d                   	pop    rbp
-    //  53:	c3                   	ret
     fn_name_to_location.insert(String::from("println_u64"), 0);
 
     w.extend_from_slice(&[
@@ -405,6 +375,7 @@ pub enum InstructionKind {
     Push,
     Pop,
     Ret,
+    Syscall,
 }
 
 pub struct Emitter {
@@ -1225,6 +1196,7 @@ impl InstructionKind {
             // Size independent.
             InstructionKind::Call => "call",
             InstructionKind::Ret => "ret",
+            InstructionKind::Syscall => "syscall",
         }
     }
 }
@@ -2363,6 +2335,12 @@ impl Instruction {
                     _ => Err(std::io::Error::from(io::ErrorKind::InvalidData)),
                 }
             }
+            InstructionKind::Syscall => {
+                if !self.operands.is_empty() {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
+                w.write_all(&[0x0f, 0x05])
+            }
             InstructionKind::Ret => {
                 if self.operands.len() > 1 {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
@@ -2492,6 +2470,7 @@ impl Interpreter {
             let asm::Instruction::Amd64(ins) = ins;
 
             match ins.kind {
+                InstructionKind::Syscall => todo!(),
                 InstructionKind::Mov => {
                     assert_eq!(ins.operands.len(), 2);
                     self.store(&ins.operands[0], &ins.operands[1]);
