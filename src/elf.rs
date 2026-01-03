@@ -6,9 +6,6 @@ use std::os::unix::fs::OpenOptionsExt;
 
 use log::trace;
 
-use crate::error::{Error, ErrorKind};
-use crate::origin;
-
 #[derive(Debug)]
 #[repr(u32)]
 enum ProgramHeaderType {
