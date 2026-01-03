@@ -36,24 +36,13 @@ enum SectionHeaderKind {
     #[default]
     Null = 0,
     Progbits = 1,
-    Symtab = 2,
     Strtab = 3,
-    Rela = 4,
-    Hash = 5,
-    Dynamic = 6,
-    Note = 7,
-    Nobits = 8,
-    Rel = 9,
-    Shlib = 10,
-    Dynsym = 11,
 }
 
 #[repr(u64)]
 enum SectionHeaderFlag {
-    Write = 1 << 0,
     Alloc = 1 << 1,
     Execinstr = 1 << 2,
-    Maskproc = 0xf000000,
 }
 
 #[derive(Default, Debug)]
