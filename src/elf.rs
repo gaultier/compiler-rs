@@ -64,7 +64,7 @@ fn round_up(n: usize, rnd: usize) -> usize {
     (n + (rnd - 1)) & !(rnd - 1)
 }
 
-pub fn write<W: Write>(w: &mut W, asm_encoded: &[u8]) -> std::io::Result<()> {
+pub fn write<W: Write>(w: &mut W, asm_encoded: &[u8], entrypoint: usize) -> std::io::Result<()> {
     let page_size: usize = 4 * 1024; // FIXME
     let vm_start = 1 << 22;
 
@@ -138,7 +138,8 @@ pub fn write<W: Write>(w: &mut W, asm_encoded: &[u8]) -> std::io::Result<()> {
         w.write_all(&0x1u32.to_le_bytes())?; // ELF: version=1.
 
         // Program entry offset.
-        let program_entry_offset = program_headers[0].p_vaddr + page_size as u64;
+        let program_entry_offset =
+            program_headers[0].p_vaddr + page_size as u64 + entrypoint as u64;
         w.write_all(&program_entry_offset.to_le_bytes())?;
         // Program header table offset.
         let elf_header_size = 64u64;
@@ -217,7 +218,11 @@ pub fn write<W: Write>(w: &mut W, asm_encoded: &[u8]) -> std::io::Result<()> {
     Ok(())
 }
 
-pub fn write_to_file(asm_encoded: &[u8], file_name: &str) -> std::io::Result<()> {
+pub fn write_to_file(
+    asm_encoded: &[u8],
+    file_name: &str,
+    entrypoint: usize,
+) -> std::io::Result<()> {
     let mut opts = OpenOptions::new();
     opts.create(true).write(true);
     #[cfg(unix)]
@@ -226,5 +231,5 @@ pub fn write_to_file(asm_encoded: &[u8], file_name: &str) -> std::io::Result<()>
     let mut file = opts.open(file_name)?;
     trace!("elf: action=write file={}", file_name);
 
-    write(&mut file, asm_encoded)
+    write(&mut file, asm_encoded, entrypoint)
 }

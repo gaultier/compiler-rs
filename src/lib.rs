@@ -184,6 +184,7 @@ pub struct CompileResult {
     pub asm_text: String,
     pub asm_encoded: Vec<u8>,
     pub asm_eval: asm::EvalResult,
+    pub entrypoint: usize,
 }
 
 pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileResult {
@@ -249,7 +250,7 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
     }
     trace!("asm_text: {}", asm_text);
 
-    let asm_encoded = asm::encode(&asm_instructions, &target_arch);
+    let (asm_encoded, entrypoint) = asm::encode(&asm_instructions, &target_arch);
 
     let asm_eval = asm::eval(&asm_instructions);
     trace!("asm_eval: {:#?}", asm_eval);
@@ -267,6 +268,7 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
         asm_text,
         asm_encoded,
         asm_eval,
+        entrypoint,
     }
 }
 

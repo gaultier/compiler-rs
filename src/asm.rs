@@ -70,7 +70,7 @@ pub(crate) fn abi(target_arch: &ArchKind) -> Abi {
     }
 }
 
-pub(crate) fn encode(instructions: &[Instruction], target_arch: &ArchKind) -> Vec<u8> {
+pub(crate) fn encode(instructions: &[Instruction], target_arch: &ArchKind) -> (Vec<u8>, usize) {
     match target_arch {
         ArchKind::Amd64 => amd64::encode(instructions),
     }

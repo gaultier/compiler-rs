@@ -223,16 +223,117 @@ impl Display for Operand {
     }
 }
 
-pub(crate) fn encode(instructions: &[asm::Instruction]) -> Vec<u8> {
-    let mut res = Vec::with_capacity(instructions.len() * 5);
-    let fn_name_to_location = BTreeMap::new();
+pub(crate) fn encode(instructions: &[asm::Instruction]) -> (Vec<u8>, usize) {
+    let mut w = Vec::with_capacity(instructions.len() * 5);
+    let mut fn_name_to_location = BTreeMap::new();
 
+    //0000000000000000 <print_u64>:
+    //   0:	55                   	push   rbp
+    //   1:	48 89 e5             	mov    rbp,rsp
+    //   4:	48 81 ec 00 01 00 00 	sub    rsp,0x100
+    //   b:	4c 8d 8d 00 ff ff ff 	lea    r9,[rbp-0x100]
+    //  12:	4d 31 c0             	xor    r8,r8
+    //  15:	48 89 f0             	mov    rax,rsi
+    //
+    //0000000000000018 <print_u64.int_to_string_loop>:
+    //  18:	48 83 f8 00          	cmp    rax,0x0
+    //  1c:	74 1a                	je     38 <print_u64.int_to_string_end>
+    //  1e:	b9 0a 00 00 00       	mov    ecx,0xa
+    //  23:	48 31 d2             	xor    rdx,rdx
+    //  26:	48 f7 f1             	div    rcx
+    //  29:	48 83 c2 30          	add    rdx,0x30
+    //  2d:	49 ff c9             	dec    r9
+    //  30:	41 88 11             	mov    BYTE PTR [r9],dl
+    //  33:	49 ff c0             	inc    r8
+    //  36:	eb e0                	jmp    18 <print_u64.int_to_string_loop>
+    //
+    //0000000000000038 <print_u64.int_to_string_end>:
+    //  38:	4c 89 c0             	mov    rax,r8
+    //  3b:	b8 01 00 00 00       	mov    eax,0x1
+    //  40:	48 89 ff             	mov    rdi,rdi
+    //  43:	4c 89 ce             	mov    rsi,r9
+    //  46:	4c 89 c2             	mov    rdx,r8
+    //  49:	0f 05                	syscall
+    //  4b:	48 81 c4 00 01 00 00 	add    rsp,0x100
+    //  52:	5d                   	pop    rbp
+    //  53:	c3                   	ret
+    fn_name_to_location.insert(String::from("println_u64"), 0);
+
+    /*
+        w.extend_from_slice(&[
+            0x55, // push rbp
+            0x48, 0x89, 0xe5, // mov rbp, rsp,
+            0x48, 0x81, 0xec, 0x00, 0x01, 0x00, 0x00, // sub rsp, 0x100
+            0x4c, 0x8d, 0x8d, 0x00, 0xff, 0xff, 0xff, // lea r9, [rbp-0x100]
+            0x4d, 0x31, 0xc0, // xor r8,r8
+            0x48, 0x89, 0xf0, // mov rax, rsi
+            0x48, 0x83, 0xf8, 0x00, // cmp rax, 0x00
+            0x74, 0x1a, // je 38
+            0xb9, 0x0a, 0x00, 0x00, 0x00, // mov ecx, 0xa
+            0x48, 0x31, 0xd2, // xor rdx, rdx
+            0x48, 0xf7, 0xf1, // div rcx
+            0x48, 0x83, 0xc2, 0x30, // add rdx, 0x30
+            0x49, 0xff, 0xc9, // dec r9
+            0x41, 0x88, 0x11, // mov BYTE PTR [r9], dl
+            0x49, 0xff, 0xc0, // inc r8
+            0xeb, 0xe0, // jmp 18
+            0x4c, 0x89, 0xc0, // mov rax, r8
+            0xb8, 0x01, 0x00, 0x00, 0x00, // mov eax, 0x1
+            0x48, 0x89, 0xff, // mov rdi, rdi
+            0x4c, 0x89, 0xce, // mov rsi, r9
+            0x4c, 0x89, 0xc2, // mov rdx, r8
+            0x3c, 0x89, 0xc2, // mov rdx, r8
+            0x0f, 0x05, // syscall
+            0x48, 0x81, 0xc4, 0x00, 0x01, 0x00, 0x00, // add rsp, 0x100
+            0x5d, // pop rbp
+            0xc3, // ret
+        ]);
+    */
+    w.extend_from_slice(&[
+        0xc3, // ret
+    ]);
+
+    let entrypoint = w.len();
+
+    w.extend_from_slice(&[
+        0x48, 0xc7, 0xc7, 0x39, 0x30, 0x00, 0x00, // mov rdi, 12345
+    ]);
+    let ins_call = Instruction {
+        kind: InstructionKind::Call,
+        operands: vec![Operand::FnName(String::from("println_u64"))],
+        origin: Origin::new_unknown(),
+    };
+    ins_call.encode(&mut w, &fn_name_to_location).unwrap();
+
+    /*
     for ins in instructions {
         let asm::Instruction::Amd64(ins) = ins;
         ins.encode(&mut res, &fn_name_to_location).unwrap();
     }
+    */
 
-    res
+    {
+        let ins_mov = Instruction {
+            kind: InstructionKind::Mov,
+            operands: vec![Operand::Register(Register::Eax), Operand::Immediate(60)], //FIXME
+            origin: Origin::new_unknown(),
+        };
+        ins_mov.encode(&mut w, &fn_name_to_location).unwrap();
+    }
+    {
+        let ins_mov = Instruction {
+            kind: InstructionKind::Mov,
+            operands: vec![Operand::Register(Register::Edi), Operand::Immediate(0)],
+            origin: Origin::new_unknown(),
+        };
+        ins_mov.encode(&mut w, &fn_name_to_location).unwrap();
+    }
+
+    w.extend_from_slice(&[
+        0x0f, 0x05, // syscall
+    ]);
+
+    (w, entrypoint)
 }
 
 impl Scale {
@@ -1715,7 +1816,6 @@ impl Instruction {
                     (_, Operand::Register(reg))
                         if lhs.is_rm() && lhs.size() == Size::_64 && lhs.size() == rhs.size() =>
                     {
-                        trace!("foo");
                         Instruction::encode_rex_from_operands(w, true, Some(lhs), Some(rhs), None)?;
                         let modrm =
                             Instruction::encode_modrm(ModRmEncoding::SlashR, lhs, Some(*reg));
