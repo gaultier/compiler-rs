@@ -92,9 +92,9 @@ pub fn write<W: Write>(w: &mut W, asm_encoded: &[u8]) -> std::io::Result<()> {
     }];
 
     let strings = [
-        CStr::from_bytes_with_nul(b"\0").unwrap(),
-        CStr::from_bytes_with_nul(b".shstrtab\0").unwrap(),
-        CStr::from_bytes_with_nul(b".text\0").unwrap(),
+        c"",
+        c".shstrtab",
+        c".text",
         //CStr::from_bytes_with_nul(b".data\0").unwrap(),
         //CStr::from_bytes_with_nul(b".rodata\0").unwrap(),
     ];
@@ -112,7 +112,7 @@ pub fn write<W: Write>(w: &mut W, asm_encoded: &[u8]) -> std::io::Result<()> {
         SectionHeader::default(), // null
         // Text (code).
         SectionHeader {
-            name: *string_indexes.get(".text").unwrap() as u32,
+            name: *string_indexes.get(".text").unwrap(),
             kind: SectionHeaderKind::Progbits,
             flags: SectionHeaderFlag::Execinstr as u64 | SectionHeaderFlag::Alloc as u64,
             addr: vm_start + page_size as u64,
@@ -123,7 +123,7 @@ pub fn write<W: Write>(w: &mut W, asm_encoded: &[u8]) -> std::io::Result<()> {
         },
         // Strings.
         SectionHeader {
-            name: *string_indexes.get(".shstrtab").unwrap() as u32,
+            name: *string_indexes.get(".shstrtab").unwrap(),
             kind: SectionHeaderKind::Strtab,
             flags: 0,
             addr: 0,

@@ -752,7 +752,7 @@ fn imm_sign_extend_8_to_16(imm: i16) -> i16 {
 
 fn imm_sign_extend_8_to_64(imm: i64) -> i64 {
     let extended = (imm << 56) >> 56;
-    extended as i64
+    extended
 }
 
 fn imm_fits_in_1_byte_sign_extended_to_size(imm: i64, size: Size) -> bool {
@@ -781,7 +781,7 @@ fn imm_fits_in_4_bytes(imm: i64) -> bool {
     u32::MIN as usize <= n && n < u32::MAX as usize
 }
 
-fn imm_fits_in_4_bytes_sign_extended(imm: i64) -> bool {
+fn imm_fits_in_4_bytes_sign_extended(_imm: i64) -> bool {
     todo!()
 }
 

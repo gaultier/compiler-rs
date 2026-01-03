@@ -245,7 +245,7 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
 
     let mut asm_text = String::with_capacity(asm_instructions.len() * 8 /* heuristic */);
     for ins in &asm_instructions {
-        write!(&mut asm_text, "{}\n", ins).unwrap();
+        writeln!(&mut asm_text, "{}", ins).unwrap();
     }
     trace!("asm_text: {}", asm_text);
 
