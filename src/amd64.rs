@@ -227,7 +227,7 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> (Vec<u8>, usize) {
     let mut w = Vec::with_capacity(instructions.len() * 5);
     let mut fn_name_to_location = BTreeMap::new();
 
-    fn_name_to_location.insert(String::from("println_u64"), 0);
+    fn_name_to_location.insert(String::from("println_u64"), w.len());
 
     w.extend_from_slice(&[
         0x55, // push rbp
@@ -257,24 +257,23 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> (Vec<u8>, usize) {
         0xc3, // ret
     ]);
 
-    let entrypoint = w.len();
-
-    w.extend_from_slice(&[
-        0x48, 0xc7, 0xc7, 0x39, 0x30, 0x00, 0x00, // mov rdi, 12345
-    ]);
-    let ins_call = Instruction {
-        kind: InstructionKind::Call,
-        operands: vec![Operand::FnName(String::from("println_u64"))],
-        origin: Origin::new_unknown(),
-    };
-    ins_call.encode(&mut w, &fn_name_to_location).unwrap();
-
-    /*
+    // main
+    fn_name_to_location.insert(String::from("main"), w.len());
     for ins in instructions {
         let asm::Instruction::Amd64(ins) = ins;
-        ins.encode(&mut res, &fn_name_to_location).unwrap();
+        ins.encode(&mut w, &fn_name_to_location).unwrap();
     }
-    */
+
+    // Entrypoint.
+    let entrypoint = w.len();
+    {
+        let ins_call = Instruction {
+            kind: InstructionKind::Call,
+            operands: vec![Operand::FnName(String::from("main"))],
+            origin: Origin::new_unknown(),
+        };
+        ins_call.encode(&mut w, &fn_name_to_location).unwrap();
+    }
 
     // Exit.
     {
@@ -2792,6 +2791,17 @@ mod tests {
 
     #[test]
     fn test_encoding() {
+        {
+            let ins = Instruction {
+                kind: InstructionKind::Mov,
+                operands: vec![Operand::Register(Register::Rax), Operand::Immediate(1)],
+                origin: Origin::new_unknown(),
+            };
+            let mut w = Vec::with_capacity(8);
+            let fn_name_to_location = BTreeMap::new();
+            ins.encode(&mut w, &fn_name_to_location).unwrap();
+            assert_eq!(&w, &[0x48, 0xc7, 0xc0, 0x01, 0x00, 0x00, 0x00]);
+        }
         {
             let mut w = Vec::with_capacity(15);
 
