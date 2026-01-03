@@ -232,7 +232,7 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> Vec<u8> {
 }
 
 impl Scale {
-    fn to_2_bits(&self) -> u8 {
+    fn to_2_bits(self) -> u8 {
         match self {
             Scale::_1 => 0b00,
             Scale::_2 => 0b01,
@@ -961,7 +961,7 @@ impl Register {
         )
     }
 
-    fn to_3_bits(&self) -> u8 {
+    fn to_3_bits(self) -> u8 {
         let res = match self {
             Register::Al | Register::Ax | Register::Eax | Register::Rax => 0b000,
             Register::Bl | Register::Bx | Register::Ebx | Register::Rbx => 0b011,
