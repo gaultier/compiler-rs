@@ -1882,10 +1882,8 @@ impl Instruction {
                     // add rm32, imm32
                     // add rm64, imm32
                     (_, Operand::Immediate(imm)) if lhs.is_rm() && lhs.size() >= Size::_32 => {
-                        if lhs.size() == Size::_32 && !imm_fits_in_4_bytes(*imm) {
-                            return Err(io::Error::from(ErrorKind::InvalidData));
-                        } else if lhs.size() == Size::_64
-                            && !imm_fits_in_4_bytes_sign_extended(*imm)
+                        if (lhs.size() == Size::_32 && !imm_fits_in_4_bytes(*imm))
+                            || (lhs.size() == Size::_64 && !imm_fits_in_4_bytes_sign_extended(*imm))
                         {
                             return Err(io::Error::from(ErrorKind::InvalidData));
                         }
