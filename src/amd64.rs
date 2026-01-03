@@ -276,6 +276,7 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> (Vec<u8>, usize) {
     }
     */
 
+    // Exit.
     {
         let ins_mov = Instruction {
             kind: InstructionKind::Mov,
@@ -292,10 +293,14 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> (Vec<u8>, usize) {
         };
         ins_mov.encode(&mut w, &fn_name_to_location).unwrap();
     }
-
-    w.extend_from_slice(&[
-        0x0f, 0x05, // syscall
-    ]);
+    {
+        let ins_syscall = Instruction {
+            kind: InstructionKind::Syscall,
+            operands: vec![],
+            origin: Origin::new_unknown(),
+        };
+        ins_syscall.encode(&mut w, &fn_name_to_location).unwrap();
+    }
 
     (w, entrypoint)
 }
