@@ -787,95 +787,95 @@ fn imm_fits_in_4_bytes_sign_extended(_imm: i64) -> bool {
 
 impl Register {
     fn is_64_bits(&self) -> bool {
-        match self {
+        matches!(
+            self,
             Register::Rax
-            | Register::Rbx
-            | Register::Rcx
-            | Register::Rdx
-            | Register::Rdi
-            | Register::Rsi
-            | Register::Rbp
-            | Register::Rsp
-            | Register::R8
-            | Register::R9
-            | Register::R10
-            | Register::R11
-            | Register::R12
-            | Register::R13
-            | Register::R14
-            | Register::R15 => true,
-            _ => false,
-        }
+                | Register::Rbx
+                | Register::Rcx
+                | Register::Rdx
+                | Register::Rdi
+                | Register::Rsi
+                | Register::Rbp
+                | Register::Rsp
+                | Register::R8
+                | Register::R9
+                | Register::R10
+                | Register::R11
+                | Register::R12
+                | Register::R13
+                | Register::R14
+                | Register::R15
+        )
     }
 
     fn is_32_bits(&self) -> bool {
-        match self {
+        matches!(
+            self,
             Register::Eax
-            | Register::Ebx
-            | Register::Ecx
-            | Register::Edx
-            | Register::Edi
-            | Register::Esi
-            | Register::Ebp
-            | Register::Esp
-            | Register::R8d
-            | Register::R9d
-            | Register::R10d
-            | Register::R11d
-            | Register::R12d
-            | Register::R13d
-            | Register::R14d
-            | Register::R15d => true,
-            _ => false,
-        }
+                | Register::Ebx
+                | Register::Ecx
+                | Register::Edx
+                | Register::Edi
+                | Register::Esi
+                | Register::Ebp
+                | Register::Esp
+                | Register::R8d
+                | Register::R9d
+                | Register::R10d
+                | Register::R11d
+                | Register::R12d
+                | Register::R13d
+                | Register::R14d
+                | Register::R15d
+        )
     }
 
     fn is_16_bits(&self) -> bool {
-        match self {
+        matches!(
+            self,
             Register::Ax
-            | Register::Bx
-            | Register::Cx
-            | Register::Dx
-            | Register::Di
-            | Register::Si
-            | Register::Bp
-            | Register::Sp
-            | Register::R8w
-            | Register::R9w
-            | Register::R10w
-            | Register::R11w
-            | Register::R12w
-            | Register::R13w
-            | Register::R14w
-            | Register::R15w => true,
-            _ => false,
-        }
+                | Register::Bx
+                | Register::Cx
+                | Register::Dx
+                | Register::Di
+                | Register::Si
+                | Register::Bp
+                | Register::Sp
+                | Register::R8w
+                | Register::R9w
+                | Register::R10w
+                | Register::R11w
+                | Register::R12w
+                | Register::R13w
+                | Register::R14w
+                | Register::R15w
+        )
     }
 
     fn is_8_bits(&self) -> bool {
-        match self {
+        matches!(
+            self,
             Register::Ah
-            | Register::Al
-            | Register::Bh
-            | Register::Bl
-            | Register::Ch
-            | Register::Cl
-            | Register::Dh
-            | Register::Dl
-            | Register::Dil
-            | Register::Sil
-            | Register::Bpl
-            | Register::Spl
-            | Register::R8b
-            | Register::R9b
-            | Register::R10b
-            | Register::R11b
-            | Register::R12b
-            | Register::R13b
-            | Register::R14b
-            | Register::R15b => true,
-            _ => false,
-        }
+                | Register::Al
+                | Register::Bh
+                | Register::Bl
+                | Register::Ch
+                | Register::Cl
+                | Register::Dh
+                | Register::Dl
+                | Register::Dil
+                | Register::Sil
+                | Register::Bpl
+                | Register::Spl
+                | Register::R8b
+                | Register::R9b
+                | Register::R10b
+                | Register::R11b
+                | Register::R12b
+                | Register::R13b
+                | Register::R14b
+                | Register::R15b
+        )
     }
 
     fn size(&self) -> Size {
@@ -985,17 +985,41 @@ impl Register {
     }
 
     pub fn is_extended(&self) -> bool {
-        match self {
-            Register::R8b | Register::R8w | Register::R8d | Register::R8 => true,
-            Register::R9b | Register::R9w | Register::R9d | Register::R9 => true,
-            Register::R10b | Register::R10w | Register::R10d | Register::R10 => true,
-            Register::R11b | Register::R11w | Register::R11d | Register::R11 => true,
-            Register::R12b | Register::R12w | Register::R12d | Register::R12 => true,
-            Register::R13b | Register::R13w | Register::R13d | Register::R13 => true,
-            Register::R14b | Register::R14w | Register::R14d | Register::R14 => true,
-            Register::R15b | Register::R15w | Register::R15d | Register::R15 => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            Register::R8b
+                | Register::R8w
+                | Register::R8d
+                | Register::R8
+                | Register::R9b
+                | Register::R9w
+                | Register::R9d
+                | Register::R9
+                | Register::R10b
+                | Register::R10w
+                | Register::R10d
+                | Register::R10
+                | Register::R11b
+                | Register::R11w
+                | Register::R11d
+                | Register::R11
+                | Register::R12b
+                | Register::R12w
+                | Register::R12d
+                | Register::R12
+                | Register::R13b
+                | Register::R13w
+                | Register::R13d
+                | Register::R13
+                | Register::R14b
+                | Register::R14w
+                | Register::R14d
+                | Register::R14
+                | Register::R15b
+                | Register::R15w
+                | Register::R15d
+                | Register::R15
+        )
     }
 }
 
@@ -1200,10 +1224,8 @@ impl Instruction {
         // > or debug register. REX.R does not modify ModRM.reg
         // > when that field specifies other registers or is used to extend the opcode.
         // > REX.R is ignored in such cases.
-        let r = match op_modrm_reg {
-            Some(Operand::Register(reg)) if reg.is_extended() => true,
-            _ => false,
-        };
+        let r = matches!( op_modrm_reg ,
+            Some(Operand::Register(reg)) if reg.is_extended() );
 
         // > The REX.X bit adds a 1-bit (msb) extension to the SIB.index field.
         let x = match op_modrm_rm {
