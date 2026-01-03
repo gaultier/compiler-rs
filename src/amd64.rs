@@ -751,8 +751,7 @@ fn imm_sign_extend_8_to_16(imm: i16) -> i16 {
 }
 
 fn imm_sign_extend_8_to_64(imm: i64) -> i64 {
-    let extended = (imm << 56) >> 56;
-    extended
+    (imm << 56) >> 56
 }
 
 fn imm_fits_in_1_byte_sign_extended_to_size(imm: i64, size: Size) -> bool {
@@ -1259,10 +1258,8 @@ impl Instruction {
 
         // Or, the register is embedded in the opcode, in which case,
         // REX.B is set when this register is extended.
-        b |= match op_reg {
-            Some(Operand::Register(reg)) if reg.is_extended() => true,
-            _ => false,
-        };
+        b |= matches!(op_reg ,
+            Some(Operand::Register(reg)) if reg.is_extended() );
 
         let ops: Vec<&Operand> = [op_modrm_rm, op_modrm_reg, op_reg]
             .into_iter()
@@ -1604,15 +1601,15 @@ impl Instruction {
         trace!("amd64: action=encode ins={}", self);
 
         // Need Address Size Override Prefix?
-        if self.operands.iter().any(|op| match op {
+        if self.operands.iter().any(|op| {
+            matches!( op ,
             Operand::EffectiveAddress(EffectiveAddress {
                 base: Some(reg), ..
             })
             | Operand::EffectiveAddress(EffectiveAddress {
                 index_scale: Some((reg, _)),
                 ..
-            }) if reg.size() == Size::_32 => true,
-            _ => false,
+            }) if reg.size() == Size::_32 )
         }) {
             w.write_all(&[0x67])?;
         }
