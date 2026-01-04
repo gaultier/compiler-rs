@@ -119,20 +119,22 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
     }
 
     let mut symtab = Vec::with_capacity(encoding.fn_name_to_location.len() + 1);
-    symtab.push(Symtab::default());
-    symtab.extend(
-        encoding
-            .fn_name_to_location
-            .iter()
-            .map(|(name, loc)| Symtab {
-                name: *string_indexes.get(name.as_str()).unwrap(),
-                info: 0,          // TODO
-                other: 0,         // TODO
-                section_index: 1, // .text
-                value: *loc as u64 + vm_start,
-                size: 0,
-            }),
-    );
+    {
+        symtab.push(Symtab::default());
+        symtab.extend(
+            encoding
+                .fn_name_to_location
+                .iter()
+                .map(|(name, loc)| Symtab {
+                    name: *string_indexes.get(name.as_str()).unwrap(),
+                    info: 0,                                          // TODO
+                    other: 0,                                         // TODO
+                    section_index: 1,                                 // .text
+                    value: *loc as u64 + vm_start + page_size as u64, // Absolute position.
+                    size: 0,
+                }),
+        );
+    }
     assert_eq!(std::mem::size_of::<Symtab>(), 24);
     assert!(!symtab.is_empty());
 
