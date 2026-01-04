@@ -2025,6 +2025,9 @@ impl Instruction {
                     // add rm32, imm32
                     // add rm64, imm32
                     (_, Operand::Immediate(imm)) if lhs.is_rm() && lhs.size() >= Size::_32 => {
+                        if *imm > i32::MAX as i64 {
+                            return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                        }
                         let imm = *imm as i32;
                         Instruction::encode_rex_from_operands(
                             w,
