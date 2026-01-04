@@ -39,6 +39,7 @@ enum SectionHeaderKind {
     #[default]
     Null = 0,
     Progbits = 1,
+    Symtab = 2,
     Strtab = 3,
 }
 
@@ -61,6 +62,17 @@ struct SectionHeader {
     info: u32,
     align: u64,
     entsize: u64,
+}
+
+#[derive(Default, Debug)]
+#[repr(C)]
+struct Symtab {
+    name: u32, // Name (string table index).
+    info: u8,  // Type and binding.
+    other: u8, // Visibility.
+    section_index: u16,
+    value: u64,
+    size: u64,
 }
 
 fn round_up(n: usize, rnd: usize) -> usize {
@@ -86,6 +98,7 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
         c"".into(),
         c".shstrtab".into(),
         c".text".into(),
+        c".symtab".into(),
         //CStr::from_bytes_with_nul(b".data\0").unwrap(),
         //CStr::from_bytes_with_nul(b".rodata\0").unwrap(),
     ];
@@ -104,6 +117,21 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
             strings_size += s.to_bytes_with_nul().len();
         }
     }
+
+    let symtab = encoding
+        .fn_name_to_location
+        .iter()
+        .map(|(name, loc)| Symtab {
+            name: *string_indexes.get(name.as_str()).unwrap(),
+            info: 0,          // TODO
+            other: 0,         // TODO
+            section_index: 1, // .text
+            value: *loc as u64,
+            size: 0,
+        })
+        .collect::<Vec<Symtab>>();
+    assert_eq!(std::mem::size_of::<Symtab>(), 24);
+    assert!(!symtab.is_empty());
 
     let section_headers = [
         SectionHeader::default(), // null
@@ -129,7 +157,23 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
             align: 1,
             ..Default::default()
         },
+        // Symtab.
+        SectionHeader {
+            name: *string_indexes.get(".symtab").unwrap(),
+            kind: SectionHeaderKind::Symtab,
+            flags: 0,
+            addr: 0,
+            offset: page_size as u64
+                + round_up(encoding.instructions.len(), page_size) as u64
+                + strings_size as u64,
+            size: (symtab.len() * std::mem::size_of::<Symtab>()) as u64,
+            align: std::mem::align_of::<Symtab>() as u64,
+            entsize: std::mem::size_of::<Symtab>() as u64,
+            link: 2, // strings
+            info: 0,
+        },
     ];
+    dbg!(&section_headers);
 
     {
         // Magic.
@@ -182,7 +226,7 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
 
         // Section index in the section
         // header table.
-        let section_header_string_table_index = section_headers.len() as u16 - 1;
+        let section_header_string_table_index = 2u16;
         w.write_all(&section_header_string_table_index.to_le_bytes())?;
     }
     let mut written = 64;
