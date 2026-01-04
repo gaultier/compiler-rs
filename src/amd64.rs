@@ -2031,11 +2031,7 @@ impl Instruction {
                     // add rm32, imm32
                     // add rm64, imm32
                     (_, Operand::Immediate(imm)) if lhs.is_rm() && lhs.size() >= Size::_32 => {
-                        if (lhs.size() == Size::_32 && !imm_fits_in_4_bytes(*imm))
-                            || (lhs.size() == Size::_64 && !imm_fits_in_4_bytes_sign_extended(*imm))
-                        {
-                            return Err(io::Error::from(ErrorKind::InvalidData));
-                        }
+                        let imm = *imm as i32;
                         Instruction::encode_rex_from_operands(
                             w,
                             lhs.size() == Size::_64,
@@ -2049,7 +2045,7 @@ impl Instruction {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
 
-                        Instruction::encode_imm(w, *imm, &Size::_32)?;
+                        Instruction::encode_imm(w, imm as i64, &Size::_32)?;
                     }
                     // add rm, r
                     // Encoding: MR 	ModRM:r/m (r, w) 	ModRM:reg (r)
@@ -2958,6 +2954,25 @@ mod tests {
                     0xe8, 0xf5, 0xff, 0xff, 0xff // call println_u64
                 ]
             );
+        }
+        {
+            let ins = Instruction {
+                kind: InstructionKind::Add,
+                operands: vec![
+                    Operand::EffectiveAddress(EffectiveAddress {
+                        base: Some(Register::Ebx),
+                        index_scale: None,
+                        displacement: 0,
+                        size_override: Some(Size::_32),
+                    }),
+                    Operand::Immediate(4294967296),
+                ],
+                origin: Origin::new_unknown(),
+            };
+            let mut w = Vec::with_capacity(5);
+            let symbols = BTreeMap::new();
+            ins.encode(&mut w, &symbols).unwrap();
+            assert_eq!(&w, &[0x67, 0x81, 0x03, 0x00, 0x00, 0x00, 0x00]);
         }
         {
             let ins = Instruction {
