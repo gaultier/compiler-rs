@@ -1,7 +1,7 @@
 use std::{
     collections::BTreeMap,
     fmt::Display,
-    io::{self, ErrorKind, Write},
+    io::{self, Write},
     ops::Neg,
     panic,
 };
@@ -907,15 +907,6 @@ fn imm_fits_in_1_byte_sign_extended_to_size(imm: i64, size: Size) -> bool {
         }
         Size::_64 => imm == imm_sign_extend_8_to_64(imm),
     }
-}
-
-fn imm_fits_in_4_bytes(imm: i64) -> bool {
-    let n = imm as usize;
-    u32::MIN as usize <= n && n < u32::MAX as usize
-}
-
-fn imm_fits_in_4_bytes_sign_extended(_imm: i64) -> bool {
-    todo!()
 }
 
 impl Register {
@@ -1976,6 +1967,9 @@ impl Instruction {
                     }
                     // add rax, imm32
                     (Operand::Register(Register::Rax), Operand::Immediate(imm)) => {
+                        if *imm > i32::MAX as i64 {
+                            return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                        }
                         Instruction::encode_rex_from_operands(w, true, None, None, None)?;
                         w.write_all(&[0x05])?;
                         w.write_all(&(*imm as u32).to_le_bytes())?;
