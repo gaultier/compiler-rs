@@ -1628,7 +1628,13 @@ impl Instruction {
             let index = addr
                 .index_scale
                 .map(|(reg, _)| reg.to_3_bits())
-                .unwrap_or_default()
+                .unwrap_or_else(|| {
+                    assert!(addr.index_scale.is_none());
+                    assert_eq!(scale, 0);
+                    assert_eq!(addr.base, Some(Register::Rsp));
+
+                    0b100
+                })
                 << 3;
 
             let base = addr.base.map(|reg| reg.to_3_bits()).unwrap_or(0b101);
@@ -2796,6 +2802,25 @@ mod tests {
 
     #[test]
     fn test_encoding() {
+        {
+            let ins = Instruction {
+                kind: InstructionKind::Mov,
+                operands: vec![
+                    Operand::EffectiveAddress(EffectiveAddress {
+                        base: Some(Register::Rsp),
+                        index_scale: None,
+                        displacement: -8,
+                        size_override: None,
+                    }),
+                    Operand::Register(Register::Rdi),
+                ],
+                origin: Origin::new_unknown(),
+            };
+            let mut w = Vec::with_capacity(8);
+            let fn_name_to_location = BTreeMap::new();
+            ins.encode(&mut w, &fn_name_to_location).unwrap();
+            assert_eq!(&w, &[0x48, 0x89, 0x7c, 0x24, 0xf8]);
+        }
         {
             let ins = Instruction {
                 kind: InstructionKind::Mov,
