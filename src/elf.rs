@@ -170,7 +170,7 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
             align: std::mem::align_of::<Symtab>() as u64,
             entsize: std::mem::size_of::<Symtab>() as u64,
             link: 2, // strings
-            info: 0,
+            info: symtab.len() as u32,
         },
     ];
     dbg!(&section_headers);
@@ -201,7 +201,8 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
         // Section header table offset.
         let section_header_table_offset = page_size as u64
             + round_up(encoding.instructions.len(), page_size) as u64
-            + strings_size as u64;
+            + strings_size as u64
+            + (symtab.len() * std::mem::size_of::<Symtab>()) as u64;
         w.write_all(&section_header_table_offset.to_le_bytes())?;
 
         // Flags.
@@ -258,6 +259,15 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
     // Strings.
     for s in &strings {
         w.write_all(s.to_bytes_with_nul())?;
+    }
+
+    for s in &symtab {
+        w.write_all(unsafe {
+            std::slice::from_raw_parts(
+                s as *const Symtab as *const u8,
+                std::mem::size_of::<Symtab>(),
+            )
+        })?;
     }
 
     // Section headers.
