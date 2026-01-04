@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::ffi::CString;
 use std::fs::OpenOptions;
 use std::io::Write;
+#[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 
 use log::trace;

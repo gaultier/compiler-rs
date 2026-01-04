@@ -7,8 +7,12 @@ use std::{
 };
 
 use log::{error, trace};
+
+#[cfg(test)]
 use proptest::proptest;
+#[cfg(test)]
 use proptest_derive::Arbitrary;
+
 use serde::Serialize;
 
 use crate::{
@@ -19,7 +23,8 @@ use crate::{
     type_checker::Size,
 };
 
-#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Arbitrary)]
+#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(test, derive(Arbitrary))]
 pub enum Scale {
     _1 = 1,
     _2 = 2,
@@ -27,7 +32,8 @@ pub enum Scale {
     _8 = 8,
 }
 
-#[derive(Serialize, Debug, Clone, Copy, Arbitrary)]
+#[derive(Serialize, Debug, Clone, Copy)]
+#[cfg_attr(test, derive(Arbitrary))]
 pub struct EffectiveAddress {
     base: Option<Register>,
     index_scale: Option<(Register, Scale)>,
@@ -35,13 +41,14 @@ pub struct EffectiveAddress {
     size_override: Option<Size>,
 }
 
-#[derive(Serialize, Debug, Clone, Arbitrary)]
+#[derive(Serialize, Debug, Clone)]
+#[cfg_attr(test, derive(Arbitrary))]
 pub enum Operand {
     Register(Register),
     Immediate(i64),
     EffectiveAddress(EffectiveAddress),
     // For now.
-    #[proptest(skip)]
+    #[cfg_attr(test, proptest(skip))]
     FnName(String),
 }
 
@@ -52,7 +59,8 @@ pub struct Instruction {
     pub origin: Origin,
 }
 
-#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Arbitrary)]
+#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(test, derive(Arbitrary))]
 #[repr(u8)]
 pub enum Register {
     Al,
@@ -415,7 +423,8 @@ pub(crate) fn abi() -> Abi {
     }
 }
 
-#[derive(Serialize, Debug, Clone, Copy, Arbitrary, PartialEq, Eq)]
+#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(test, derive(Arbitrary))]
 #[allow(non_camel_case_types)]
 #[repr(u16)]
 pub enum InstructionKind {
@@ -425,7 +434,7 @@ pub enum InstructionKind {
     IDiv,
     Lea,
     // For now. Need basic linker to compute the relative displacement.
-    #[proptest(skip)]
+    #[cfg_attr(test, proptest(skip))]
     Call,
     Push,
     Pop,

@@ -18,3 +18,10 @@ crate-type = ["cdylib","lib"]
 [profile.release]
 lto = true
 panic = "abort"
+
+
+[profile.test.package.proptest]
+opt-level = 3
+
+[profile.test.package.rand_chacha]
+opt-level = 3

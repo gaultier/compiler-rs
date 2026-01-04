@@ -1,6 +1,8 @@
 use std::fmt::Display;
 
+#[cfg(test)]
 use proptest_derive::Arbitrary;
+
 use serde::Serialize;
 
 use crate::{ast::Node, error::Error, origin::Origin};
@@ -14,7 +16,8 @@ pub enum TypeKind {
     Function(Type, Vec<Type>),
 }
 
-#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Arbitrary)]
+#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(test, derive(Arbitrary))]
 pub enum Size {
     _8,
     _16,

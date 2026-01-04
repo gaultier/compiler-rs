@@ -27,7 +27,7 @@ use crate::{
 #[cfg(target_arch = "wasm32")]
 mod wasm32 {
     use crate::{
-        asm::{self, ArchKind},
+        asm::{ArchKind, Encoding},
         ast::Node,
         error::Error,
         ir::{self, Instruction, LiveRanges},
@@ -138,8 +138,6 @@ mod wasm32 {
             ir_live_ranges: compiled.ir_live_ranges,
             ir_eval: compiled.ir_eval,
             vreg_to_memory_location: compiled.vreg_to_memory_location,
-            asm_instructions: compiled.asm_instructions,
-            asm_text: compiled.asm_text,
             asm_encoded: compiled.asm_encoded,
             asm_eval: compiled.asm_eval.into_iter().collect(),
         };
@@ -163,9 +161,7 @@ mod wasm32 {
         pub ir_live_ranges: LiveRanges,
         pub ir_eval: ir::EvalResult,
         pub vreg_to_memory_location: RegisterMapping,
-        pub asm_instructions: Vec<asm::Instruction>,
-        pub asm_text: String,
-        pub asm_encoded: Vec<u8>,
+        pub asm_encoded: Encoding,
         pub asm_eval: Vec<(MemoryLocation, ir::EvalValue)>,
     }
 }
