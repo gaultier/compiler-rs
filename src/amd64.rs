@@ -2913,6 +2913,7 @@ mod tests {
                 Symbol {
                     location: w.len(),
                     visibility: asm::Visibility::Local,
+                    origin: Origin::new_builtin(),
                 },
             );
             {
