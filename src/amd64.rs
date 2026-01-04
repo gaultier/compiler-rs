@@ -12,7 +12,7 @@ use proptest_derive::Arbitrary;
 use serde::Serialize;
 
 use crate::{
-    asm::{self, Abi, EvalResult, Stack},
+    asm::{self, Abi, Encoding, EvalResult, Stack},
     ir::{self, EvalValue, EvalValueKind},
     origin::Origin,
     register_alloc::{MemoryLocation, RegisterMapping},
@@ -223,7 +223,7 @@ impl Display for Operand {
     }
 }
 
-pub(crate) fn encode(instructions: &[asm::Instruction]) -> (Vec<u8>, usize) {
+pub(crate) fn encode(instructions: &[asm::Instruction]) -> Encoding {
     let mut w = Vec::with_capacity(instructions.len() * 5);
     let mut fn_name_to_location = BTreeMap::new();
 
@@ -237,6 +237,10 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> (Vec<u8>, usize) {
         0x41, 0xb8, 0x01, 0x00, 0x00, 0x00, // mov r8d, 1
         0x41, 0xc6, 0x01, 0x0a, // mov BYTE PTR [r9], 0x0a ; '\n'
         0x48, 0x89, 0xf8, // mov rax, rdi
+    ]);
+
+    fn_name_to_location.insert(String::from("println_u64.loop"), w.len());
+    w.extend_from_slice(&[
         // .loop:
         0x48, 0x83, 0xf8, 0x00, // cmp rax, 0x00
         0x74, 0x1a, // je 3f
@@ -248,6 +252,10 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> (Vec<u8>, usize) {
         0x41, 0x88, 0x11, // mov BYTE PTR [r9], dl
         0x49, 0xff, 0xc0, // inc r8
         0xeb, 0xe0, // jmp r8
+    ]);
+
+    fn_name_to_location.insert(String::from("println_u64.end"), w.len());
+    w.extend_from_slice(&[
         // .end:
         0xb8, 0x01, 0x00, 0x00, 0x00, // mov eax, 0x1; SYSCALL_WRITE_LINUX
         0xbf, 0x01, 0x00, 0x00, 0x00, // mov edi, 1; STDOUT
@@ -269,6 +277,7 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> (Vec<u8>, usize) {
 
     // Entrypoint.
     let entrypoint = w.len();
+    fn_name_to_location.insert(String::from("_start"), w.len());
     {
         let ins_call = Instruction {
             kind: InstructionKind::Call,
@@ -304,7 +313,11 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> (Vec<u8>, usize) {
         ins_syscall.encode(&mut w, &fn_name_to_location).unwrap();
     }
 
-    (w, entrypoint)
+    Encoding {
+        instructions: w,
+        entrypoint,
+        fn_name_to_location,
+    }
 }
 
 impl Scale {

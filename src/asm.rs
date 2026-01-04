@@ -43,6 +43,13 @@ pub enum Instruction {
     // TODO
 }
 
+#[derive(Serialize, Debug, Default)]
+pub struct Encoding {
+    pub instructions: Vec<u8>,
+    pub entrypoint: usize,
+    pub fn_name_to_location: BTreeMap<String, usize>,
+}
+
 pub type EvalResult = BTreeMap<MemoryLocation, ir::EvalValue>;
 
 impl Display for Register {
@@ -70,7 +77,7 @@ pub(crate) fn abi(target_arch: &ArchKind) -> Abi {
     }
 }
 
-pub(crate) fn encode(instructions: &[Instruction], target_arch: &ArchKind) -> (Vec<u8>, usize) {
+pub(crate) fn encode(instructions: &[Instruction], target_arch: &ArchKind) -> Encoding {
     match target_arch {
         ArchKind::Amd64 => amd64::encode(instructions),
     }

@@ -1,9 +1,12 @@
 use std::collections::BTreeMap;
+use std::ffi::CString;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
 
 use log::trace;
+
+use crate::asm::Encoding;
 
 #[derive(Debug)]
 #[repr(u32)]
@@ -64,7 +67,7 @@ fn round_up(n: usize, rnd: usize) -> usize {
     (n + (rnd - 1)) & !(rnd - 1)
 }
 
-pub fn write<W: Write>(w: &mut W, asm_encoded: &[u8], entrypoint: usize) -> std::io::Result<()> {
+pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
     let page_size: usize = 4 * 1024; // FIXME
     let vm_start = 1 << 22;
 
@@ -74,18 +77,24 @@ pub fn write<W: Write>(w: &mut W, asm_encoded: &[u8], entrypoint: usize) -> std:
         p_offset: 0,
         p_vaddr: vm_start,
         p_paddr: vm_start,
-        p_filesz: page_size as u64 + asm_encoded.len() as u64,
-        p_memsz: page_size as u64 + asm_encoded.len() as u64,
+        p_filesz: page_size as u64 + encoding.instructions.len() as u64,
+        p_memsz: page_size as u64 + encoding.instructions.len() as u64,
         alignment: page_size as u64,
     }];
 
-    let strings = [
-        c"",
-        c".shstrtab",
-        c".text",
+    let mut strings: Vec<CString> = vec![
+        c"".into(),
+        c".shstrtab".into(),
+        c".text".into(),
         //CStr::from_bytes_with_nul(b".data\0").unwrap(),
         //CStr::from_bytes_with_nul(b".rodata\0").unwrap(),
     ];
+    strings.extend(
+        encoding
+            .fn_name_to_location
+            .keys()
+            .map(|s| CString::new(s.as_bytes()).unwrap()),
+    );
 
     let mut string_indexes = BTreeMap::new();
     let mut strings_size = 0;
@@ -105,7 +114,7 @@ pub fn write<W: Write>(w: &mut W, asm_encoded: &[u8], entrypoint: usize) -> std:
             flags: SectionHeaderFlag::Execinstr as u64 | SectionHeaderFlag::Alloc as u64,
             addr: vm_start + page_size as u64,
             offset: page_size as u64,
-            size: asm_encoded.len() as u64,
+            size: encoding.instructions.len() as u64,
             align: 16,
             ..Default::default()
         },
@@ -115,7 +124,7 @@ pub fn write<W: Write>(w: &mut W, asm_encoded: &[u8], entrypoint: usize) -> std:
             kind: SectionHeaderKind::Strtab,
             flags: 0,
             addr: 0,
-            offset: page_size as u64 + round_up(asm_encoded.len(), page_size) as u64,
+            offset: page_size as u64 + round_up(encoding.instructions.len(), page_size) as u64,
             size: strings_size as u64,
             align: 1,
             ..Default::default()
@@ -139,15 +148,16 @@ pub fn write<W: Write>(w: &mut W, asm_encoded: &[u8], entrypoint: usize) -> std:
 
         // Program entry offset.
         let program_entry_offset =
-            program_headers[0].p_vaddr + page_size as u64 + entrypoint as u64;
+            program_headers[0].p_vaddr + page_size as u64 + encoding.entrypoint as u64;
         w.write_all(&program_entry_offset.to_le_bytes())?;
         // Program header table offset.
         let elf_header_size = 64u64;
         w.write_all(&elf_header_size.to_le_bytes())?;
 
         // Section header table offset.
-        let section_header_table_offset =
-            page_size as u64 + round_up(asm_encoded.len(), page_size) as u64 + strings_size as u64;
+        let section_header_table_offset = page_size as u64
+            + round_up(encoding.instructions.len(), page_size) as u64
+            + strings_size as u64;
         w.write_all(&section_header_table_offset.to_le_bytes())?;
 
         // Flags.
@@ -194,10 +204,10 @@ pub fn write<W: Write>(w: &mut W, asm_encoded: &[u8], entrypoint: usize) -> std:
     }
 
     // Text.
-    w.write_all(asm_encoded)?;
+    w.write_all(&encoding.instructions)?;
 
     // Pad.
-    for _ in asm_encoded.len()..round_up(asm_encoded.len(), page_size) {
+    for _ in encoding.instructions.len()..round_up(encoding.instructions.len(), page_size) {
         w.write_all(&[0])?;
     }
 
@@ -218,11 +228,7 @@ pub fn write<W: Write>(w: &mut W, asm_encoded: &[u8], entrypoint: usize) -> std:
     Ok(())
 }
 
-pub fn write_to_file(
-    asm_encoded: &[u8],
-    file_name: &str,
-    entrypoint: usize,
-) -> std::io::Result<()> {
+pub fn write_to_file(file_name: &str, encoding: &Encoding) -> std::io::Result<()> {
     let mut opts = OpenOptions::new();
     opts.create(true).write(true);
     #[cfg(unix)]
@@ -231,5 +237,5 @@ pub fn write_to_file(
     let mut file = opts.open(file_name)?;
     trace!("elf: action=write file={}", file_name);
 
-    write(&mut file, asm_encoded, entrypoint)
+    write(&mut file, encoding)
 }

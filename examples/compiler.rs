@@ -87,9 +87,7 @@ fn main() {
     };
 
     match target_os {
-        Os::Linux => {
-            elf::write_to_file(&compiled.asm_encoded, "hello.bin", compiled.entrypoint).unwrap()
-        }
+        Os::Linux => elf::write_to_file("hello.bin", &compiled.asm_encoded).unwrap(),
         Os::MacOS => todo!(),
     };
 }

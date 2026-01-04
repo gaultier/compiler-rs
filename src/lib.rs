@@ -14,7 +14,7 @@ use std::{collections::BTreeMap, fmt::Write};
 use log::trace;
 
 use crate::{
-    asm::ArchKind,
+    asm::{ArchKind, Encoding},
     ast::{Node, Parser},
     error::Error,
     ir::{Instruction, LiveRanges, VirtualRegister},
@@ -182,9 +182,8 @@ pub struct CompileResult {
     pub vreg_to_memory_location: RegisterMapping,
     pub asm_instructions: Vec<asm::Instruction>,
     pub asm_text: String,
-    pub asm_encoded: Vec<u8>,
+    pub asm_encoded: Encoding,
     pub asm_eval: asm::EvalResult,
-    pub entrypoint: usize,
 }
 
 pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileResult {
@@ -250,7 +249,7 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
     }
     trace!("asm_text: {}", asm_text);
 
-    let (asm_encoded, entrypoint) = asm::encode(&asm_instructions, &target_arch);
+    let encoding = asm::encode(&asm_instructions, &target_arch);
 
     let asm_eval = asm::eval(&asm_instructions);
     trace!("asm_eval: {:#?}", asm_eval);
@@ -266,9 +265,8 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
         vreg_to_memory_location,
         asm_instructions,
         asm_text,
-        asm_encoded,
+        asm_encoded: encoding,
         asm_eval,
-        entrypoint,
     }
 }
 
