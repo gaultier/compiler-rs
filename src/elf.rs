@@ -75,6 +75,25 @@ struct Symtab {
     size: u64,
 }
 
+#[derive(Copy, Clone)]
+#[repr(u8)]
+enum SymbolKind {
+    None = 0,
+    Func = 2,
+    File = 4,
+}
+
+#[derive(Copy, Clone)]
+#[repr(u8)]
+enum SymbolBinding {
+    Local = 0,
+    Global = 1,
+}
+
+fn make_symtab_info(kind: SymbolKind, binding: SymbolBinding) -> u8 {
+    ((binding as u8) << 4) | ((kind as u8) & 0xf)
+}
+
 fn round_up(n: usize, rnd: usize) -> usize {
     (n + (rnd - 1)) & !(rnd - 1)
 }
@@ -127,7 +146,7 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
                 .iter()
                 .map(|(name, loc)| Symtab {
                     name: *string_indexes.get(name.as_str()).unwrap(),
-                    info: 0,                                          // TODO
+                    info: make_symtab_info(SymbolKind::Func, SymbolBinding::Local),
                     other: 0,                                         // TODO
                     section_index: 1,                                 // .text
                     value: *loc as u64 + vm_start + page_size as u64, // Absolute position.
