@@ -157,7 +157,7 @@
             }
 
             const asm_dom = document.getElementById("asm");
-            asm_dom.innerText = res.asm_text;
+            asm_dom.innerText = res.asm_encoded.instructions;
 
             const asm_eval_dom = document.getElementById("asm_eval");
             asm_eval_dom.innerText = "";
