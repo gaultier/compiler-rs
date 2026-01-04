@@ -1739,7 +1739,9 @@ impl Instruction {
                         w.write_all(&[0xB8 | reg.to_3_bits()])?;
                         Instruction::encode_imm(w, *imm, &Size::_32)?;
                     }
-                    (Operand::Register(reg), Operand::Immediate(imm)) if reg.is_64_bits() => {
+                    (Operand::Register(reg), Operand::Immediate(imm))
+                        if reg.is_64_bits() && *imm > i32::MAX as i64 =>
+                    {
                         Instruction::encode_rex_from_operands(w, true, None, None, Some(lhs))?;
                         w.write_all(&[0xB8 | reg.to_3_bits()])?;
                         Instruction::encode_imm(w, *imm, &Size::_64)?;
@@ -1868,12 +1870,15 @@ impl Instruction {
                         w.write_all(&[0xC7, modrm])?;
                         Instruction::encode_imm(w, *imm, &Size::_32)?;
                     }
-                    (_, Operand::Immediate(imm)) if lhs.is_rm() && lhs.size() == Size::_64 => {
+                    // mov r/m64, imm32
+                    (_, Operand::Immediate(imm))
+                        if lhs.is_rm() && lhs.size() == Size::_64 && *imm <= i32::MAX as i64 =>
+                    {
                         Instruction::encode_rex_from_operands(w, true, Some(lhs), None, None)?;
 
                         let modrm = Instruction::encode_modrm(ModRmEncoding::Slash0, lhs, None);
                         w.write_all(&[0xC7, modrm])?;
-                        Instruction::encode_imm(w, *imm, &Size::_64)?;
+                        Instruction::encode_imm(w, *imm, &Size::_32)?;
                     }
 
                     _ => return Err(std::io::Error::from(io::ErrorKind::InvalidData)),
