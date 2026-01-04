@@ -1818,7 +1818,7 @@ impl Instruction {
                         let modrm =
                             Instruction::encode_modrm(ModRmEncoding::SlashR, rhs, Some(*reg));
                         w.write_all(&[0x8A, modrm])?;
-                        if let Some(addr) = lhs.as_effective_address() {
+                        if let Some(addr) = rhs.as_effective_address() {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
@@ -1837,7 +1837,7 @@ impl Instruction {
                         let modrm =
                             Instruction::encode_modrm(ModRmEncoding::SlashR, rhs, Some(*reg));
                         w.write_all(&[0x8B, modrm])?;
-                        if let Some(addr) = lhs.as_effective_address() {
+                        if let Some(addr) = rhs.as_effective_address() {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
@@ -1848,7 +1848,7 @@ impl Instruction {
                         let modrm =
                             Instruction::encode_modrm(ModRmEncoding::SlashR, rhs, Some(*reg));
                         w.write_all(&[0x8B, modrm])?;
-                        if let Some(addr) = lhs.as_effective_address() {
+                        if let Some(addr) = rhs.as_effective_address() {
                             Instruction::encode_sib(w, &addr, modrm)?;
                         }
                     }
@@ -2802,6 +2802,25 @@ mod tests {
 
     #[test]
     fn test_encoding() {
+        {
+            let ins = Instruction {
+                kind: InstructionKind::Mov,
+                operands: vec![
+                    Operand::Register(Register::Rdi),
+                    Operand::EffectiveAddress(EffectiveAddress {
+                        base: Some(Register::Rsp),
+                        index_scale: None,
+                        displacement: -8,
+                        size_override: None,
+                    }),
+                ],
+                origin: Origin::new_unknown(),
+            };
+            let mut w = Vec::with_capacity(8);
+            let fn_name_to_location = BTreeMap::new();
+            ins.encode(&mut w, &fn_name_to_location).unwrap();
+            assert_eq!(&w, &[0x48, 0x8b, 0x7c, 0x24, 0xf8]);
+        }
         {
             let ins = Instruction {
                 kind: InstructionKind::Mov,
