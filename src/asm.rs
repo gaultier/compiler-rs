@@ -9,6 +9,7 @@ use serde::Serialize;
 use crate::{
     amd64,
     ir::{self},
+    origin::Origin,
     register_alloc::{MemoryLocation, RegisterMapping},
 };
 
@@ -53,6 +54,7 @@ pub enum Visibility {
 pub struct Symbol {
     pub location: usize,
     pub visibility: Visibility,
+    pub origin: Origin,
 }
 
 #[derive(Serialize, Debug, Default)]

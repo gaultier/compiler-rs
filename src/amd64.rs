@@ -232,6 +232,7 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> Encoding {
         Symbol {
             location: w.len(),
             visibility: asm::Visibility::Local,
+            origin: Origin::new_builtin(),
         },
     );
 
@@ -250,6 +251,7 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> Encoding {
         Symbol {
             location: w.len(),
             visibility: asm::Visibility::Local,
+            origin: Origin::new_builtin(),
         },
     );
     w.extend_from_slice(&[
@@ -271,6 +273,7 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> Encoding {
         Symbol {
             location: w.len(),
             visibility: asm::Visibility::Local,
+            origin: Origin::new_builtin(),
         },
     );
     w.extend_from_slice(&[
@@ -292,6 +295,7 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> Encoding {
         Symbol {
             location: w.len(),
             visibility: asm::Visibility::Local,
+            origin: Origin::new_builtin(),
         },
     );
     for ins in instructions {
@@ -306,6 +310,7 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> Encoding {
         Symbol {
             location: w.len(),
             visibility: asm::Visibility::Global,
+            origin: Origin::new_builtin(),
         },
     );
     {
