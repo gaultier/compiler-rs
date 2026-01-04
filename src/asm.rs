@@ -43,11 +43,23 @@ pub enum Instruction {
     // TODO
 }
 
+#[derive(Serialize, Debug, Clone, Copy)]
+pub enum Visibility {
+    Local,
+    Global,
+}
+
+#[derive(Serialize, Debug, Clone, Copy)]
+pub struct Symbol {
+    pub location: usize,
+    pub visibility: Visibility,
+}
+
 #[derive(Serialize, Debug, Default)]
 pub struct Encoding {
     pub instructions: Vec<u8>,
     pub entrypoint: usize,
-    pub fn_name_to_location: BTreeMap<String, usize>,
+    pub symbols: BTreeMap<String, Symbol>,
 }
 
 pub type EvalResult = BTreeMap<MemoryLocation, ir::EvalValue>;

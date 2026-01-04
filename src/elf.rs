@@ -6,7 +6,7 @@ use std::os::unix::fs::OpenOptionsExt;
 
 use log::trace;
 
-use crate::asm::Encoding;
+use crate::asm::{Encoding, Visibility};
 
 #[derive(Debug)]
 #[repr(u32)]
@@ -90,6 +90,15 @@ enum SymbolBinding {
     Global = 1,
 }
 
+impl From<Visibility> for SymbolBinding {
+    fn from(value: Visibility) -> Self {
+        match value {
+            Visibility::Local => SymbolBinding::Local,
+            Visibility::Global => SymbolBinding::Global,
+        }
+    }
+}
+
 fn make_symtab_info(kind: SymbolKind, binding: SymbolBinding) -> u8 {
     ((binding as u8) << 4) | ((kind as u8) & 0xf)
 }
@@ -123,7 +132,7 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
     ];
     strings.extend(
         encoding
-            .fn_name_to_location
+            .symbols
             .keys()
             .map(|s| CString::new(s.as_bytes()).unwrap()),
     );
@@ -137,22 +146,17 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
         }
     }
 
-    let mut symtab = Vec::with_capacity(encoding.fn_name_to_location.len() + 1);
+    let mut symtab = Vec::with_capacity(encoding.symbols.len() + 1);
     {
         symtab.push(Symtab::default());
-        symtab.extend(
-            encoding
-                .fn_name_to_location
-                .iter()
-                .map(|(name, loc)| Symtab {
-                    name: *string_indexes.get(name.as_str()).unwrap(),
-                    info: make_symtab_info(SymbolKind::Func, SymbolBinding::Local),
-                    other: 0,                                         // TODO
-                    section_index: 1,                                 // .text
-                    value: *loc as u64 + vm_start + page_size as u64, // Absolute position.
-                    size: 0,
-                }),
-        );
+        symtab.extend(encoding.symbols.iter().map(|(name, sym)| Symtab {
+            name: *string_indexes.get(name.as_str()).unwrap(),
+            info: make_symtab_info(SymbolKind::Func, sym.visibility.into()),
+            other: 0,                                                 // TODO
+            section_index: 1,                                         // .text
+            value: sym.location as u64 + vm_start + page_size as u64, // Absolute position.
+            size: 0,
+        }));
     }
     assert_eq!(std::mem::size_of::<Symtab>(), 24);
     assert!(!symtab.is_empty());

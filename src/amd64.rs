@@ -12,7 +12,7 @@ use proptest_derive::Arbitrary;
 use serde::Serialize;
 
 use crate::{
-    asm::{self, Abi, Encoding, EvalResult, Stack},
+    asm::{self, Abi, Encoding, EvalResult, Stack, Symbol},
     ir::{self, EvalValue, EvalValueKind},
     origin::Origin,
     register_alloc::{MemoryLocation, RegisterMapping},
@@ -225,9 +225,15 @@ impl Display for Operand {
 
 pub(crate) fn encode(instructions: &[asm::Instruction]) -> Encoding {
     let mut w = Vec::with_capacity(instructions.len() * 5);
-    let mut fn_name_to_location = BTreeMap::new();
+    let mut symbols = BTreeMap::new();
 
-    fn_name_to_location.insert(String::from("println_u64"), w.len());
+    symbols.insert(
+        String::from("println_u64"),
+        Symbol {
+            location: w.len(),
+            visibility: asm::Visibility::Local,
+        },
+    );
 
     w.extend_from_slice(&[
         0x55, // push rbp
@@ -239,7 +245,13 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> Encoding {
         0x48, 0x89, 0xf8, // mov rax, rdi
     ]);
 
-    fn_name_to_location.insert(String::from("println_u64.loop"), w.len());
+    symbols.insert(
+        String::from("println_u64.loop"),
+        Symbol {
+            location: w.len(),
+            visibility: asm::Visibility::Local,
+        },
+    );
     w.extend_from_slice(&[
         // .loop:
         0x48, 0x83, 0xf8, 0x00, // cmp rax, 0x00
@@ -254,7 +266,13 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> Encoding {
         0xeb, 0xe0, // jmp r8
     ]);
 
-    fn_name_to_location.insert(String::from("println_u64.end"), w.len());
+    symbols.insert(
+        String::from("println_u64.end"),
+        Symbol {
+            location: w.len(),
+            visibility: asm::Visibility::Local,
+        },
+    );
     w.extend_from_slice(&[
         // .end:
         0xb8, 0x01, 0x00, 0x00, 0x00, // mov eax, 0x1; SYSCALL_WRITE_LINUX
@@ -269,22 +287,34 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> Encoding {
     ]);
 
     // main
-    fn_name_to_location.insert(String::from("main"), w.len());
+    symbols.insert(
+        String::from("main"),
+        Symbol {
+            location: w.len(),
+            visibility: asm::Visibility::Local,
+        },
+    );
     for ins in instructions {
         let asm::Instruction::Amd64(ins) = ins;
-        ins.encode(&mut w, &fn_name_to_location).unwrap();
+        ins.encode(&mut w, &symbols).unwrap();
     }
 
     // Entrypoint.
     let entrypoint = w.len();
-    fn_name_to_location.insert(String::from("_start"), w.len());
+    symbols.insert(
+        String::from("_start"),
+        Symbol {
+            location: w.len(),
+            visibility: asm::Visibility::Global,
+        },
+    );
     {
         let ins_call = Instruction {
             kind: InstructionKind::Call,
             operands: vec![Operand::FnName(String::from("main"))],
             origin: Origin::new_unknown(),
         };
-        ins_call.encode(&mut w, &fn_name_to_location).unwrap();
+        ins_call.encode(&mut w, &symbols).unwrap();
     }
 
     // Exit.
@@ -294,7 +324,7 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> Encoding {
             operands: vec![Operand::Register(Register::Eax), Operand::Immediate(60)], //FIXME
             origin: Origin::new_unknown(),
         };
-        ins_mov.encode(&mut w, &fn_name_to_location).unwrap();
+        ins_mov.encode(&mut w, &symbols).unwrap();
     }
     {
         let ins_mov = Instruction {
@@ -302,7 +332,7 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> Encoding {
             operands: vec![Operand::Register(Register::Edi), Operand::Immediate(0)],
             origin: Origin::new_unknown(),
         };
-        ins_mov.encode(&mut w, &fn_name_to_location).unwrap();
+        ins_mov.encode(&mut w, &symbols).unwrap();
     }
     {
         let ins_syscall = Instruction {
@@ -310,13 +340,13 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> Encoding {
             operands: vec![],
             origin: Origin::new_unknown(),
         };
-        ins_syscall.encode(&mut w, &fn_name_to_location).unwrap();
+        ins_syscall.encode(&mut w, &symbols).unwrap();
     }
 
     Encoding {
         instructions: w,
         entrypoint,
-        fn_name_to_location,
+        symbols,
     }
 }
 
@@ -1697,7 +1727,7 @@ impl Instruction {
     pub(crate) fn encode(
         &self,
         w: &mut Vec<u8>,
-        fn_name_to_location: &BTreeMap<String, usize>,
+        symbols: &BTreeMap<String, Symbol>,
     ) -> std::io::Result<()> {
         trace!("amd64: action=encode ins={}", self);
 
@@ -2276,11 +2306,12 @@ impl Instruction {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
                 let name = self.operands.first().unwrap().as_fn_name().unwrap();
-                let location = fn_name_to_location
+                let location = symbols
                     .get(name)
-                    .expect("function location not found");
+                    .expect("function location not found")
+                    .location;
                 let displacement = (w.len() + 5/* sizeof(call_ins_encoded) */)
-                    .checked_sub(*location)
+                    .checked_sub(location)
                     .unwrap() as isize;
                 let disp32 = i32::try_from(displacement.neg()).expect("function too far");
                 w.write_all(&[0xe8])?; // Call near.
@@ -2833,8 +2864,8 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(8);
-            let fn_name_to_location = BTreeMap::new();
-            ins.encode(&mut w, &fn_name_to_location).unwrap();
+            let symbols = BTreeMap::new();
+            ins.encode(&mut w, &symbols).unwrap();
             assert_eq!(&w, &[0x48, 0x8b, 0x7c, 0x24, 0xf8]);
         }
         {
@@ -2852,8 +2883,8 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(8);
-            let fn_name_to_location = BTreeMap::new();
-            ins.encode(&mut w, &fn_name_to_location).unwrap();
+            let symbols = BTreeMap::new();
+            ins.encode(&mut w, &symbols).unwrap();
             assert_eq!(&w, &[0x48, 0x89, 0x7c, 0x24, 0xf8]);
         }
         {
@@ -2863,30 +2894,36 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(8);
-            let fn_name_to_location = BTreeMap::new();
-            ins.encode(&mut w, &fn_name_to_location).unwrap();
+            let symbols = BTreeMap::new();
+            ins.encode(&mut w, &symbols).unwrap();
             assert_eq!(&w, &[0x48, 0xc7, 0xc0, 0x01, 0x00, 0x00, 0x00]);
         }
         {
             let mut w = Vec::with_capacity(15);
 
-            let mut fn_name_to_location = BTreeMap::new();
+            let mut symbols = BTreeMap::new();
 
-            fn_name_to_location.insert(String::from("println_u64"), w.len());
+            symbols.insert(
+                String::from("println_u64"),
+                Symbol {
+                    location: w.len(),
+                    visibility: asm::Visibility::Local,
+                },
+            );
             {
                 let ins_mov = Instruction {
                     kind: InstructionKind::Mov,
                     operands: vec![Operand::Register(Register::Edx), Operand::Immediate(1)],
                     origin: Origin::new_unknown(),
                 };
-                ins_mov.encode(&mut w, &fn_name_to_location).unwrap();
+                ins_mov.encode(&mut w, &symbols).unwrap();
 
                 let ins_ret = Instruction {
                     kind: InstructionKind::Ret,
                     operands: vec![],
                     origin: Origin::new_unknown(),
                 };
-                ins_ret.encode(&mut w, &fn_name_to_location).unwrap();
+                ins_ret.encode(&mut w, &symbols).unwrap();
             }
 
             {
@@ -2895,7 +2932,7 @@ mod tests {
                     operands: vec![Operand::FnName(String::from("println_u64"))],
                     origin: Origin::new_unknown(),
                 };
-                ins_call.encode(&mut w, &fn_name_to_location).unwrap();
+                ins_call.encode(&mut w, &symbols).unwrap();
             }
 
             assert_eq!(
@@ -2914,8 +2951,8 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(5);
-            let fn_name_to_location = BTreeMap::new();
-            ins.encode(&mut w, &fn_name_to_location).unwrap();
+            let symbols = BTreeMap::new();
+            ins.encode(&mut w, &symbols).unwrap();
             assert_eq!(&w, &[0x66, 0x83, 0xc3, 0x00]);
         }
         {
@@ -2930,8 +2967,8 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(15);
-            let fn_name_to_location = BTreeMap::new();
-            ins.encode(&mut w, &fn_name_to_location).unwrap();
+            let symbols = BTreeMap::new();
+            ins.encode(&mut w, &symbols).unwrap();
             assert_eq!(&w, &[0x67, 0xf6, 0xab, 0x7f, 0xff, 0xff, 0xff]);
         }
         {
@@ -2946,8 +2983,8 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(5);
-            let fn_name_to_location = BTreeMap::new();
-            ins.encode(&mut w, &fn_name_to_location).unwrap();
+            let symbols = BTreeMap::new();
+            ins.encode(&mut w, &symbols).unwrap();
             assert_eq!(&w, &[0x67, 0xff, 0x73, 0x01]);
         }
         {
@@ -2962,8 +2999,8 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(5);
-            let fn_name_to_location = BTreeMap::new();
-            ins.encode(&mut w, &fn_name_to_location).unwrap();
+            let symbols = BTreeMap::new();
+            ins.encode(&mut w, &symbols).unwrap();
             assert_eq!(&w, &[0x67, 0xff, 0x33]);
         }
         {
@@ -2978,8 +3015,8 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(5);
-            let fn_name_to_location = BTreeMap::new();
-            ins.encode(&mut w, &fn_name_to_location).unwrap();
+            let symbols = BTreeMap::new();
+            ins.encode(&mut w, &symbols).unwrap();
             assert_eq!(&w, &[0x67, 0xff, 0x33]);
         }
         {
@@ -2994,8 +3031,8 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(5);
-            let fn_name_to_location = BTreeMap::new();
-            ins.encode(&mut w, &fn_name_to_location).unwrap();
+            let symbols = BTreeMap::new();
+            ins.encode(&mut w, &symbols).unwrap();
             assert_eq!(&w, &[0x67, 0x66, 0xff, 0x34, 0x5d, 0, 0, 0, 0]);
         }
         {
@@ -3005,8 +3042,8 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(2);
-            let fn_name_to_location = BTreeMap::new();
-            ins.encode(&mut w, &fn_name_to_location).unwrap();
+            let symbols = BTreeMap::new();
+            ins.encode(&mut w, &symbols).unwrap();
             assert_eq!(&w, &[0x41, 0x57]);
         }
 
@@ -3017,8 +3054,8 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(2);
-            let fn_name_to_location = BTreeMap::new();
-            ins.encode(&mut w, &fn_name_to_location).unwrap();
+            let symbols = BTreeMap::new();
+            ins.encode(&mut w, &symbols).unwrap();
             assert_eq!(&w, &[0x5b]);
         }
 
@@ -3037,8 +3074,8 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(5);
-            let fn_name_to_location = BTreeMap::new();
-            ins.encode(&mut w, &fn_name_to_location).unwrap();
+            let symbols = BTreeMap::new();
+            ins.encode(&mut w, &symbols).unwrap();
             assert_eq!(&w, &[0x4f, 0x8d, 0x44, 0xf5, 0x2a]);
         }
         {
@@ -3053,8 +3090,8 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(5);
-            let fn_name_to_location = BTreeMap::new();
-            ins.encode(&mut w, &fn_name_to_location).unwrap();
+            let symbols = BTreeMap::new();
+            ins.encode(&mut w, &symbols).unwrap();
             assert_eq!(&w, &[0x41, 0xff, 0x74, 0x9c, 0x01]);
         }
         {
@@ -3069,8 +3106,8 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(5);
-            let fn_name_to_location = BTreeMap::new();
-            ins.encode(&mut w, &fn_name_to_location).unwrap();
+            let symbols = BTreeMap::new();
+            ins.encode(&mut w, &symbols).unwrap();
             assert_eq!(&w, &[0x41, 0x8f, 0x44, 0x9c, 0x01]);
         }
         {
@@ -3085,8 +3122,8 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(5);
-            let fn_name_to_location = BTreeMap::new();
-            ins.encode(&mut w, &fn_name_to_location).unwrap();
+            let symbols = BTreeMap::new();
+            ins.encode(&mut w, &symbols).unwrap();
             assert_eq!(&w, &[0x49, 0xf7, 0x7c, 0x9c, 0x01]);
         }
         {
@@ -3099,8 +3136,8 @@ mod tests {
                 origin: Origin::new_unknown(),
             };
             let mut w = Vec::with_capacity(5);
-            let fn_name_to_location = BTreeMap::new();
-            ins.encode(&mut w, &fn_name_to_location).unwrap();
+            let symbols = BTreeMap::new();
+            ins.encode(&mut w, &symbols).unwrap();
             assert_eq!(&w, &[0x48, 0x89, 0xe5]);
         }
     }
@@ -3183,8 +3220,8 @@ mod tests {
           if !has_invalid_addresses {
             let mut actual = Vec::with_capacity(15);
 
-            let fn_name_to_location = BTreeMap::new();
-            match (ins.encode(&mut actual, &fn_name_to_location), oracle_encode(&ins)) {
+            let symbols = BTreeMap::new();
+            match (ins.encode(&mut actual, &symbols), oracle_encode(&ins)) {
                 (Ok(()), Ok(expected)) => assert_eq!(actual, expected, "ins={}, {:#?} actual={:x?} expected={:x?}", ins,ins, &actual, &expected),
                 (Err(_), Err(_)) => {},
                 (Ok(actual),Err((status, stdout, stderr))) => panic!("oracle and implementation disagree: actual={:#?} oracle_status={} oracle_stdout={} oracle_stderr={} ins={} {:#?}",actual,status,stdout, String::from_utf8_lossy(&stderr), ins,ins ),
