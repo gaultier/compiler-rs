@@ -168,6 +168,10 @@ impl EffectiveAddress {
                 ..
             } if reg.size() < Size::_32 || *reg == Register::Rsp => false,
 
+            EffectiveAddress {
+                base: Some(reg), ..
+            } if reg.size() < Size::_32 => false,
+
             // At least base or index must be present.
             EffectiveAddress {
                 base: None,
