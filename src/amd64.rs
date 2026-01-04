@@ -2350,15 +2350,23 @@ impl Instruction {
                 }
 
                 let op = self.operands.first().unwrap();
-                if op.size() != Size::_64 {
+                if op.size() == Size::_8 {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
                 match op {
-                    // pop r
+                    // pop r16
+                    // pop r32
+                    // pop r64
                     // Encoding: O 	opcode + rd (w)
                     Operand::Register(reg) => {
                         if reg.is_extended() {
-                            Instruction::encode_rex_from_operands(w, false, None, None, Some(op))?;
+                            Instruction::encode_rex_from_operands(
+                                w,
+                                reg.size() == Size::_64,
+                                None,
+                                None,
+                                Some(op),
+                            )?;
                         }
 
                         w.write_all(&[0x58 | reg.to_3_bits()])
