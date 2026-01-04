@@ -1800,9 +1800,7 @@ impl Instruction {
                         w.write_all(&[0xB8 | reg.to_3_bits()])?;
                         Instruction::encode_imm(w, *imm, &Size::_32)?;
                     }
-                    (Operand::Register(reg), Operand::Immediate(imm))
-                        if reg.is_64_bits() && *imm > i32::MAX as i64 =>
-                    {
+                    (Operand::Register(reg), Operand::Immediate(imm)) if reg.is_64_bits() => {
                         Instruction::encode_rex_from_operands(w, true, None, None, Some(lhs))?;
                         w.write_all(&[0xB8 | reg.to_3_bits()])?;
                         Instruction::encode_imm(w, *imm, &Size::_64)?;
