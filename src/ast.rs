@@ -611,7 +611,7 @@ mod tests {
         assert!(lexer.errors.is_empty());
 
         let mut parser = Parser::new(input, &lexer);
-        parser.parse();
+        parser.parse_expr();
 
         assert!(parser.errors.is_empty());
         let (builtins, _) = Parser::builtins(16);
@@ -636,7 +636,7 @@ mod tests {
         assert!(lexer.errors.is_empty());
 
         let mut parser = Parser::new(input, &lexer);
-        parser.parse();
+        parser.parse_expr();
 
         assert!(parser.errors.is_empty());
         let (builtins, _) = Parser::builtins(16);
