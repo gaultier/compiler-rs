@@ -357,12 +357,7 @@ impl<'a> Parser<'a> {
             });
         }
 
-        if self.match_kind(TokenKind::RightParen).is_none() {
-            self.add_error_with_explanation(
-                ErrorKind::ParseCallMissingRightParen,
-                self.current_or_last_token_origin().unwrap(),
-                String::from("missing right parenthesis after call"),
-            );
+        if !self.expect_token(TokenKind::RightParen, "function call") {
             return false;
         }
 
@@ -382,27 +377,13 @@ impl<'a> Parser<'a> {
             return false;
         }
 
-        if self.parse_expr() {
-            if self
-                .match_kind1_or_kind2(TokenKind::Newline, TokenKind::Eof)
-                .is_none()
-            {
-                let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
-                self.add_error_with_explanation(
-                    ErrorKind::MissingNewline,
-                    self.current_or_last_token_origin()
-                        .unwrap_or(self.nodes.last().unwrap().origin),
-                    format!(
-                        "a newline is expected after a statement but found: {:?}",
-                        found,
-                    ),
-                );
-                return false;
-            }
-            return true;
+        if !self.parse_expr() {return false;}
+
+        if !self.expect_token(TokenKind::Newline, "statement") {
+            return false;
         }
 
-        false
+        true
     }
 
     // Best effort to find the closest token when doing error reporting.
@@ -424,12 +405,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_package_clause(&mut self) -> bool {
-        if self.match_kind(TokenKind::KeywordPackage).is_none() {
-            self.add_error_with_explanation(
-                ErrorKind::MissingTopLevelPackage,
-                self.current_or_last_token_origin().unwrap(),
-                String::from("a file must start with a package clause but none was found"),
-            );
+        if !self.expect_token(TokenKind::KeywordPackage, "package clause") {
             return false;
         }
 
@@ -453,11 +429,87 @@ impl<'a> Parser<'a> {
             typ: Type::new_void(),
         });
 
+        if !self.expect_token(TokenKind::Newline, "package clause") {
+            return false;
+        }
+
+
         true
     }
 
     fn str_from_source(src: &'a str, origin: &Origin) -> &'a str {
         &src[origin.offset as usize..origin.offset as usize + origin.len as usize]
+    }
+
+    fn expect_token(&mut self, token_kind: TokenKind, context: &str) -> bool {
+        if self.match_kind(token_kind).is_none() {
+            self.add_error_with_explanation(
+                ErrorKind::MissingExpected(token_kind),
+                self.current_or_last_token_origin().unwrap(),
+                format!("failed to parse {}: missing {:#?}", context, token_kind),
+            );
+            return false;
+        }
+        true
+    }
+
+    fn parse_function_declaration(&mut self) -> bool {
+        if !self.expect_token(TokenKind::KeywordFunc, "function declaration") {
+            return false;
+        }
+
+        let name = if let Some(name) = self.match_kind(TokenKind::Identifier) {
+            name
+        } else {
+            self.add_error_with_explanation(
+                ErrorKind::MissingExpected(TokenKind::Identifier),
+                self.current_or_last_token_origin().unwrap(),
+                String::from("failed to parse function declaration: missing function name"),
+            );
+            return false;
+        };
+
+        if !self.expect_token(TokenKind::LeftParen, "function declaration") {
+            return false;
+        }
+        // TODO: Args.
+        if !self.expect_token(TokenKind::RightParen, "function declaration") {
+            return false;
+        }
+        if !self.expect_token(TokenKind::LeftCurly, "function declaration") {
+            return false;
+        }
+
+        loop {
+            match self.peek_token() {
+                None
+                | Some(Token {
+                    kind: TokenKind::RightCurly,
+                    ..
+                }) => break,
+                _ => {}
+            }
+
+            if !self.parse_statement() {
+                return false;
+            }
+        }
+
+        if !self.expect_token(TokenKind::RightCurly, "function declaration") {
+            return false;
+        }
+
+        // self.nodes.push(value);
+
+        true
+    }
+
+    fn parse_declaration(&mut self) -> bool {
+        if self.parse_function_declaration() {
+            return true;
+        }
+
+        false
     }
 
     pub fn parse(&mut self) {
@@ -475,20 +527,20 @@ impl<'a> Parser<'a> {
             }
 
             match self.peek_token().map(|t| t.kind) {
-                None | Some(TokenKind::Eof) | Some(TokenKind::Newline) => {
+                None | Some(TokenKind::Eof) => {
                     return;
                 }
                 token => {
-                    if self.parse_statement() {
+                    if self.parse_declaration() {
                         continue;
                     }
 
                     // Catch-all.
                     self.add_error_with_explanation(
-                        ErrorKind::ParseStatement,
+                        ErrorKind::ParseDeclaration,
                         self.current_or_last_token_origin().unwrap(),
                         format!(
-                            "catch-all parse statement error: encountered unexpected token {:#?}",
+                            "catch-all parse declaration error: encountered unexpected token {:#?}",
                             token
                         ),
                     );

@@ -1,4 +1,6 @@
 package main
 
-println(1 + 3)
+func main(){
+	println(1 + 3)
+}
 

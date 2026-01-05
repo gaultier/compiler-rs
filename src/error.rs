@@ -3,6 +3,7 @@ use std::{collections::HashMap, io::Write};
 use serde::Serialize;
 
 use crate::{
+    lex::TokenKind,
     origin::{FileId, Origin},
     type_checker::Type,
 };
@@ -12,6 +13,8 @@ pub enum ErrorKind {
     UnknownToken,
     InvalidLiteralNumber,
     ParseStatement,
+    ParseDeclaration,
+    ParseFunctionDeclaration,
     MissingNewline,
     MissingTopLevelPackage,
     ParseTermMissingRhs,
@@ -21,6 +24,7 @@ pub enum ErrorKind {
     IncompatibleTypes,
     IncompatibleArgumentsCount,
     UnknownIdentifier,
+    MissingExpected(TokenKind),
 }
 
 #[derive(Serialize, Debug, Clone)]
