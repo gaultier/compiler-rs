@@ -170,7 +170,7 @@ impl Emitter {
 
                     // FIXME: Proper name resolution.
                     let fn_name = Operand {
-                        kind: OperandKind::Fn(String::from("println_u64")),
+                        kind: OperandKind::Fn(String::from("builtin.println_u64")),
                         typ: node.typ.clone(),
                     };
 
@@ -472,7 +472,7 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                     _ => panic!("invalid FnCall IR: {:#?}", ir.operands.first()),
                 };
                 match fn_name.as_str() {
-                    "println_u64" => {
+                    "builtin.println_u64" => {
                         for op in &ir.operands[1..] {
                             let val = match op.kind {
                                 OperandKind::VirtualRegister(vreg) => res.get(&vreg).unwrap(),

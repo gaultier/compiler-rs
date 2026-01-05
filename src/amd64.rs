@@ -240,7 +240,7 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> Encoding {
     let mut symbols = BTreeMap::new();
 
     symbols.insert(
-        String::from("println_u64"),
+        String::from("builtin.println_u64"),
         Symbol {
             location: w.len(),
             visibility: asm::Visibility::Local,
@@ -259,7 +259,7 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> Encoding {
     ]);
 
     symbols.insert(
-        String::from("println_u64.loop"),
+        String::from("builtin.println_u64.loop"),
         Symbol {
             location: w.len(),
             visibility: asm::Visibility::Local,
@@ -281,7 +281,7 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> Encoding {
     ]);
 
     symbols.insert(
-        String::from("println_u64.end"),
+        String::from("builtin.println_u64.end"),
         Symbol {
             location: w.len(),
             visibility: asm::Visibility::Local,
@@ -702,7 +702,7 @@ impl Emitter {
                     kind: ir::OperandKind::VirtualRegister(vreg),
                     ..
                 }),
-            ) if fn_name == "println_u64" => {
+            ) if fn_name == "builtin.println_u64" => {
                 let arg: Operand = vreg_to_memory_location.get(vreg).unwrap().into();
 
                 let spill_slot = self.find_free_spill_slot(&Size::_64);
@@ -2620,7 +2620,7 @@ impl Interpreter {
                         _ => panic!("invalid call"),
                     };
 
-                    if fn_name != "println_u64" {
+                    if fn_name != "builtin.println_u64" {
                         todo!()
                     }
 
@@ -2869,7 +2869,7 @@ mod tests {
             let mut symbols = BTreeMap::new();
 
             symbols.insert(
-                String::from("println_u64"),
+                String::from("builtin.println_u64"),
                 Symbol {
                     location: w.len(),
                     visibility: asm::Visibility::Local,
@@ -2895,7 +2895,7 @@ mod tests {
             {
                 let ins_call = Instruction {
                     kind: InstructionKind::Call,
-                    operands: vec![Operand::FnName(String::from("println_u64"))],
+                    operands: vec![Operand::FnName(String::from("builtin.println_u64"))],
                     origin: Origin::new_unknown(),
                 };
                 ins_call.encode(&mut w, &symbols).unwrap();

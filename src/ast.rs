@@ -71,7 +71,7 @@ impl<'a> Parser<'a> {
 
         nodes.push(Node {
             kind: NodeKind::FnDef,
-            data: Some(NodeData::String(String::from("println"))),
+            data: Some(NodeData::String(String::from("builtin.println"))),
             origin: Origin::new_builtin(),
             typ: Type::new_function(
                 &Type::new_void(),
@@ -79,7 +79,7 @@ impl<'a> Parser<'a> {
                 &Origin::new_builtin(),
             ),
         });
-        names.insert(String::from("println"), nodes.len() - 1);
+        names.insert(String::from("builtin.println"), nodes.len() - 1);
 
         (nodes, names)
     }
