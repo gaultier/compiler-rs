@@ -13,6 +13,7 @@ pub enum ErrorKind {
     InvalidLiteralNumber,
     ParseStatement,
     MissingNewline,
+    MissingTopLevelPackage,
     ParseTermMissingRhs,
     ParseFactorMissingRhs,
     ParseCallMissingRightParen,

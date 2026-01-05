@@ -138,6 +138,7 @@ impl Checker {
 
         for node in nodes {
             match node.kind {
+                crate::ast::NodeKind::Package => {}
                 crate::ast::NodeKind::FnDef => match &*node.typ.kind {
                     TypeKind::Function(ret_type, args) => {
                         assert_ne!(*ret_type.kind, TypeKind::Unknown);

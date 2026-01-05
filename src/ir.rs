@@ -107,6 +107,7 @@ impl Emitter {
 
         for node in nodes {
             match node.kind {
+                crate::ast::NodeKind::Package => {}
                 crate::ast::NodeKind::FnDef => {
                     // TODO.
                 }

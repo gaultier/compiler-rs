@@ -27,6 +27,7 @@ pub enum TokenKind {
     LeftParen,
     RightParen,
     Eof,
+    KeywordPackage,
     Unknown,
 }
 
@@ -83,6 +84,7 @@ impl Lexer {
         let lit = &input[origin.offset as usize..origin.offset as usize + len as usize];
         let kind = match lit {
             "true" | "false" => TokenKind::LiteralBool,
+            "package" => TokenKind::KeywordPackage,
             _ => TokenKind::Identifier,
         };
 

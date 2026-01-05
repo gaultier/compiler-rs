@@ -18,6 +18,7 @@ pub enum NodeKind {
     Identifier,
     FnCall,
     FnDef,
+    Package,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -422,7 +423,40 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_package_clause(&mut self) -> bool {
+        if self.match_kind(TokenKind::KeywordPackage).is_none() {
+            self.add_error_with_explanation(
+                ErrorKind::MissingTopLevelPackage,
+                self.current_or_last_token_origin().unwrap(),
+                String::from("a file must start with a package clause but none was found"),
+            );
+            return false;
+        }
+
+        let package = if let Some(p) = self.match_kind(TokenKind::Identifier) {
+            p
+        } else {
+            self.add_error_with_explanation(
+                ErrorKind::MissingTopLevelPackage,
+                self.current_or_last_token_origin().unwrap(),
+                String::from("the package keyword must be followed by a package name"),
+            );
+            return false;
+        };
+
+        self.nodes.push(Node {
+            kind: NodeKind::Package,
+            data: Some(NodeData::String(String::from("todo"))),
+            origin: package.origin,
+            typ: Type::new_void(),
+        });
+
+        true
+    }
+
     pub fn parse(&mut self) {
+        self.parse_package_clause();
+
         for _i in 0..self.tokens.len() {
             if self.peek_token().is_none() {
                 return;

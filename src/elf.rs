@@ -202,7 +202,6 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
             info: symtab.len() as u32,
         },
     ];
-    dbg!(&section_headers);
 
     {
         // Magic.
