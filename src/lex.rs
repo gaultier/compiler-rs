@@ -26,8 +26,11 @@ pub enum TokenKind {
     Newline,
     LeftParen,
     RightParen,
+    LeftCurly,
+    RightCurly,
     Eof,
     KeywordPackage,
+    KeywordFunc,
     Unknown,
 }
 
@@ -85,6 +88,7 @@ impl Lexer {
         let kind = match lit {
             "true" | "false" => TokenKind::LiteralBool,
             "package" => TokenKind::KeywordPackage,
+            "func" => TokenKind::KeywordFunc,
             _ => TokenKind::Identifier,
         };
 
@@ -184,6 +188,32 @@ impl Lexer {
                     };
                     self.tokens.push(Token {
                         kind: TokenKind::Slash,
+                        origin,
+                    });
+                    self.origin.offset += 1;
+                    self.origin.column += 1;
+                    it.next();
+                }
+                '{' => {
+                    let origin = Origin {
+                        len: 1,
+                        ..self.origin
+                    };
+                    self.tokens.push(Token {
+                        kind: TokenKind::LeftCurly,
+                        origin,
+                    });
+                    self.origin.offset += 1;
+                    self.origin.column += 1;
+                    it.next();
+                }
+                '}' => {
+                    let origin = Origin {
+                        len: 1,
+                        ..self.origin
+                    };
+                    self.tokens.push(Token {
+                        kind: TokenKind::RightCurly,
                         origin,
                     });
                     self.origin.offset += 1;
