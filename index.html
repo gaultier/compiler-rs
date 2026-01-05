@@ -121,6 +121,9 @@
                 if (node.data && node.data.Bool != null) {
                     node_dom.innerText += `(${node.data.Bool})`;
                 }
+                if (node.data && node.data.String != null) {
+                    node_dom.innerText += `(${node.data.String})`;
+                }
                 parse_dom.appendChild(node_dom);
             }
 
