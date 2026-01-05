@@ -446,12 +446,18 @@ impl<'a> Parser<'a> {
 
         self.nodes.push(Node {
             kind: NodeKind::Package,
-            data: Some(NodeData::String(String::from("todo"))),
+            data: Some(NodeData::String(
+                Self::str_from_source(&self.input, &package.origin).to_owned(),
+            )),
             origin: package.origin,
             typ: Type::new_void(),
         });
 
         true
+    }
+
+    fn str_from_source(src: &'a str, origin: &Origin) -> &'a str {
+        &src[origin.offset as usize..origin.offset as usize + origin.len as usize]
     }
 
     pub fn parse(&mut self) {
