@@ -95,10 +95,12 @@ impl<'a> Parser<'a> {
 
     // Used to avoid an avalanche of errors for the same line.
     fn skip_to_next_line(&mut self) {
+        let current_line = self.peek_token().map(|t| t.origin.line).unwrap_or(1);
+
         loop {
             match self.peek_token() {
                 None => return,
-                Some(t) if t.kind == TokenKind::Eof || t.kind == TokenKind::Newline => {
+                Some(t) if t.kind == TokenKind::Eof || t.origin.line > current_line => {
                     self.tokens_consumed += 1;
                     return;
                 }
@@ -123,10 +125,6 @@ impl<'a> Parser<'a> {
 
     fn match_kind(&mut self, kind: TokenKind) -> Option<Token> {
         match self.peek_token() {
-            Some(t) if t.is_whitespace() => {
-                self.tokens_consumed += 1;
-                self.match_kind(kind)
-            }
             Some(t) if t.kind == kind => {
                 let res = Some(*t);
                 self.tokens_consumed += 1;
@@ -211,6 +209,7 @@ impl<'a> Parser<'a> {
         if self.error_mode {
             return false;
         }
+        dbg!(self.peek_token());
 
         if self.parse_assignement() {
             return true;
@@ -357,7 +356,7 @@ impl<'a> Parser<'a> {
             });
         }
 
-        if !self.expect_token(TokenKind::RightParen, "function call") {
+        if !self.expect_token_exactly_one(TokenKind::RightParen, "function call") {
             return false;
         }
 
@@ -377,9 +376,7 @@ impl<'a> Parser<'a> {
             return false;
         }
 
-        if !self.parse_expr() {return false;}
-
-        if !self.expect_token(TokenKind::Newline, "statement") {
+        if !self.parse_expr() {
             return false;
         }
 
@@ -405,7 +402,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_package_clause(&mut self) -> bool {
-        if !self.expect_token(TokenKind::KeywordPackage, "package clause") {
+        if !self.expect_token_exactly_one(TokenKind::KeywordPackage, "package clause") {
             return false;
         }
 
@@ -429,11 +426,6 @@ impl<'a> Parser<'a> {
             typ: Type::new_void(),
         });
 
-        if !self.expect_token(TokenKind::Newline, "package clause") {
-            return false;
-        }
-
-
         true
     }
 
@@ -441,7 +433,11 @@ impl<'a> Parser<'a> {
         &src[origin.offset as usize..origin.offset as usize + origin.len as usize]
     }
 
-    fn expect_token(&mut self, token_kind: TokenKind, context: &str) -> bool {
+    fn remaining_tokens_count(&self) -> usize {
+        self.tokens.len() - self.tokens_consumed
+    }
+
+    fn expect_token_exactly_one(&mut self, token_kind: TokenKind, context: &str) -> bool {
         if self.match_kind(token_kind).is_none() {
             self.add_error_with_explanation(
                 ErrorKind::MissingExpected(token_kind),
@@ -454,11 +450,11 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_function_declaration(&mut self) -> bool {
-        if !self.expect_token(TokenKind::KeywordFunc, "function declaration") {
+        if !self.expect_token_exactly_one(TokenKind::KeywordFunc, "function declaration") {
             return false;
         }
 
-        let name = if let Some(name) = self.match_kind(TokenKind::Identifier) {
+        let _name = if let Some(name) = self.match_kind(TokenKind::Identifier) {
             name
         } else {
             self.add_error_with_explanation(
@@ -469,18 +465,18 @@ impl<'a> Parser<'a> {
             return false;
         };
 
-        if !self.expect_token(TokenKind::LeftParen, "function declaration") {
+        if !self.expect_token_exactly_one(TokenKind::LeftParen, "function declaration") {
             return false;
         }
         // TODO: Args.
-        if !self.expect_token(TokenKind::RightParen, "function declaration") {
+        if !self.expect_token_exactly_one(TokenKind::RightParen, "function declaration") {
             return false;
         }
-        if !self.expect_token(TokenKind::LeftCurly, "function declaration") {
+        if !self.expect_token_exactly_one(TokenKind::LeftCurly, "function declaration") {
             return false;
         }
 
-        loop {
+        for _ in 0..self.remaining_tokens_count() {
             match self.peek_token() {
                 None
                 | Some(Token {
@@ -495,7 +491,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        if !self.expect_token(TokenKind::RightCurly, "function declaration") {
+        if !self.expect_token_exactly_one(TokenKind::RightCurly, "function declaration") {
             return false;
         }
 

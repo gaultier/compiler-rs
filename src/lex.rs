@@ -16,14 +16,12 @@ pub struct Lexer {
 
 #[derive(PartialEq, Eq, Debug, Serialize, Copy, Clone)]
 pub enum TokenKind {
-    Whitespace,
     LiteralNumber,
     LiteralBool,
     Identifier,
     Plus,
     Star,
     Slash,
-    Newline,
     LeftParen,
     RightParen,
     LeftCurly,
@@ -146,10 +144,6 @@ impl Lexer {
                         len: 1,
                         ..self.origin
                     };
-                    self.tokens.push(Token {
-                        kind: TokenKind::Newline,
-                        origin,
-                    });
                     self.origin.offset += 1;
                     self.origin.column = 1;
                     self.origin.line += 1;
@@ -281,12 +275,6 @@ impl Lexer {
     }
 }
 
-impl Token {
-    pub(crate) fn is_whitespace(&self) -> bool {
-        self.kind == TokenKind::Whitespace || self.kind == TokenKind::Newline
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -297,7 +285,7 @@ mod tests {
         lexer.lex("123 4567\n 01");
 
         assert_eq!(lexer.errors.len(), 1);
-        assert_eq!(lexer.tokens.len(), 4);
+        assert_eq!(lexer.tokens.len(), 3);
 
         {
             let token = &lexer.tokens[0];
@@ -317,14 +305,6 @@ mod tests {
         }
         {
             let token = &lexer.tokens[2];
-            assert_eq!(token.kind, TokenKind::Newline);
-            assert_eq!(token.origin.offset, 8);
-            assert_eq!(token.origin.line, 1);
-            assert_eq!(token.origin.column, 9);
-            assert_eq!(token.origin.len, 1);
-        }
-        {
-            let token = &lexer.tokens[3];
             assert_eq!(token.kind, TokenKind::Eof);
         }
         {
