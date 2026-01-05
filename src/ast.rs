@@ -209,7 +209,6 @@ impl<'a> Parser<'a> {
         if self.error_mode {
             return false;
         }
-        dbg!(self.peek_token());
 
         if self.parse_assignement() {
             return true;
@@ -356,7 +355,10 @@ impl<'a> Parser<'a> {
             });
         }
 
-        if !self.expect_token_exactly_one(TokenKind::RightParen, "function call") {
+        if self
+            .expect_token_exactly_one(TokenKind::RightParen, "function call")
+            .is_none()
+        {
             return false;
         }
 
@@ -402,7 +404,10 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_package_clause(&mut self) -> bool {
-        if !self.expect_token_exactly_one(TokenKind::KeywordPackage, "package clause") {
+        if self
+            .expect_token_exactly_one(TokenKind::KeywordPackage, "package clause")
+            .is_none()
+        {
             return false;
         }
 
@@ -437,24 +442,29 @@ impl<'a> Parser<'a> {
         self.tokens.len() - self.tokens_consumed
     }
 
-    fn expect_token_exactly_one(&mut self, token_kind: TokenKind, context: &str) -> bool {
-        if self.match_kind(token_kind).is_none() {
+    fn expect_token_exactly_one(&mut self, token_kind: TokenKind, context: &str) -> Option<Token> {
+        if let Some(token) = self.match_kind(token_kind) {
+            Some(token)
+        } else {
             self.add_error_with_explanation(
                 ErrorKind::MissingExpected(token_kind),
                 self.current_or_last_token_origin().unwrap(),
                 format!("failed to parse {}: missing {:#?}", context, token_kind),
             );
-            return false;
+            return None;
         }
-        true
     }
 
     fn parse_function_declaration(&mut self) -> bool {
-        if !self.expect_token_exactly_one(TokenKind::KeywordFunc, "function declaration") {
+        let func = if let Some(func) =
+            self.expect_token_exactly_one(TokenKind::KeywordFunc, "function declaration")
+        {
+            func
+        } else {
             return false;
-        }
+        };
 
-        let _name = if let Some(name) = self.match_kind(TokenKind::Identifier) {
+        let name = if let Some(name) = self.match_kind(TokenKind::Identifier) {
             name
         } else {
             self.add_error_with_explanation(
@@ -465,14 +475,28 @@ impl<'a> Parser<'a> {
             return false;
         };
 
-        if !self.expect_token_exactly_one(TokenKind::LeftParen, "function declaration") {
+        if self
+            .expect_token_exactly_one(TokenKind::LeftParen, "function declaration")
+            .is_none()
+        {
             return false;
         }
+
         // TODO: Args.
-        if !self.expect_token_exactly_one(TokenKind::RightParen, "function declaration") {
+
+        if self
+            .expect_token_exactly_one(TokenKind::RightParen, "function declaration")
+            .is_none()
+        {
             return false;
         }
-        if !self.expect_token_exactly_one(TokenKind::LeftCurly, "function declaration") {
+
+        // TODO: Return type.
+
+        if self
+            .expect_token_exactly_one(TokenKind::LeftCurly, "function declaration")
+            .is_none()
+        {
             return false;
         }
 
@@ -491,11 +515,21 @@ impl<'a> Parser<'a> {
             }
         }
 
-        if !self.expect_token_exactly_one(TokenKind::RightCurly, "function declaration") {
+        if self
+            .expect_token_exactly_one(TokenKind::RightCurly, "function declaration")
+            .is_none()
+        {
             return false;
         }
 
-        // self.nodes.push(value);
+        self.nodes.push(Node {
+            kind: NodeKind::FnDef,
+            data: Some(NodeData::String(
+                Self::str_from_source(&self.input, &name.origin).to_owned(),
+            )),
+            origin: func.origin,
+            typ: Type::new_function(&Type::new_void(), &[], &func.origin), // TODO
+        });
 
         true
     }
