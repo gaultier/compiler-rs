@@ -185,6 +185,7 @@ impl Emitter {
         for (i, node) in nodes.iter().enumerate() {
             match node.kind {
                 crate::ast::NodeKind::Package => {}
+                // Start of a new function.
                 crate::ast::NodeKind::FnDef => {
                     fn_def.live_ranges = fn_def.compute_live_ranges();
                     return (fn_def, &nodes[i..]);
@@ -358,6 +359,7 @@ impl Emitter {
     pub fn emit(&mut self, nodes: &[Node]) {
         for _ in 0..nodes.len() {
             let (fn_def, remaining) = self.emit_fn_def(nodes);
+            dbg!(&fn_def);
             self.fn_defs.push(fn_def);
 
             if remaining.is_empty() {
