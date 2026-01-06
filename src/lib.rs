@@ -17,7 +17,7 @@ use crate::{
     asm::{ArchKind, Encoding},
     ast::{Node, Parser},
     error::Error,
-    ir::{Instruction, LiveRanges, VirtualRegister},
+    ir::VirtualRegister,
     lex::{Lexer, Token},
     origin::FileId,
     register_alloc::RegisterMapping,
@@ -133,13 +133,12 @@ mod wasm32 {
             errors: compiled.errors,
             lex_tokens: compiled.lex_tokens,
             ast_nodes: compiled.ast_nodes,
-            ir_instructions: compiled.ir_instructions,
+            ir_fn_defs: compiled.ir_fn_defs,
             ir_text: compiled.ir_text,
-            ir_live_ranges: compiled.ir_live_ranges,
-            ir_eval: compiled.ir_eval,
-            vreg_to_memory_location: compiled.vreg_to_memory_location,
+            //ir_eval: compiled.ir_eval,
+            //vreg_to_memory_location: compiled.vreg_to_memory_location,
             asm_encoded: compiled.asm_encoded,
-            asm_eval: compiled.asm_eval.into_iter().collect(),
+            //asm_eval: compiled.asm_eval.into_iter().collect(),
         };
 
         let json = serde_json::to_string(&json_compiled).unwrap();
@@ -156,13 +155,13 @@ mod wasm32 {
         pub errors: Vec<Error>,
         pub lex_tokens: Vec<Token>,
         pub ast_nodes: Vec<Node>,
-        pub ir_instructions: Vec<Instruction>,
+        pub ir_fn_defs: Vec<ir::FnDef>,
         pub ir_text: String,
-        pub ir_live_ranges: LiveRanges,
-        pub ir_eval: ir::EvalResult,
-        pub vreg_to_memory_location: RegisterMapping,
+        //pub ir_live_ranges: LiveRanges,
+        //pub ir_eval: ir::EvalResult,
+        //pub vreg_to_memory_location: RegisterMapping,
         pub asm_encoded: Encoding,
-        pub asm_eval: Vec<(MemoryLocation, ir::EvalValue)>,
+        //pub asm_eval: Vec<(MemoryLocation, ir::EvalValue)>,
     }
 }
 
@@ -171,11 +170,10 @@ pub struct CompileResult {
     pub errors: Vec<Error>,
     pub lex_tokens: Vec<Token>,
     pub ast_nodes: Vec<Node>,
-    pub ir_instructions: Vec<Instruction>,
+    pub ir_fn_defs: Vec<ir::FnDef>,
     pub ir_text: String,
-    pub ir_live_ranges: LiveRanges,
     pub ir_eval: ir::EvalResult,
-    pub vreg_to_memory_location: RegisterMapping,
+    pub vreg_to_memory_locations: Vec<RegisterMapping>,
     pub asm_instructions: Vec<asm::Instruction>,
     pub asm_text: String,
     pub asm_encoded: Encoding,
@@ -210,59 +208,69 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
     trace!("ir_emitter: {:#?}", ir_emitter);
 
     let mut ir_text = Vec::with_capacity(input.len() * 3);
-    for ins in &ir_emitter.instructions {
-        ins.write(&mut ir_text).unwrap();
+    for fn_def in &ir_emitter.fn_defs {
+        for ins in &fn_def.instructions {
+            ins.write(&mut ir_text).unwrap();
+        }
     }
     trace!("ir_text: {}", unsafe { str::from_utf8_unchecked(&ir_text) });
 
-    let ir_eval = ir::eval(&ir_emitter.instructions);
-    trace!("ir_eval: {:#?}", ir_eval);
+    //let ir_eval = ir::eval(&ir_emitter.instructions);
+    //trace!("ir_eval: {:#?}", ir_eval);
 
-    let vreg_to_size = ir_emitter
-        .instructions
-        .iter()
-        .filter_map(|x| x.res_vreg.map(|vreg| (vreg, x.typ.size.unwrap())))
-        .collect::<BTreeMap<VirtualRegister, Size>>();
+    let mut asm_text = String::with_capacity(input.len() * 10); // Heuristic. TODO: Revisit.
+    let mut asm_instructions = Vec::with_capacity(input.len() * 10);
 
-    let (vreg_to_memory_location, stack_offset) = register_alloc::regalloc(
-        &ir_emitter.live_ranges,
-        &vreg_to_size,
-        &asm::abi(&target_arch),
-    );
-    trace!("vreg_to_memory_location: {:#?}", vreg_to_memory_location);
+    for fn_def in &ir_emitter.fn_defs {
+        let vreg_to_size = fn_def
+            .instructions
+            .iter()
+            .filter_map(|x| x.res_vreg.map(|vreg| (vreg, x.typ.size.unwrap())))
+            .collect::<BTreeMap<VirtualRegister, Size>>();
 
-    let (asm_instructions, _) = asm::emit(
-        &ir_emitter.instructions,
-        &vreg_to_memory_location,
-        stack_offset,
-        &target_arch,
-    );
-    trace!("asm_instructions: {:#?}", asm_instructions);
+        let (vreg_to_memory_location, stack_offset) =
+            register_alloc::regalloc(&fn_def.live_ranges, &vreg_to_size, &asm::abi(&target_arch));
+        trace!("vreg_to_memory_location: {:#?}", vreg_to_memory_location);
 
-    let mut asm_text = String::with_capacity(asm_instructions.len() * 8 /* heuristic */);
-    for ins in &asm_instructions {
-        writeln!(&mut asm_text, "{}", ins).unwrap();
+        let (fn_asm_instructions, _) = asm::emit_fn_def(
+            &fn_def,
+            &vreg_to_memory_location,
+            stack_offset,
+            &target_arch,
+        );
+
+        trace!(
+            "asm_instructions: fn_name={} ins={:#?}",
+            fn_def.name, fn_asm_instructions
+        );
+        writeln!(&mut asm_text, "{}:\n", &fn_def.name).unwrap();
+        for ins in &asm_instructions {
+            writeln!(&mut asm_text, "  {}", ins).unwrap();
+        }
+        writeln!(&mut asm_text, "\n").unwrap();
+
+        trace!("asm_text: {}:\n{}", fn_def.name, &asm_text);
+
+        asm_instructions.extend(fn_asm_instructions);
     }
-    trace!("asm_text: {}", asm_text);
 
-    let encoding = asm::encode(&asm_instructions, &target_arch);
+    let encoding = Encoding::default(); // asm::encode(&asm_instructions, &target_arch);
 
-    let asm_eval = asm::eval(&asm_instructions);
-    trace!("asm_eval: {:#?}", asm_eval);
+    //let asm_eval = asm::eval(&asm_instructions);
+    //trace!("asm_eval: {:#?}", asm_eval);
 
     CompileResult {
         lex_tokens: parser.tokens,
         ast_nodes: parser.nodes,
         errors: parser.errors,
-        ir_instructions: ir_emitter.instructions,
+        ir_fn_defs: ir_emitter.fn_defs,
         ir_text: String::from_utf8(ir_text).unwrap(),
-        ir_live_ranges: ir_emitter.live_ranges,
-        ir_eval,
-        vreg_to_memory_location,
+        ir_eval: ir::EvalResult::default(),
+        vreg_to_memory_locations: Vec::new(),
         asm_instructions,
         asm_text,
         asm_encoded: encoding,
-        asm_eval,
+        asm_eval: asm::EvalResult::default(),
     }
 }
 

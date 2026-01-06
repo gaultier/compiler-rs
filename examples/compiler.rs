@@ -62,22 +62,21 @@ fn main() {
     }
 
     println!("--- IR ---");
-    println!("instructions: {:#?}", &compiled.ir_instructions);
-    println!("live_ranges: {:#?}", &compiled.ir_live_ranges);
-    for (i, ins) in compiled.ir_instructions.iter().enumerate() {
-        print!("{}: ", i);
-        ins.write(&mut stdout()).unwrap();
+    println!("fn_defs: {:#?}", &compiled.ir_fn_defs);
+    for fn_def in &compiled.ir_fn_defs {
+        for (i, ins) in fn_def.instructions.iter().enumerate() {
+            print!("{}: ", i);
+            ins.write(&mut stdout()).unwrap();
+        }
     }
     println!("eval: {:#?}", &compiled.ir_eval);
 
-    println!("--- RegAlloc ---");
-    println!("vreg_to_mem_loc: {:#?}", &compiled.vreg_to_memory_location);
+    //println!("--- RegAlloc ---");
+    //println!("vreg_to_mem_loc: {:#?}", &compiled.vreg_to_memory_location);
 
     println!("--- ASM ---");
     println!("instructions: {:#?}", &compiled.asm_instructions);
-    for (i, ins) in compiled.asm_instructions.iter().enumerate() {
-        println!("{}: {}", i, ins);
-    }
+    println!("{}", &compiled.asm_text);
     println!("encoded: {:x?}", &compiled.asm_encoded);
 
     println!("eval: {:#?}", &compiled.asm_eval);

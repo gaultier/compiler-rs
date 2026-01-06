@@ -732,12 +732,12 @@ impl Emitter {
         }
     }
 
-    pub(crate) fn emit(
+    pub(crate) fn emit_fn_def(
         &mut self,
-        irs: &[ir::Instruction],
+        fn_def: &ir::FnDef,
         vreg_to_memory_location: &RegisterMapping,
     ) {
-        self.asm = Vec::with_capacity(irs.len() * 2);
+        self.asm = Vec::with_capacity(fn_def.instructions.len() * 2);
 
         self.asm.push(Instruction {
             kind: InstructionKind::Push,
@@ -767,8 +767,8 @@ impl Emitter {
             });
         }
 
-        for ir in irs {
-            self.instruction_selection(ir, vreg_to_memory_location);
+        for ir in &fn_def.instructions {
+            self.instruction_selection(&ir, vreg_to_memory_location);
         }
 
         // Restore stack.

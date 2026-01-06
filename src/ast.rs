@@ -51,6 +51,15 @@ pub struct Parser<'a> {
     pub name_to_node_def: NameToNodeDef,
 }
 
+impl NodeData {
+    pub(crate) fn as_str(&self) -> Option<&str> {
+        match self {
+            NodeData::String(s) => Some(s),
+            _ => None,
+        }
+    }
+}
+
 impl<'a> Parser<'a> {
     pub fn new(input: &'a str, lexer: &Lexer) -> Self {
         let (builtins_nodes, builtin_names) = Self::builtins(lexer.tokens.len());

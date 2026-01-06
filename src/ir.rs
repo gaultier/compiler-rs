@@ -8,7 +8,7 @@ use std::{
 use serde::Serialize;
 
 use crate::{
-    ast::{Node, NodeData},
+    ast::{Node, NodeData, NodeKind},
     origin::Origin,
     type_checker::{Size, Type, TypeKind},
 };
@@ -59,6 +59,12 @@ pub type LiveRanges = BTreeMap<VirtualRegister, LiveRange>;
 
 #[derive(Debug)]
 pub struct Emitter {
+    pub fn_defs: Vec<FnDef>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FnDef {
+    pub name: String,
     pub instructions: Vec<Instruction>,
     vreg: VirtualRegister,
     pub live_ranges: LiveRanges,
@@ -83,9 +89,10 @@ impl Default for Emitter {
     }
 }
 
-impl Emitter {
-    pub(crate) fn new() -> Self {
+impl FnDef {
+    fn new(name: &str) -> Self {
         Self {
+            name: name.to_owned(),
             instructions: Vec::new(),
             vreg: VirtualRegister(0),
             live_ranges: LiveRanges::new(),
@@ -99,182 +106,6 @@ impl Emitter {
         self.vreg_to_type.insert(self.vreg, typ.clone());
 
         self.vreg
-    }
-
-    pub fn emit(&mut self, nodes: &[Node]) {
-        let mut stack = Vec::new();
-        //        let mut name_resolutions = BTreeMap::<String, Operand>::new();
-
-        for node in nodes {
-            match node.kind {
-                crate::ast::NodeKind::Package => {}
-                crate::ast::NodeKind::FnDef => {
-                    // TODO.
-                }
-                crate::ast::NodeKind::Number => {
-                    let num = match node.data {
-                        Some(NodeData::Num(n)) => n,
-                        _ => panic!("expected number but was not present"),
-                    };
-                    assert_eq!(*node.typ.kind, TypeKind::Number);
-
-                    let res_vreg = self.make_vreg(&node.typ);
-                    let ins = Instruction {
-                        kind: InstructionKind::Set,
-                        args_count: 1,
-                        operands: vec![Operand::new_int(num as i64)],
-                        origin: node.origin,
-                        res_vreg: Some(res_vreg),
-                        typ: node.typ.clone(),
-                    };
-                    self.instructions.push(ins);
-                    stack.push(res_vreg);
-                }
-                crate::ast::NodeKind::Bool => {
-                    let b = match node.data {
-                        Some(NodeData::Bool(b)) => b,
-                        _ => panic!("expected boolean but was not present"),
-                    };
-                    assert_eq!(*node.typ.kind, TypeKind::Bool);
-
-                    let res_vreg = self.make_vreg(&node.typ);
-                    let ins = Instruction {
-                        kind: InstructionKind::Set,
-                        args_count: 1,
-                        operands: vec![Operand::new_bool(b)],
-                        origin: node.origin,
-                        res_vreg: Some(res_vreg),
-                        typ: node.typ.clone(),
-                    };
-                    self.instructions.push(ins);
-                    stack.push(res_vreg);
-                }
-                crate::ast::NodeKind::Identifier => {
-                    // Only do checks.
-                    match &*node.typ.kind {
-                        TypeKind::Function(_, args) if args.len() == 1 => {}
-                        _ => panic!("unexpected println type"),
-                    };
-                }
-                crate::ast::NodeKind::FnCall => {
-                    let args_count = match node.data.as_ref().unwrap() {
-                        crate::ast::NodeData::Num(n) => *n as usize,
-                        _ => panic!(
-                            "invalid AST: node data for FnCall (i.e. the argument count) should be a number"
-                        ),
-                    };
-                    let mut args = Vec::with_capacity(args_count);
-                    for _ in 0..args_count {
-                        args.push(stack.pop().unwrap());
-                    }
-
-                    // FIXME: Proper name resolution.
-                    let fn_name = Operand {
-                        kind: OperandKind::Fn(String::from("builtin.println_u64")),
-                        typ: node.typ.clone(),
-                    };
-
-                    let (res_vreg, ret_type) = match &*node.typ.kind {
-                        TypeKind::Function(ret_type, _) if *ret_type.kind == TypeKind::Void => {
-                            (None, ret_type.clone())
-                        }
-                        TypeKind::Function(ret_type, _) => {
-                            (Some(self.make_vreg(&node.typ)), ret_type.clone())
-                        }
-                        _ => panic!("not a function type"),
-                    };
-
-                    if let Some(res_vreg) = res_vreg {
-                        stack.push(res_vreg);
-                    }
-                    let mut operands = Vec::with_capacity(args.len() + 1);
-                    operands.push(fn_name);
-                    operands.extend(
-                        args.iter()
-                            .map(|x| Operand::new_vreg(*x, &self.vreg_to_type[x])),
-                    );
-
-                    let ins = Instruction {
-                        kind: InstructionKind::FnCall,
-                        args_count,
-                        operands,
-                        origin: node.origin,
-                        res_vreg,
-                        typ: ret_type,
-                    };
-                    self.instructions.push(ins);
-                }
-                crate::ast::NodeKind::Add => {
-                    // TODO: Checks.
-                    let rhs = stack.pop().unwrap();
-                    let lhs = stack.pop().unwrap();
-
-                    assert_eq!(*node.typ.kind, TypeKind::Number);
-
-                    let res_vreg = self.make_vreg(&node.typ);
-
-                    let ins = Instruction {
-                        kind: InstructionKind::IAdd,
-                        args_count: 2,
-                        operands: vec![
-                            Operand::new_vreg(lhs, &self.vreg_to_type[&lhs]),
-                            Operand::new_vreg(rhs, &self.vreg_to_type[&rhs]),
-                        ],
-                        origin: node.origin,
-                        res_vreg: Some(res_vreg),
-                        typ: node.typ.clone(),
-                    };
-                    self.instructions.push(ins);
-                    stack.push(res_vreg);
-                }
-                crate::ast::NodeKind::Multiply => {
-                    let rhs = stack.pop().unwrap();
-                    let lhs = stack.pop().unwrap();
-
-                    assert_eq!(*node.typ.kind, TypeKind::Number);
-
-                    let res_vreg = self.make_vreg(&node.typ);
-
-                    let ins = Instruction {
-                        kind: InstructionKind::IMultiply,
-                        args_count: 2,
-                        operands: vec![
-                            Operand::new_vreg(lhs, &self.vreg_to_type[&lhs]),
-                            Operand::new_vreg(rhs, &self.vreg_to_type[&rhs]),
-                        ],
-                        origin: node.origin,
-                        res_vreg: Some(res_vreg),
-                        typ: node.typ.clone(),
-                    };
-                    self.instructions.push(ins);
-                    stack.push(res_vreg);
-                }
-                crate::ast::NodeKind::Divide => {
-                    let rhs = stack.pop().unwrap();
-                    let lhs = stack.pop().unwrap();
-
-                    assert_eq!(*node.typ.kind, TypeKind::Number);
-
-                    let res_vreg = self.make_vreg(&node.typ);
-
-                    let ins = Instruction {
-                        kind: InstructionKind::IDivide,
-                        args_count: 2,
-                        operands: vec![
-                            Operand::new_vreg(lhs, &self.vreg_to_type[&lhs]),
-                            Operand::new_vreg(rhs, &self.vreg_to_type[&rhs]),
-                        ],
-                        origin: node.origin,
-                        res_vreg: Some(res_vreg),
-                        typ: node.typ.clone(),
-                    };
-                    self.instructions.push(ins);
-                    stack.push(res_vreg);
-                }
-            }
-        }
-
-        self.live_ranges = self.compute_live_ranges();
     }
 
     fn extend_live_range_on_use(
@@ -332,6 +163,207 @@ impl Emitter {
         }
 
         res
+    }
+}
+
+impl Emitter {
+    pub(crate) fn new() -> Self {
+        Self {
+            fn_defs: Vec::new(),
+        }
+    }
+
+    fn emit_fn_def<'a>(&mut self, nodes: &'a [Node]) -> (FnDef, &'a [Node]) {
+        let (first, nodes) = nodes.split_first().unwrap();
+        assert_eq!(first.kind, NodeKind::FnDef);
+
+        let mut stack = Vec::new();
+        //        let mut name_resolutions = BTreeMap::<String, Operand>::new();
+
+        let mut fn_def = FnDef::new(first.data.as_ref().unwrap().as_str().unwrap());
+
+        for (i, node) in nodes.iter().enumerate() {
+            match node.kind {
+                crate::ast::NodeKind::Package => {}
+                crate::ast::NodeKind::FnDef => {
+                    fn_def.live_ranges = fn_def.compute_live_ranges();
+                    return (fn_def, &nodes[i..]);
+                }
+                crate::ast::NodeKind::Number => {
+                    let num = match node.data {
+                        Some(NodeData::Num(n)) => n,
+                        _ => panic!("expected number but was not present"),
+                    };
+                    assert_eq!(*node.typ.kind, TypeKind::Number);
+
+                    let res_vreg = fn_def.make_vreg(&node.typ);
+                    let ins = Instruction {
+                        kind: InstructionKind::Set,
+                        args_count: 1,
+                        operands: vec![Operand::new_int(num as i64)],
+                        origin: node.origin,
+                        res_vreg: Some(res_vreg),
+                        typ: node.typ.clone(),
+                    };
+                    fn_def.instructions.push(ins);
+                    stack.push(res_vreg);
+                }
+                crate::ast::NodeKind::Bool => {
+                    let b = match node.data {
+                        Some(NodeData::Bool(b)) => b,
+                        _ => panic!("expected boolean but was not present"),
+                    };
+                    assert_eq!(*node.typ.kind, TypeKind::Bool);
+
+                    let res_vreg = fn_def.make_vreg(&node.typ);
+                    let ins = Instruction {
+                        kind: InstructionKind::Set,
+                        args_count: 1,
+                        operands: vec![Operand::new_bool(b)],
+                        origin: node.origin,
+                        res_vreg: Some(res_vreg),
+                        typ: node.typ.clone(),
+                    };
+                    fn_def.instructions.push(ins);
+                    stack.push(res_vreg);
+                }
+                crate::ast::NodeKind::Identifier => {
+                    // Only do checks.
+                    match &*node.typ.kind {
+                        TypeKind::Function(_, args) if args.len() == 1 => {}
+                        _ => panic!("unexpected println type"),
+                    };
+                }
+                crate::ast::NodeKind::FnCall => {
+                    let args_count = match node.data.as_ref().unwrap() {
+                        crate::ast::NodeData::Num(n) => *n as usize,
+                        _ => panic!(
+                            "invalid AST: node data for FnCall (i.e. the argument count) should be a number"
+                        ),
+                    };
+                    let mut args = Vec::with_capacity(args_count);
+                    for _ in 0..args_count {
+                        args.push(stack.pop().unwrap());
+                    }
+
+                    // FIXME: Proper name resolution.
+                    let fn_name = Operand {
+                        kind: OperandKind::Fn(String::from("builtin.println_u64")),
+                        typ: node.typ.clone(),
+                    };
+
+                    let (res_vreg, ret_type) = match &*node.typ.kind {
+                        TypeKind::Function(ret_type, _) if *ret_type.kind == TypeKind::Void => {
+                            (None, ret_type.clone())
+                        }
+                        TypeKind::Function(ret_type, _) => {
+                            (Some(fn_def.make_vreg(&node.typ)), ret_type.clone())
+                        }
+                        _ => panic!("not a function type"),
+                    };
+
+                    if let Some(res_vreg) = res_vreg {
+                        stack.push(res_vreg);
+                    }
+                    let mut operands = Vec::with_capacity(args.len() + 1);
+                    operands.push(fn_name);
+                    operands.extend(
+                        args.iter()
+                            .map(|x| Operand::new_vreg(*x, &fn_def.vreg_to_type[x])),
+                    );
+
+                    let ins = Instruction {
+                        kind: InstructionKind::FnCall,
+                        args_count,
+                        operands,
+                        origin: node.origin,
+                        res_vreg,
+                        typ: ret_type,
+                    };
+                    fn_def.instructions.push(ins);
+                }
+                crate::ast::NodeKind::Add => {
+                    // TODO: Checks.
+                    let rhs = stack.pop().unwrap();
+                    let lhs = stack.pop().unwrap();
+
+                    assert_eq!(*node.typ.kind, TypeKind::Number);
+
+                    let res_vreg = fn_def.make_vreg(&node.typ);
+
+                    let ins = Instruction {
+                        kind: InstructionKind::IAdd,
+                        args_count: 2,
+                        operands: vec![
+                            Operand::new_vreg(lhs, &fn_def.vreg_to_type[&lhs]),
+                            Operand::new_vreg(rhs, &fn_def.vreg_to_type[&rhs]),
+                        ],
+                        origin: node.origin,
+                        res_vreg: Some(res_vreg),
+                        typ: node.typ.clone(),
+                    };
+                    fn_def.instructions.push(ins);
+                    stack.push(res_vreg);
+                }
+                crate::ast::NodeKind::Multiply => {
+                    let rhs = stack.pop().unwrap();
+                    let lhs = stack.pop().unwrap();
+
+                    assert_eq!(*node.typ.kind, TypeKind::Number);
+
+                    let res_vreg = fn_def.make_vreg(&node.typ);
+
+                    let ins = Instruction {
+                        kind: InstructionKind::IMultiply,
+                        args_count: 2,
+                        operands: vec![
+                            Operand::new_vreg(lhs, &fn_def.vreg_to_type[&lhs]),
+                            Operand::new_vreg(rhs, &fn_def.vreg_to_type[&rhs]),
+                        ],
+                        origin: node.origin,
+                        res_vreg: Some(res_vreg),
+                        typ: node.typ.clone(),
+                    };
+                    fn_def.instructions.push(ins);
+                    stack.push(res_vreg);
+                }
+                crate::ast::NodeKind::Divide => {
+                    let rhs = stack.pop().unwrap();
+                    let lhs = stack.pop().unwrap();
+
+                    assert_eq!(*node.typ.kind, TypeKind::Number);
+
+                    let res_vreg = fn_def.make_vreg(&node.typ);
+
+                    let ins = Instruction {
+                        kind: InstructionKind::IDivide,
+                        args_count: 2,
+                        operands: vec![
+                            Operand::new_vreg(lhs, &fn_def.vreg_to_type[&lhs]),
+                            Operand::new_vreg(rhs, &fn_def.vreg_to_type[&rhs]),
+                        ],
+                        origin: node.origin,
+                        res_vreg: Some(res_vreg),
+                        typ: node.typ.clone(),
+                    };
+                    fn_def.instructions.push(ins);
+                    stack.push(res_vreg);
+                }
+            }
+        }
+
+        return (fn_def, &[]);
+    }
+
+    pub fn emit(&mut self, nodes: &[Node]) {
+        for _ in 0..nodes.len() {
+            let (fn_def, remaining) = self.emit_fn_def(nodes);
+            self.fn_defs.push(fn_def);
+
+            if remaining.is_empty() {
+                break;
+            }
+        }
     }
 }
 

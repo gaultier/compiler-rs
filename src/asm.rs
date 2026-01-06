@@ -128,8 +128,8 @@ impl Stack {
     }
 }
 
-pub(crate) fn emit(
-    irs: &[ir::Instruction],
+pub(crate) fn emit_fn_def(
+    fn_def: &ir::FnDef,
     vreg_to_memory_location: &RegisterMapping,
     stack_offset: isize,
     target_arch: &ArchKind,
@@ -139,7 +139,7 @@ pub(crate) fn emit(
     match target_arch {
         ArchKind::Amd64 => {
             let mut emitter = amd64::Emitter::new(stack_offset);
-            emitter.emit(irs, vreg_to_memory_location);
+            emitter.emit_fn_def(fn_def, vreg_to_memory_location);
 
             (
                 emitter.asm.into_iter().map(Instruction::Amd64).collect(),
