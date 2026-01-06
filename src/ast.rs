@@ -28,15 +28,17 @@ pub enum NodeData {
     String(String),
 }
 
+#[derive(Serialize, Clone, Copy, Debug)]
+pub struct NodeIndex(usize);
+
 #[derive(Serialize, Clone, Debug)]
 pub struct Node {
     pub kind: NodeKind,
     pub data: Option<NodeData>,
     pub origin: Origin,
     pub typ: Type,
+    pub children: Vec<NodeIndex>,
 }
-
-pub type NodeIndex = usize;
 
 pub type NameToNodeDef = BTreeMap<String, NodeIndex>;
 
@@ -87,8 +89,9 @@ impl<'a> Parser<'a> {
                 &[Type::new_int()],
                 &Origin::new_builtin(),
             ),
+            children: Vec::new(), // FIXME?
         });
-        names.insert(String::from("builtin.println"), nodes.len() - 1);
+        names.insert(String::from("builtin.println"), NodeIndex(nodes.len() - 1));
 
         (nodes, names)
     }
@@ -177,6 +180,7 @@ impl<'a> Parser<'a> {
                 data: Some(NodeData::Num(num)),
                 origin: token.origin,
                 typ: Type::new_int(),
+                children: Vec::new(),
             };
             self.nodes.push(node);
             return true;
@@ -191,6 +195,7 @@ impl<'a> Parser<'a> {
                 data: Some(NodeData::Bool(src == "true")),
                 origin: token.origin,
                 typ: Type::new_bool(),
+                children: Vec::new(),
             };
             self.nodes.push(node);
             return true;
@@ -206,6 +211,7 @@ impl<'a> Parser<'a> {
                     &[Type::new_int()],
                     &Origin::new_builtin(),
                 ),
+                children: Vec::new(),
             };
             self.nodes.push(node);
             return true;
@@ -290,6 +296,7 @@ impl<'a> Parser<'a> {
                 data: None,
                 origin: token.origin,
                 typ: Type::default(),
+                children: Vec::new(),
             };
             self.nodes.push(node);
         }
@@ -328,6 +335,7 @@ impl<'a> Parser<'a> {
                 data: None,
                 origin: token.origin,
                 typ: Type::default(),
+                children: Vec::new(),
             };
             self.nodes.push(node);
         }
@@ -376,6 +384,7 @@ impl<'a> Parser<'a> {
             data: Some(NodeData::Num(args_count)),
             origin: lparen.origin,
             typ: Type::default(),
+            children: Vec::new(),
         };
         self.nodes.push(node);
 
@@ -438,6 +447,7 @@ impl<'a> Parser<'a> {
             )),
             origin: package.origin,
             typ: Type::new_void(),
+            children: Vec::new(),
         });
 
         true
@@ -538,6 +548,7 @@ impl<'a> Parser<'a> {
             )),
             origin: func.origin,
             typ: Type::new_function(&Type::new_void(), &[], &func.origin), // TODO
+            children: Vec::new(),
         });
 
         true
@@ -632,7 +643,7 @@ impl<'a> Parser<'a> {
                 };
 
                 let def_idx = *self.name_to_node_def.get(name).unwrap();
-                (i, self.nodes[def_idx].typ.clone())
+                (i, self.nodes[def_idx.0].typ.clone())
             })
             .collect::<Vec<_>>();
         for (idx, typ) in idx_and_types {
