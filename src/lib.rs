@@ -186,25 +186,26 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
     trace!("lexer: {:#?}", lexer);
 
     let mut parser = Parser::new(input, &lexer);
-    parser.parse();
-    trace!("parser: {:#?}", parser);
+    let mut ast_nodes = parser.parse();
+    trace!("ast_nodes: {:#?}", ast_nodes);
+    trace!("parser errors: {:#?}", parser.errors);
 
     let mut type_checker = type_checker::Checker::new();
     // TODO: ugly.
-    parser.errors.extend(type_checker.check(&mut parser.nodes));
+    parser.errors.extend(type_checker.check(&mut ast_nodes));
     trace!("after type checking: {:#?}", parser);
 
     if !parser.errors.is_empty() {
         return CompileResult {
             lex_tokens: parser.tokens,
-            ast_nodes: parser.nodes,
+            ast_nodes: ast_nodes,
             errors: parser.errors,
             ..Default::default()
         };
     }
 
     let mut ir_emitter = ir::Emitter::new();
-    ir_emitter.emit(&parser.nodes);
+    ir_emitter.emit(&ast_nodes);
     trace!("ir_emitter: {:#?}", ir_emitter);
 
     let mut ir_text = Vec::with_capacity(input.len() * 3);
@@ -261,7 +262,7 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
 
     CompileResult {
         lex_tokens: parser.tokens,
-        ast_nodes: parser.nodes,
+        ast_nodes: ast_nodes,
         errors: parser.errors,
         ir_fn_defs: ir_emitter.fn_defs,
         ir_text: String::from_utf8(ir_text).unwrap(),

@@ -48,7 +48,6 @@ pub struct Parser<'a> {
     pub tokens: Vec<Token>,
     tokens_consumed: usize,
     pub errors: Vec<Error>,
-    pub nodes: Vec<Node>,
     input: &'a str,
     pub name_to_node_def: NameToNodeDef,
 }
@@ -64,15 +63,13 @@ impl NodeData {
 
 impl<'a> Parser<'a> {
     pub fn new(input: &'a str, lexer: &Lexer) -> Self {
-        let (builtins_nodes, builtin_names) = Self::builtins(lexer.tokens.len());
         Self {
             error_mode: false,
             tokens: lexer.tokens.clone(),
             tokens_consumed: 0,
             errors: lexer.errors.clone(),
-            nodes: builtins_nodes,
             input,
-            name_to_node_def: builtin_names,
+            name_to_node_def: NameToNodeDef::new(),
         }
     }
 
@@ -399,12 +396,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_package_clause(&mut self) -> bool {
+    fn parse_package_clause(&mut self) -> Option<Node> {
         if self
             .expect_token_exactly_one(TokenKind::KeywordPackage, "package clause")
             .is_none()
         {
-            return false;
+            return None;
         }
 
         let package = if let Some(p) = self.match_kind(TokenKind::Identifier) {
@@ -415,10 +412,10 @@ impl<'a> Parser<'a> {
                 self.current_or_last_token_origin().unwrap(),
                 String::from("the package keyword must be followed by a package name"),
             );
-            return false;
+            return None;
         };
 
-        self.nodes.push(Node {
+        Some(Node {
             kind: NodeKind::Package,
             data: Some(NodeData::String(
                 Self::str_from_source(&self.input, &package.origin).to_owned(),
@@ -426,9 +423,7 @@ impl<'a> Parser<'a> {
             origin: package.origin,
             typ: Type::new_void(),
             children: Vec::new(),
-        });
-
-        true
+        })
     }
 
     fn str_from_source(src: &'a str, origin: &Origin) -> &'a str {
@@ -539,13 +534,22 @@ impl<'a> Parser<'a> {
         None
     }
 
-    pub fn parse(&mut self) -> Option<Vec<Node>> {
-        self.parse_package_clause();
-
+    #[warn(unused_results)]
+    pub fn parse(&mut self) -> Vec<Node> {
         let mut decls = Vec::new();
+        let (builtins_nodes, builtin_names) = Self::builtins(self.tokens.len());
+        decls.extend_from_slice(&builtins_nodes);
+        self.name_to_node_def = builtin_names;
+
+        if let Some(p) = self.parse_package_clause() {
+            decls.push(p);
+        } else {
+            return decls;
+        }
+
         for _i in 0..self.tokens.len() {
             if self.peek_token().is_none() {
-                return None;
+                return decls;
             }
 
             if self.error_mode {
@@ -575,13 +579,12 @@ impl<'a> Parser<'a> {
             }
         }
 
-        self.resolve_names();
-        Some(decls)
+        self.resolve_names(&mut decls);
+        decls
     }
 
-    fn resolve_names(&mut self) {
-        let errors = self
-            .nodes
+    fn resolve_names(&mut self, nodes: &mut [Node]) {
+        let errors = nodes
             .iter_mut()
             .filter(|n| n.kind == NodeKind::Identifier)
             .filter_map(|node| {
@@ -607,8 +610,7 @@ impl<'a> Parser<'a> {
         self.errors.extend(errors);
 
         // Second phase: update types of identifiers.
-        let idx_and_types = self
-            .nodes
+        let idx_and_types = nodes
             .iter()
             .enumerate()
             .filter(|(_, n)| n.kind == NodeKind::Identifier && *n.typ.kind == TypeKind::Unknown)
@@ -621,11 +623,11 @@ impl<'a> Parser<'a> {
                 };
 
                 let def_idx = *self.name_to_node_def.get(name).unwrap();
-                (i, self.nodes[def_idx.0].typ.clone())
+                (i, nodes[def_idx.0].typ.clone())
             })
             .collect::<Vec<_>>();
         for (idx, typ) in idx_and_types {
-            self.nodes[idx].typ = typ;
+            nodes[idx].typ = typ;
         }
     }
 }
