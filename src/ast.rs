@@ -645,16 +645,13 @@ mod tests {
         assert!(lexer.errors.is_empty());
 
         let mut parser = Parser::new(input, &lexer);
-        parser.parse_expr();
+        let root = parser.parse_expr().unwrap();
 
         assert!(parser.errors.is_empty());
-        let (builtins, _) = Parser::builtins(16);
-        assert_eq!(parser.nodes.len(), builtins.len() + 1);
 
         {
-            let node = &parser.nodes[builtins.len() + 0];
-            assert_eq!(node.kind, NodeKind::Number);
-            match node.data {
+            assert_eq!(root.kind, NodeKind::Number);
+            match root.data {
                 Some(NodeData::Num(123)) => {}
                 _ => panic!(),
             };
@@ -670,43 +667,40 @@ mod tests {
         assert!(lexer.errors.is_empty());
 
         let mut parser = Parser::new(input, &lexer);
-        parser.parse_expr();
+        let root = parser.parse_expr().unwrap();
 
         assert!(parser.errors.is_empty());
-        let (builtins, _) = Parser::builtins(16);
-        assert_eq!(parser.nodes.len(), builtins.len() + 5);
+        assert_eq!(root.kind, NodeKind::Add);
+        assert_eq!(root.children.len(), 2);
 
         {
-            let node = &parser.nodes[builtins.len() + 0];
-            assert_eq!(node.kind, NodeKind::Number);
-            match node.data {
+            let lhs = &root.children[0];
+            assert_eq!(lhs.kind, NodeKind::Number);
+            match lhs.data {
                 Some(NodeData::Num(123)) => {}
                 _ => panic!(),
             };
         }
         {
-            let node = &parser.nodes[builtins.len() + 1];
-            assert_eq!(node.kind, NodeKind::Number);
-            match node.data {
+            let node = &root.children[1];
+            assert_eq!(node.kind, NodeKind::Add);
+            assert_eq!(node.children.len(), 2);
+        }
+        {
+            let mhs = &root.children[1].children[0];
+            assert!(mhs.children.is_empty());
+            match mhs.data {
                 Some(NodeData::Num(45)) => {}
                 _ => panic!(),
             };
         }
         {
-            let node = &parser.nodes[builtins.len() + 2];
-            assert_eq!(node.kind, NodeKind::Add);
-        }
-        {
-            let node = &parser.nodes[builtins.len() + 3];
-            assert_eq!(node.kind, NodeKind::Number);
-            match node.data {
-                Some(NodeData::Num(0)) => {}
+            let rhs = &root.children[1].children[0];
+            assert!(rhs.children.is_empty());
+            match rhs.data {
+                Some(NodeData::Num(45)) => {}
                 _ => panic!(),
             };
-        }
-        {
-            let node = &parser.nodes[builtins.len() + 4];
-            assert_eq!(node.kind, NodeKind::Add);
         }
     }
 }

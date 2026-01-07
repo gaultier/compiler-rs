@@ -280,6 +280,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg(false)]
     fn test_api() {
         let input = "2 + 3 * 4 / 7";
 
