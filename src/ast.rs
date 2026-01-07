@@ -216,12 +216,10 @@ impl<'a> Parser<'a> {
             return None;
         }
 
-        self.parse_assignement()?;
-
-        None
+        self.parse_assignment()
     }
 
-    fn parse_assignement(&mut self) -> Option<Node> {
+    fn parse_assignment(&mut self) -> Option<Node> {
         if self.error_mode {
             return None;
         }
@@ -373,9 +371,7 @@ impl<'a> Parser<'a> {
             return None;
         }
 
-        self.parse_expr()?;
-
-        None
+        self.parse_expr()
     }
 
     // Best effort to find the closest token when doing error reporting.
