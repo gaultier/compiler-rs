@@ -37,7 +37,7 @@ pub struct Node {
     pub data: Option<NodeData>,
     pub origin: Origin,
     pub typ: Type,
-    pub children: Vec<NodeIndex>,
+    pub children: Vec<Node>,
 }
 
 pub type NameToNodeDef = BTreeMap<String, NodeIndex>;
@@ -157,9 +157,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_primary(&mut self) -> bool {
+    fn parse_primary(&mut self) -> Option<Node> {
         if self.error_mode {
-            return false;
+            return None;
         }
 
         if let Some(token) = self.match_kind(TokenKind::LiteralNumber) {
@@ -172,37 +172,33 @@ impl<'a> Parser<'a> {
                         token.origin,
                         err.to_string(),
                     );
-                    return false;
+                    return None;
                 }
             };
-            let node = Node {
+            return Some(Node {
                 kind: NodeKind::Number,
                 data: Some(NodeData::Num(num)),
                 origin: token.origin,
                 typ: Type::new_int(),
                 children: Vec::new(),
-            };
-            self.nodes.push(node);
-            return true;
+            });
         }
         if let Some(token) = self.match_kind(TokenKind::LiteralBool) {
             let src = &self.input[token.origin.offset as usize..][..token.origin.len as usize];
 
             assert!(src == "true" || src == "false");
 
-            let node = Node {
+            return Some(Node {
                 kind: NodeKind::Bool,
                 data: Some(NodeData::Bool(src == "true")),
                 origin: token.origin,
                 typ: Type::new_bool(),
                 children: Vec::new(),
-            };
-            self.nodes.push(node);
-            return true;
+            });
         }
 
         if let Some(token) = self.match_kind(TokenKind::Identifier) {
-            let node = Node {
+            return Some(Node {
                 kind: NodeKind::Identifier,
                 data: None,
                 origin: token.origin,
@@ -212,195 +208,177 @@ impl<'a> Parser<'a> {
                     &Origin::new_builtin(),
                 ),
                 children: Vec::new(),
-            };
-            self.nodes.push(node);
-            return true;
+            });
         }
 
-        false
+        None
     }
 
-    fn parse_expr(&mut self) -> bool {
+    fn parse_expr(&mut self) -> Option<Node> {
         if self.error_mode {
-            return false;
+            return None;
         }
 
-        if self.parse_assignement() {
-            return true;
-        }
+        self.parse_assignement()?;
 
-        false
+        None
     }
 
-    fn parse_assignement(&mut self) -> bool {
+    fn parse_assignement(&mut self) -> Option<Node> {
         if self.error_mode {
-            return false;
+            return None;
         }
         self.parse_logic_or()
     }
 
-    fn parse_logic_or(&mut self) -> bool {
+    fn parse_logic_or(&mut self) -> Option<Node> {
         if self.error_mode {
-            return false;
+            return None;
         }
         self.parse_logic_and()
     }
 
-    fn parse_logic_and(&mut self) -> bool {
+    fn parse_logic_and(&mut self) -> Option<Node> {
         if self.error_mode {
-            return false;
+            return None;
         }
         self.parse_equality()
     }
 
-    fn parse_equality(&mut self) -> bool {
+    fn parse_equality(&mut self) -> Option<Node> {
         if self.error_mode {
-            return false;
+            return None;
         }
         self.parse_comparison()
     }
 
-    fn parse_comparison(&mut self) -> bool {
+    fn parse_comparison(&mut self) -> Option<Node> {
         if self.error_mode {
-            return false;
+            return None;
         }
         self.parse_term()
     }
 
-    fn parse_term(&mut self) -> bool {
+    fn parse_term(&mut self) -> Option<Node> {
         if self.error_mode {
-            return false;
-        }
-        if !self.parse_factor() {
-            return false;
+            return None;
         }
 
-        loop {
-            let token = match self.match_kind(TokenKind::Plus) {
-                None => return true,
-                Some(t) => t,
-            };
+        let lhs = self.parse_factor()?;
 
-            if !self.parse_factor() {
+        let token = match self.match_kind(TokenKind::Plus) {
+            None => return Some(lhs),
+            Some(t) => t,
+        };
+
+        let rhs = self.parse_term().or_else(||{
                 let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
                 self.add_error_with_explanation(
                     ErrorKind::ParseTermMissingRhs,
                     self.current_or_last_token_origin().unwrap_or(token.origin),
                     format!("expected expression for the right-hand side of a + or - expression but found: {:?}",found),
                 );
-                return false;
-            }
+                return None;
+            })?;
 
-            let node = Node {
-                kind: NodeKind::Add,
-                data: None,
-                origin: token.origin,
-                typ: Type::default(),
-                children: Vec::new(),
-            };
-            self.nodes.push(node);
-        }
+        Some(Node {
+            kind: NodeKind::Add,
+            data: None,
+            origin: token.origin,
+            typ: Type::default(),
+            children: vec![lhs, rhs],
+        })
     }
 
-    fn parse_factor(&mut self) -> bool {
+    fn parse_factor(&mut self) -> Option<Node> {
         if self.error_mode {
-            return false;
+            return None;
         }
-        if !self.parse_unary() {
-            return false;
-        }
+        let lhs = self.parse_unary()?;
 
-        loop {
-            let token = match self.match_kind1_or_kind2(TokenKind::Star, TokenKind::Slash) {
-                None => return true,
-                Some(t) => t,
-            };
+        let token = match self.match_kind1_or_kind2(TokenKind::Star, TokenKind::Slash) {
+            None => return Some(lhs),
+            Some(t) => t,
+        };
 
-            if !self.parse_unary() {
+        let rhs = self.parse_factor().or_else(|| {
                 let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
                 self.add_error_with_explanation(
                     ErrorKind::ParseFactorMissingRhs,
                     self.current_or_last_token_origin().unwrap_or(token.origin),
                     format!("expected expression for the right-hand side of a * or / expression but found: {:?}",found),
                 );
-                return false;
-            }
+                None
+            })?;
 
-            let node = Node {
-                kind: if token.kind == TokenKind::Star {
-                    NodeKind::Multiply
-                } else {
-                    NodeKind::Divide
-                },
-                data: None,
-                origin: token.origin,
-                typ: Type::default(),
-                children: Vec::new(),
-            };
-            self.nodes.push(node);
-        }
+        Some(Node {
+            kind: if token.kind == TokenKind::Star {
+                NodeKind::Multiply
+            } else {
+                NodeKind::Divide
+            },
+            data: None,
+            origin: token.origin,
+            typ: Type::default(),
+            children: vec![lhs, rhs],
+        })
     }
 
-    fn parse_unary(&mut self) -> bool {
+    fn parse_unary(&mut self) -> Option<Node> {
         if self.error_mode {
-            return false;
+            return None;
         }
         self.parse_call()
     }
 
-    fn parse_call(&mut self) -> bool {
+    fn parse_call(&mut self) -> Option<Node> {
         if self.error_mode {
-            return false;
+            return None;
         }
 
-        if !self.parse_primary() {
-            return false;
-        }
+        let f = self.parse_primary()?;
 
         let lparen = if let Some(lparen) = self.match_kind(TokenKind::LeftParen) {
             lparen
         } else {
-            return true;
+            return Some(f);
         };
 
+        // TODO: 0-N args.
         let args_count = 1;
-        if !self.parse_expr() {
+        let arg = self.parse_expr().or_else(|| {
             self.errors.push(Error {
                 kind: ErrorKind::ParseCallMissingArgument,
                 origin: lparen.origin,
                 explanation: String::from("missing argument in function call, expected expression"),
             });
-        }
+            None
+        })?;
 
         if self
             .expect_token_exactly_one(TokenKind::RightParen, "function call")
             .is_none()
         {
-            return false;
+            return None;
         }
 
-        let node = Node {
+        Some(Node {
             kind: NodeKind::FnCall,
             data: Some(NodeData::Num(args_count)),
             origin: lparen.origin,
             typ: Type::default(),
-            children: Vec::new(),
-        };
-        self.nodes.push(node);
-
-        true
+            children: vec![arg],
+        })
     }
 
-    fn parse_statement(&mut self) -> bool {
+    fn parse_statement(&mut self) -> Option<Node> {
         if self.error_mode {
-            return false;
+            return None;
         }
 
-        if !self.parse_expr() {
-            return false;
-        }
+        self.parse_expr()?;
 
-        true
+        None
     }
 
     // Best effort to find the closest token when doing error reporting.
@@ -474,13 +452,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_function_declaration(&mut self) -> bool {
+    fn parse_function_declaration(&mut self) -> Option<Node> {
         let func = if let Some(func) =
             self.expect_token_exactly_one(TokenKind::KeywordFunc, "function declaration")
         {
             func
         } else {
-            return false;
+            return None;
         };
 
         let name = if let Some(name) = self.match_kind(TokenKind::Identifier) {
@@ -491,14 +469,14 @@ impl<'a> Parser<'a> {
                 self.current_or_last_token_origin().unwrap(),
                 String::from("failed to parse function declaration: missing function name"),
             );
-            return false;
+            return None;
         };
 
         if self
             .expect_token_exactly_one(TokenKind::LeftParen, "function declaration")
             .is_none()
         {
-            return false;
+            return None;
         }
 
         // TODO: Args.
@@ -507,7 +485,7 @@ impl<'a> Parser<'a> {
             .expect_token_exactly_one(TokenKind::RightParen, "function declaration")
             .is_none()
         {
-            return false;
+            return None;
         }
 
         // TODO: Return type.
@@ -516,8 +494,10 @@ impl<'a> Parser<'a> {
             .expect_token_exactly_one(TokenKind::LeftCurly, "function declaration")
             .is_none()
         {
-            return false;
+            return None;
         }
+
+        let mut stmts = Vec::new();
 
         for _ in 0..self.remaining_tokens_count() {
             match self.peek_token() {
@@ -529,45 +509,43 @@ impl<'a> Parser<'a> {
                 _ => {}
             }
 
-            if !self.parse_statement() {
-                return false;
-            }
+            let stmt = self.parse_statement()?;
+            stmts.push(stmt);
         }
 
         if self
             .expect_token_exactly_one(TokenKind::RightCurly, "function declaration")
             .is_none()
         {
-            return false;
+            return None;
         }
 
-        self.nodes.push(Node {
+        Some(Node {
             kind: NodeKind::FnDef,
             data: Some(NodeData::String(
                 Self::str_from_source(&self.input, &name.origin).to_owned(),
             )),
             origin: func.origin,
             typ: Type::new_function(&Type::new_void(), &[], &func.origin), // TODO
-            children: Vec::new(),
-        });
-
-        true
+            children: stmts,
+        })
     }
 
-    fn parse_declaration(&mut self) -> bool {
-        if self.parse_function_declaration() {
-            return true;
+    fn parse_declaration(&mut self) -> Option<Node> {
+        if let Some(fn_def) = self.parse_function_declaration() {
+            return Some(fn_def);
         }
 
-        false
+        None
     }
 
-    pub fn parse(&mut self) {
+    pub fn parse(&mut self) -> Option<Vec<Node>> {
         self.parse_package_clause();
 
+        let mut decls = Vec::new();
         for _i in 0..self.tokens.len() {
             if self.peek_token().is_none() {
-                return;
+                return None;
             }
 
             if self.error_mode {
@@ -577,11 +555,10 @@ impl<'a> Parser<'a> {
             }
 
             match self.peek_token().map(|t| t.kind) {
-                None | Some(TokenKind::Eof) => {
-                    return;
-                }
+                None | Some(TokenKind::Eof) => break,
                 token => {
-                    if self.parse_declaration() {
+                    if let Some(decl) = self.parse_declaration() {
+                        decls.push(decl);
                         continue;
                     }
 
@@ -599,6 +576,7 @@ impl<'a> Parser<'a> {
         }
 
         self.resolve_names();
+        Some(decls)
     }
 
     fn resolve_names(&mut self) {
