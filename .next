@@ -1,1 +1,2 @@
 amd64: fn is_size_ambiguous()
+ir: adapt to tree ast
