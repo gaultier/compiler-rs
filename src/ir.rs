@@ -8,7 +8,7 @@ use std::{
 use serde::Serialize;
 
 use crate::{
-    ast::{Node, NodeData, NodeKind},
+    ast::{Node, NodeKind},
     origin::Origin,
     type_checker::{Size, Type, TypeKind},
 };
@@ -175,26 +175,25 @@ impl Emitter {
 
     fn emit_fn_def<'a>(&mut self, nodes: &'a [Node]) -> (FnDef, &'a [Node]) {
         let (first, nodes) = nodes.split_first().unwrap();
-        assert_eq!(first.kind, NodeKind::FnDef);
+        let fn_name = match &first.kind {
+            NodeKind::FnDef(n) => n,
+            _ => panic!("expected fn def"),
+        };
 
         let mut stack = Vec::new();
         //        let mut name_resolutions = BTreeMap::<String, Operand>::new();
 
-        let mut fn_def = FnDef::new(first.data.as_ref().unwrap().as_str().unwrap());
+        let mut fn_def = FnDef::new(fn_name);
 
         for (i, node) in nodes.iter().enumerate() {
             match node.kind {
-                crate::ast::NodeKind::Package => {}
+                crate::ast::NodeKind::Package(_) => {}
                 // Start of a new function.
-                crate::ast::NodeKind::FnDef => {
+                crate::ast::NodeKind::FnDef(_) => {
                     fn_def.live_ranges = fn_def.compute_live_ranges();
                     return (fn_def, &nodes[i..]);
                 }
-                crate::ast::NodeKind::Number => {
-                    let num = match node.data {
-                        Some(NodeData::Num(n)) => n,
-                        _ => panic!("expected number but was not present"),
-                    };
+                crate::ast::NodeKind::Number(num) => {
                     assert_eq!(*node.typ.kind, TypeKind::Number);
 
                     let res_vreg = fn_def.make_vreg(&node.typ);
@@ -209,11 +208,7 @@ impl Emitter {
                     fn_def.instructions.push(ins);
                     stack.push(res_vreg);
                 }
-                crate::ast::NodeKind::Bool => {
-                    let b = match node.data {
-                        Some(NodeData::Bool(b)) => b,
-                        _ => panic!("expected boolean but was not present"),
-                    };
+                crate::ast::NodeKind::Bool(b) => {
                     assert_eq!(*node.typ.kind, TypeKind::Bool);
 
                     let res_vreg = fn_def.make_vreg(&node.typ);
@@ -228,7 +223,7 @@ impl Emitter {
                     fn_def.instructions.push(ins);
                     stack.push(res_vreg);
                 }
-                crate::ast::NodeKind::Identifier => {
+                crate::ast::NodeKind::Identifier(_) => {
                     // Only do checks.
                     match &*node.typ.kind {
                         TypeKind::Function(_, args) if args.len() == 1 => {}
@@ -236,12 +231,7 @@ impl Emitter {
                     };
                 }
                 crate::ast::NodeKind::FnCall => {
-                    let args_count = match node.data.as_ref().unwrap() {
-                        crate::ast::NodeData::Num(n) => *n as usize,
-                        _ => panic!(
-                            "invalid AST: node data for FnCall (i.e. the argument count) should be a number"
-                        ),
-                    };
+                    let args_count = node.children.len();
                     let mut args = Vec::with_capacity(args_count);
                     for _ in 0..args_count {
                         args.push(stack.pop().unwrap());

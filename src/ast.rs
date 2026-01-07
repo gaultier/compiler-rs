@@ -8,37 +8,29 @@ use crate::{
 };
 use serde::Serialize;
 
-#[derive(Serialize, Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Serialize, Clone, PartialEq, Eq, Debug)]
 pub enum NodeKind {
-    Number,
-    Bool,
+    Number(u64),
+    Bool(bool),
     Add,
     Multiply,
     Divide,
-    Identifier,
+    Identifier(String),
     FnCall,
-    FnDef,
-    Package,
+    FnDef(String),
+    Package(String),
 }
-
-#[derive(Serialize, Clone, Debug)]
-pub enum NodeData {
-    Num(u64),
-    Bool(bool),
-    String(String),
-}
-
-#[derive(Serialize, Clone, Copy, Debug)]
-pub struct NodeIndex(usize);
 
 #[derive(Serialize, Clone, Debug)]
 pub struct Node {
     pub kind: NodeKind,
-    pub data: Option<NodeData>,
     pub origin: Origin,
     pub typ: Type,
     pub children: Vec<Node>,
 }
+
+#[derive(Serialize, Clone, Copy, Debug)]
+pub struct NodeIndex(usize);
 
 pub type NameToNodeDef = BTreeMap<String, NodeIndex>;
 
@@ -50,15 +42,6 @@ pub struct Parser<'a> {
     pub errors: Vec<Error>,
     input: &'a str,
     pub name_to_node_def: NameToNodeDef,
-}
-
-impl NodeData {
-    pub(crate) fn as_str(&self) -> Option<&str> {
-        match self {
-            NodeData::String(s) => Some(s),
-            _ => None,
-        }
-    }
 }
 
 impl<'a> Parser<'a> {
@@ -78,8 +61,7 @@ impl<'a> Parser<'a> {
         let mut names = NameToNodeDef::new();
 
         nodes.push(Node {
-            kind: NodeKind::FnDef,
-            data: Some(NodeData::String(String::from("builtin.println"))),
+            kind: NodeKind::FnDef(String::from("builtin.println")),
             origin: Origin::new_builtin(),
             typ: Type::new_function(
                 &Type::new_void(),
@@ -173,8 +155,7 @@ impl<'a> Parser<'a> {
                 }
             };
             return Some(Node {
-                kind: NodeKind::Number,
-                data: Some(NodeData::Num(num)),
+                kind: NodeKind::Number(num),
                 origin: token.origin,
                 typ: Type::new_int(),
                 children: Vec::new(),
@@ -186,8 +167,7 @@ impl<'a> Parser<'a> {
             assert!(src == "true" || src == "false");
 
             return Some(Node {
-                kind: NodeKind::Bool,
-                data: Some(NodeData::Bool(src == "true")),
+                kind: NodeKind::Bool(src == "true"),
                 origin: token.origin,
                 typ: Type::new_bool(),
                 children: Vec::new(),
@@ -196,8 +176,9 @@ impl<'a> Parser<'a> {
 
         if let Some(token) = self.match_kind(TokenKind::Identifier) {
             return Some(Node {
-                kind: NodeKind::Identifier,
-                data: None,
+                kind: NodeKind::Identifier(
+                    Self::str_from_source(self.input, &token.origin).to_owned(),
+                ),
                 origin: token.origin,
                 typ: Type::new_function(
                     &Type::new_void(),
@@ -278,7 +259,6 @@ impl<'a> Parser<'a> {
 
         Some(Node {
             kind: NodeKind::Add,
-            data: None,
             origin: token.origin,
             typ: Type::default(),
             children: vec![lhs, rhs],
@@ -312,7 +292,6 @@ impl<'a> Parser<'a> {
             } else {
                 NodeKind::Divide
             },
-            data: None,
             origin: token.origin,
             typ: Type::default(),
             children: vec![lhs, rhs],
@@ -340,7 +319,6 @@ impl<'a> Parser<'a> {
         };
 
         // TODO: 0-N args.
-        let args_count = 1;
         let arg = self.parse_expr().or_else(|| {
             self.errors.push(Error {
                 kind: ErrorKind::ParseCallMissingArgument,
@@ -359,7 +337,6 @@ impl<'a> Parser<'a> {
 
         Some(Node {
             kind: NodeKind::FnCall,
-            data: Some(NodeData::Num(args_count)),
             origin: lparen.origin,
             typ: Type::default(),
             children: vec![arg],
@@ -412,10 +389,7 @@ impl<'a> Parser<'a> {
         };
 
         Some(Node {
-            kind: NodeKind::Package,
-            data: Some(NodeData::String(
-                Self::str_from_source(&self.input, &package.origin).to_owned(),
-            )),
+            kind: NodeKind::Package(Self::str_from_source(&self.input, &package.origin).to_owned()),
             origin: package.origin,
             typ: Type::new_void(),
             children: Vec::new(),
@@ -512,10 +486,7 @@ impl<'a> Parser<'a> {
         }
 
         Some(Node {
-            kind: NodeKind::FnDef,
-            data: Some(NodeData::String(
-                Self::str_from_source(&self.input, &name.origin).to_owned(),
-            )),
+            kind: NodeKind::FnDef(Self::str_from_source(&self.input, &name.origin).to_owned()),
             origin: func.origin,
             typ: Type::new_function(&Type::new_void(), &[], &func.origin), // TODO
             children: stmts,
@@ -582,13 +553,10 @@ impl<'a> Parser<'a> {
     fn resolve_names(&mut self, nodes: &mut [Node]) {
         let errors = nodes
             .iter_mut()
-            .filter(|n| n.kind == NodeKind::Identifier)
             .filter_map(|node| {
-                let name = match &node.data {
-                    Some(NodeData::String(s)) => s.as_str(),
-                    _ => {
-                        panic!("missing string node data (name) for identifier");
-                    }
+                let name = match &node.kind {
+                    NodeKind::Identifier(s) => s,
+                    _ => return None,
                 };
 
                 if let Some(_def) = self.name_to_node_def.get(name) {
@@ -609,17 +577,14 @@ impl<'a> Parser<'a> {
         let idx_and_types = nodes
             .iter()
             .enumerate()
-            .filter(|(_, n)| n.kind == NodeKind::Identifier && *n.typ.kind == TypeKind::Unknown)
-            .map(|(i, node)| {
-                let name = match &node.data {
-                    Some(NodeData::String(s)) => s.as_str(),
-                    _ => {
-                        unreachable!()
-                    }
+            .filter_map(|(i, node)| {
+                let name = match &node.kind {
+                    NodeKind::Identifier(s) if *node.typ.kind == TypeKind::Unknown => s,
+                    _ => return None,
                 };
 
                 let def_idx = *self.name_to_node_def.get(name).unwrap();
-                (i, nodes[def_idx.0].typ.clone())
+                Some((i, nodes[def_idx.0].typ.clone()))
             })
             .collect::<Vec<_>>();
         for (idx, typ) in idx_and_types {
@@ -646,11 +611,7 @@ mod tests {
         assert!(parser.errors.is_empty());
 
         {
-            assert_eq!(root.kind, NodeKind::Number);
-            match root.data {
-                Some(NodeData::Num(123)) => {}
-                _ => panic!(),
-            };
+            assert!(matches!(root.kind, NodeKind::Number(123)));
         }
     }
 
@@ -671,11 +632,7 @@ mod tests {
 
         {
             let lhs = &root.children[0];
-            assert_eq!(lhs.kind, NodeKind::Number);
-            match lhs.data {
-                Some(NodeData::Num(123)) => {}
-                _ => panic!(),
-            };
+            assert!(matches!(lhs.kind, NodeKind::Number(123)));
         }
         {
             let node = &root.children[1];
@@ -685,18 +642,12 @@ mod tests {
         {
             let mhs = &root.children[1].children[0];
             assert!(mhs.children.is_empty());
-            match mhs.data {
-                Some(NodeData::Num(45)) => {}
-                _ => panic!(),
-            };
+            assert!(matches!(mhs.kind, NodeKind::Number(45)));
         }
         {
-            let rhs = &root.children[1].children[0];
+            let rhs = &root.children[1].children[1];
             assert!(rhs.children.is_empty());
-            match rhs.data {
-                Some(NodeData::Num(45)) => {}
-                _ => panic!(),
-            };
+            assert!(matches!(rhs.kind, NodeKind::Number(0)));
         }
     }
 }

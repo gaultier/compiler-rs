@@ -138,8 +138,8 @@ impl Checker {
 
         for node in nodes {
             match node.kind {
-                crate::ast::NodeKind::Package => {}
-                crate::ast::NodeKind::FnDef => match &*node.typ.kind {
+                crate::ast::NodeKind::Package(_) => {}
+                crate::ast::NodeKind::FnDef(_) => match &*node.typ.kind {
                     TypeKind::Function(ret_type, args) => {
                         assert_ne!(*ret_type.kind, TypeKind::Unknown);
 
@@ -156,31 +156,25 @@ impl Checker {
                     }
                     _ => panic!("invalid type for function definition"),
                 },
-                crate::ast::NodeKind::Number => {
+                crate::ast::NodeKind::Number(_) => {
                     assert_eq!(*node.typ.kind, TypeKind::Number);
                     assert_ne!(node.typ.size, None);
 
                     stack.push(node);
                 }
-                crate::ast::NodeKind::Bool => {
+                crate::ast::NodeKind::Bool(_) => {
                     assert_eq!(*node.typ.kind, TypeKind::Bool);
                     assert_eq!(node.typ.size, Some(Size::_8));
 
                     stack.push(node);
                 }
-                crate::ast::NodeKind::Identifier => {
+                crate::ast::NodeKind::Identifier(_) => {
                     assert_ne!(&*node.typ.kind, &TypeKind::Unknown);
 
                     stack.push(node);
                 }
                 crate::ast::NodeKind::FnCall => {
-                    let args_count = match node.data.as_ref().unwrap() {
-                        crate::ast::NodeData::Num(n) => *n as usize,
-                        _ => panic!(
-                            "invalid AST: node data for FnCall (i.e. the argument count) should be a number"
-                        ),
-                    };
-
+                    let args_count = node.children.len();
                     let mut args = Vec::with_capacity(args_count);
                     for _ in 0..args_count {
                         args.push(stack.pop().unwrap());
