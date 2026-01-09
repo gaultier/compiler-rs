@@ -249,15 +249,6 @@ impl Size {
             Size::_64 => 8,
         }
     }
-
-    pub(crate) fn as_bits_count(&self) -> usize {
-        match self {
-            Size::_8 => 8,
-            Size::_16 => 16,
-            Size::_32 => 32,
-            Size::_64 => 64,
-        }
-    }
 }
 
 impl Display for Size {
