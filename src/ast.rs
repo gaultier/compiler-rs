@@ -339,7 +339,7 @@ impl<'a> Parser<'a> {
             kind: NodeKind::FnCall,
             origin: lparen.origin,
             typ: Type::default(),
-            children: vec![arg],
+            children: vec![f, arg],
         })
     }
 

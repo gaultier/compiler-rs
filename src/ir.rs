@@ -8,7 +8,7 @@ use std::{
 use serde::Serialize;
 
 use crate::{
-    ast::Node,
+    ast::{Node, NodeKind},
     origin::Origin,
     type_checker::{Size, Type, TypeKind},
 };
@@ -28,7 +28,6 @@ pub enum InstructionKind {
 #[derive(Serialize, Debug)]
 pub struct Instruction {
     pub kind: InstructionKind,
-    pub args_count: usize,
     pub operands: Vec<Operand>,
     pub origin: Origin,
     pub res_vreg: Option<VirtualRegister>,
@@ -187,7 +186,6 @@ impl Emitter {
                 let res_vreg = fn_def.make_vreg(&node.typ);
                 vec![Instruction {
                     kind: InstructionKind::Set,
-                    args_count: 1,
                     operands: vec![Operand::new_int(*num as i64)],
                     origin: node.origin,
                     res_vreg: Some(res_vreg),
@@ -200,7 +198,6 @@ impl Emitter {
                 let res_vreg = fn_def.make_vreg(&node.typ);
                 vec![Instruction {
                     kind: InstructionKind::Set,
-                    args_count: 1,
                     operands: vec![Operand::new_bool(*b)],
                     origin: node.origin,
                     res_vreg: Some(res_vreg),
@@ -211,48 +208,54 @@ impl Emitter {
                 todo!()
             }
             crate::ast::NodeKind::FnCall => {
-                todo!()
-                //let args_count = node.children.len();
-                //let mut args = Vec::with_capacity(args_count);
-                //for _ in 0..args_count {
-                //    args.push(stack.pop().unwrap());
-                //}
-                //
-                //// FIXME: Proper name resolution.
-                //let fn_name = Operand {
-                //    kind: OperandKind::Fn(String::from("builtin.println_u64")),
-                //    typ: node.typ.clone(),
-                //};
-                //
-                //let (res_vreg, ret_type) = match &*node.typ.kind {
-                //    TypeKind::Function(ret_type, _) if *ret_type.kind == TypeKind::Void => {
-                //        (None, ret_type.clone())
-                //    }
-                //    TypeKind::Function(ret_type, _) => {
-                //        (Some(fn_def.make_vreg(&node.typ)), ret_type.clone())
-                //    }
-                //    _ => panic!("not a function type"),
-                //};
-                //
-                //if let Some(res_vreg) = res_vreg {
-                //    stack.push(res_vreg);
-                //}
-                //let mut operands = Vec::with_capacity(args.len() + 1);
-                //operands.push(fn_name);
-                //operands.extend(
-                //    args.iter()
-                //        .map(|x| Operand::new_vreg(*x, &fn_def.vreg_to_type[x])),
-                //);
-                //
-                //let ins = Instruction {
-                //    kind: InstructionKind::FnCall,
-                //    args_count,
-                //    operands,
-                //    origin: node.origin,
-                //    res_vreg,
-                //    typ: ret_type,
-                //};
-                //fn_def.instructions.push(ins);
+                let (fn_name, args) = node.children.split_first().unwrap();
+                let ast_fn_name = if let Node {
+                    kind: NodeKind::Identifier(name),
+                    ..
+                } = fn_name
+                {
+                    name
+                } else {
+                    panic!("invalid fn call function name: {:#?}", node)
+                };
+
+                // TODO: fn name resolution.
+
+                let fn_name = Operand {
+                    kind: OperandKind::Fn(String::from(ast_fn_name.to_owned())),
+                    typ: node.typ.clone(),
+                };
+
+                // Check type.
+                let (res_vreg, ret_type) = match &*node.typ.kind {
+                    TypeKind::Function(ret_type, _) if *ret_type.kind == TypeKind::Void => {
+                        (None, ret_type.clone())
+                    }
+                    TypeKind::Function(ret_type, _) => {
+                        (Some(fn_def.make_vreg(&node.typ)), ret_type.clone())
+                    }
+                    _ => panic!("not a function type"),
+                };
+
+                let mut operands = Vec::with_capacity(args.len() + 1);
+                operands.push(fn_name);
+                for arg in args {
+                    let ir_arg = self.emit_node(fn_def, arg);
+                    let (vreg, typ) = ir_arg
+                        .first()
+                        .map(|x| (x.res_vreg.unwrap(), &x.typ))
+                        .unwrap();
+                    operands.push(Operand::new_vreg(vreg, typ));
+                    fn_def.instructions.extend(ir_arg);
+                }
+
+                vec![Instruction {
+                    kind: InstructionKind::FnCall,
+                    operands,
+                    origin: node.origin,
+                    res_vreg,
+                    typ: ret_type,
+                }]
             }
             crate::ast::NodeKind::Add => {
                 assert_eq!(node.children.len(), 2);
@@ -280,7 +283,6 @@ impl Emitter {
 
                 vec![Instruction {
                     kind: InstructionKind::IAdd,
-                    args_count: 2,
                     operands: vec![
                         Operand::new_vreg(ir_lhs_vreg, &ir_lhs_typ),
                         Operand::new_vreg(ir_rhs_vreg, &ir_rhs_typ),
