@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io::Write};
+use std::{collections::HashMap, fmt::Display};
 
 use serde::Serialize;
 
@@ -21,7 +21,45 @@ pub struct Origin {
     pub kind: OriginKind,
 }
 
+pub struct OriginFormatter<'a> {
+    origin: Origin,
+    file_name: Option<&'a str>,
+}
+
+impl<'a> Display for OriginFormatter<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.origin.kind {
+            OriginKind::File(_) => {
+                let file_name: &str = self.file_name.unwrap();
+                f.write_str(file_name)
+            }
+            OriginKind::Builtin => f.write_str("builtin"),
+            OriginKind::SynthFromCodegen => f.write_str("synth_codegen"),
+            OriginKind::Unknown => f.write_str("unknown"),
+        }?;
+        write!(
+            f,
+            ":{}:{}:{}",
+            self.origin.line, self.origin.column, self.origin.offset
+        )
+    }
+}
+
 impl Origin {
+    pub(crate) fn display<'a>(
+        &self,
+        file_id_to_name: &'a HashMap<FileId, String>,
+    ) -> OriginFormatter<'a> {
+        OriginFormatter {
+            origin: *self,
+            file_name: if let OriginKind::File(file_id) = self.kind {
+                file_id_to_name.get(&file_id).map(|s| s.as_str())
+            } else {
+                None
+            },
+        }
+    }
+
     pub(crate) fn new(line: u32, column: u32, offset: u32, len: u32, file_id: FileId) -> Self {
         Self {
             line,
@@ -59,39 +97,6 @@ impl Origin {
             offset: 0,
             len: 0,
             kind: OriginKind::Unknown,
-        }
-    }
-
-    pub fn write<W: Write>(
-        &self,
-        w: &mut W,
-        file_id_to_names: &HashMap<FileId, String>,
-    ) -> std::io::Result<()> {
-        self.kind.write(w, file_id_to_names)?;
-        write!(w, ":{}:{}:{}", self.line, self.column, self.offset)?;
-
-        Ok(())
-    }
-}
-
-impl OriginKind {
-    pub fn write<W: Write>(
-        &self,
-        w: &mut W,
-        file_id_to_names: &HashMap<FileId, String>,
-    ) -> std::io::Result<()> {
-        match self {
-            OriginKind::File(file_id) => {
-                // TODO: file name.
-                let file_name: &str = file_id_to_names
-                    .get(file_id)
-                    .map(|s| s.as_str())
-                    .unwrap_or_else(|| "<?>");
-                w.write_all(file_name.as_bytes())
-            }
-            OriginKind::Builtin => w.write_all(b"builtin"),
-            OriginKind::SynthFromCodegen => w.write_all(b"synth_codegen"),
-            OriginKind::Unknown => w.write_all(b"unknown"),
         }
     }
 }

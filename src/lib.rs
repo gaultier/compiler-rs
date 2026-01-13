@@ -9,7 +9,10 @@ mod origin;
 pub mod register_alloc;
 pub mod type_checker;
 
-use std::{collections::BTreeMap, fmt::Write};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fmt::Write,
+};
 
 use log::trace;
 
@@ -180,12 +183,17 @@ pub struct CompileResult {
     pub asm_eval: asm::EvalResult,
 }
 
-pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileResult {
+pub fn compile(
+    input: &str,
+    file_id: FileId,
+    file_id_to_name: &HashMap<FileId, String>,
+    target_arch: ArchKind,
+) -> CompileResult {
     let mut lexer = Lexer::new(file_id);
     lexer.lex(input);
     trace!("lexer: {:#?}", lexer);
 
-    let mut parser = Parser::new(input, &lexer);
+    let mut parser = Parser::new(input, &lexer, file_id_to_name);
     let mut ast_nodes = parser.parse();
     trace!("ast_nodes: {:#?}", ast_nodes);
     trace!("parser errors: {:#?}", parser.errors);
@@ -205,7 +213,7 @@ pub fn compile(input: &str, file_id: FileId, target_arch: ArchKind) -> CompileRe
     }
 
     let mut ir_emitter = ir::Emitter::new();
-    ir_emitter.emit(&ast_nodes);
+    ir_emitter.emit(&ast_nodes, &parser.name_to_type);
     trace!("ir_emitter: {:#?}", ir_emitter);
 
     let mut ir_text = Vec::with_capacity(input.len() * 3);

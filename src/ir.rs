@@ -8,7 +8,7 @@ use std::{
 use serde::Serialize;
 
 use crate::{
-    ast::{Node, NodeKind},
+    ast::{NameToType, Node, NodeKind},
     origin::Origin,
     type_checker::{Size, Type, TypeKind},
 };
@@ -172,7 +172,13 @@ impl Emitter {
         }
     }
 
-    fn emit_node(&mut self, fn_def: &mut FnDef, node: &Node) -> Vec<Instruction> {
+    fn emit_node(
+        &mut self,
+        fn_def: &mut FnDef,
+        node: &Node,
+        nodes: &[Node],
+        name_to_node_def: &NameToType,
+    ) -> Vec<Instruction> {
         match &node.kind {
             crate::ast::NodeKind::Package(_) | crate::ast::NodeKind::FnDef(_) => {
                 panic!(
@@ -209,6 +215,7 @@ impl Emitter {
             }
             crate::ast::NodeKind::FnCall => {
                 let (fn_name, args) = node.children.split_first().unwrap();
+                // TODO: Support function pointers.
                 let ast_fn_name = if let Node {
                     kind: NodeKind::Identifier(name),
                     ..
@@ -218,8 +225,6 @@ impl Emitter {
                 } else {
                     panic!("invalid fn call function name: {:#?}", node)
                 };
-
-                // TODO: fn name resolution.
 
                 let fn_name = Operand {
                     kind: OperandKind::Fn(String::from(ast_fn_name.to_owned())),
@@ -234,13 +239,13 @@ impl Emitter {
                     TypeKind::Function(ret_type, _) => {
                         (Some(fn_def.make_vreg(&node.typ)), ret_type.clone())
                     }
-                    _ => panic!("not a function type"),
+                    _ => panic!("not a function type: {:#?}", node.typ),
                 };
 
                 let mut operands = Vec::with_capacity(args.len() + 1);
                 operands.push(fn_name);
                 for arg in args {
-                    let ir_arg = self.emit_node(fn_def, arg);
+                    let ir_arg = self.emit_node(fn_def, arg, nodes, name_to_node_def);
                     let (vreg, typ) = ir_arg
                         .first()
                         .map(|x| (x.res_vreg.unwrap(), &x.typ))
@@ -267,13 +272,13 @@ impl Emitter {
                 assert_eq!(*ast_lhs.typ.kind, TypeKind::Number);
                 assert_eq!(*node.typ.kind, TypeKind::Number);
 
-                let ir_lhs = self.emit_node(fn_def, &ast_lhs);
+                let ir_lhs = self.emit_node(fn_def, &ast_lhs, nodes, name_to_node_def);
                 assert_eq!(ir_lhs.len(), 1);
                 let (ir_lhs_vreg, ir_lhs_typ) =
                     (ir_lhs[0].res_vreg.unwrap(), ir_lhs[0].typ.clone());
                 fn_def.instructions.extend(ir_lhs);
 
-                let ir_rhs = self.emit_node(fn_def, &ast_rhs);
+                let ir_rhs = self.emit_node(fn_def, &ast_rhs, nodes, name_to_node_def);
                 assert_eq!(ir_rhs.len(), 1);
                 let (ir_rhs_vreg, ir_rhs_typ) =
                     (ir_rhs[0].res_vreg.unwrap(), ir_rhs[0].typ.clone());
@@ -301,20 +306,20 @@ impl Emitter {
         }
     }
 
-    fn emit_nodes(&mut self, fn_def: &mut FnDef, nodes: &[Node]) {
+    fn emit_nodes(&mut self, fn_def: &mut FnDef, nodes: &[Node], name_to_node_def: &NameToType) {
         for node in nodes {
-            let ins = self.emit_node(fn_def, node);
+            let ins = self.emit_node(fn_def, node, nodes, name_to_node_def);
             fn_def.instructions.extend(ins);
         }
     }
 
-    fn emit_def(&mut self, node: &Node) -> Option<FnDef> {
+    fn emit_def(&mut self, node: &Node, name_to_node_def: &NameToType) -> Option<FnDef> {
         match &node.kind {
             crate::ast::NodeKind::Package(_) => None,
             // Start of a new function.
             crate::ast::NodeKind::FnDef(fn_name) => {
                 let mut fn_def = FnDef::new(&fn_name.clone());
-                self.emit_nodes(&mut fn_def, &node.children);
+                self.emit_nodes(&mut fn_def, &node.children, name_to_node_def);
 
                 fn_def.live_ranges = fn_def.compute_live_ranges();
                 Some(fn_def)
@@ -323,9 +328,9 @@ impl Emitter {
         }
     }
 
-    pub fn emit(&mut self, nodes: &[Node]) {
+    pub fn emit(&mut self, nodes: &[Node], name_to_node_def: &NameToType) {
         for node in nodes {
-            if let Some(def) = self.emit_def(node) {
+            if let Some(def) = self.emit_def(node, name_to_node_def) {
                 dbg!(&def);
                 self.fn_defs.push(def);
             }

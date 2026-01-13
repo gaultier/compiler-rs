@@ -32,8 +32,8 @@ fn main() {
 
     let file_name = std::env::args().skip(1).next().unwrap();
     let file_content = std::fs::read_to_string(&file_name).unwrap();
-    let mut file_id_to_names = HashMap::new();
-    file_id_to_names.insert(1, file_name.clone());
+    let mut file_id_to_name = HashMap::new();
+    file_id_to_name.insert(1, file_name.clone());
 
     let target_arch = asm::ArchKind::Amd64;
     let os_str = std::env::args()
@@ -46,7 +46,7 @@ fn main() {
         "macos" => Os::MacOS,
         x => unimplemented!("{}", x),
     };
-    let compiled = compile(&file_content, 1, target_arch);
+    let compiled = compile(&file_content, 1, &file_id_to_name, target_arch);
 
     println!("--- Lex ---");
     println!("tokens: {:#?}", &compiled.lex_tokens);
@@ -56,7 +56,7 @@ fn main() {
 
     println!("--- Errors ---");
     for err in &compiled.errors {
-        err.write(&mut std::io::stderr(), &file_content, &file_id_to_names)
+        err.write(&mut std::io::stderr(), &file_content, &file_id_to_name)
             .unwrap();
         std::io::stderr().write_all(b"\n").unwrap();
     }

@@ -25,6 +25,7 @@ pub enum ErrorKind {
     IncompatibleArgumentsCount,
     UnknownIdentifier,
     MissingExpected(TokenKind),
+    NameAlreadyDefined,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -40,6 +41,27 @@ impl Error {
             kind,
             origin,
             explanation,
+        }
+    }
+
+    pub(crate) fn new_name_already_defined(
+        old_type: &Type,
+        new_type: &Type,
+        name: &str,
+        old_origin: &Origin,
+        new_origin: &Origin,
+        file_id_to_name: &HashMap<FileId, String>,
+    ) -> Self {
+        Self {
+            kind: ErrorKind::NameAlreadyDefined,
+            origin: *new_origin,
+            explanation: format!(
+                "name {} already defined: old:{} new:{}. Defined here first: {}",
+                name,
+                old_type,
+                new_type,
+                old_origin.display(file_id_to_name),
+            ),
         }
     }
 
@@ -66,13 +88,14 @@ impl Error {
         }
     }
 
+    // FIXME: Display.
     pub fn write<W: Write>(
         &self,
         w: &mut W,
         input: &str,
-        file_id_to_names: &HashMap<FileId, String>,
+        file_id_to_name: &HashMap<FileId, String>,
     ) -> std::io::Result<()> {
-        self.origin.write(w, file_id_to_names)?;
+        w.write_all(format!("{}", self.origin.display(file_id_to_name)).as_bytes())?;
 
         w.write_all(b": Error: ")?;
         w.write_all(self.explanation.as_bytes())?;

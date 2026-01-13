@@ -1,9 +1,12 @@
-use std::{collections::BTreeMap, num::ParseIntError};
+use std::{
+    collections::{BTreeMap, HashMap},
+    num::ParseIntError,
+};
 
 use crate::{
     error::{Error, ErrorKind},
     lex::{Lexer, Token, TokenKind},
-    origin::Origin,
+    origin::{FileId, Origin},
     type_checker::{Type, TypeKind},
 };
 use serde::Serialize;
@@ -32,7 +35,7 @@ pub struct Node {
 #[derive(Serialize, Clone, Copy, Debug)]
 pub struct NodeIndex(usize);
 
-pub type NameToNodeDef = BTreeMap<String, NodeIndex>;
+pub type NameToType = BTreeMap<String, (Type, Origin)>;
 
 #[derive(Debug)]
 pub struct Parser<'a> {
@@ -41,38 +44,53 @@ pub struct Parser<'a> {
     tokens_consumed: usize,
     pub errors: Vec<Error>,
     input: &'a str,
-    pub name_to_node_def: NameToNodeDef,
+    pub name_to_type: NameToType,
+    file_id_to_name: &'a HashMap<FileId, String>,
+}
+
+impl std::ops::Index<NodeIndex> for [Node] {
+    type Output = Node;
+
+    fn index(&self, index: NodeIndex) -> &Self::Output {
+        &self[index.0]
+    }
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(input: &'a str, lexer: &Lexer) -> Self {
+    pub fn new(
+        input: &'a str,
+        lexer: &Lexer,
+        file_id_to_name: &'a HashMap<FileId, String>,
+    ) -> Self {
         Self {
             error_mode: false,
             tokens: lexer.tokens.clone(),
             tokens_consumed: 0,
             errors: lexer.errors.clone(),
             input,
-            name_to_node_def: NameToNodeDef::new(),
+            name_to_type: NameToType::new(),
+            file_id_to_name,
         }
     }
 
-    pub(crate) fn builtins(cap_hint: usize) -> (Vec<Node>, NameToNodeDef) {
+    pub(crate) fn builtins(cap_hint: usize) -> Vec<Node> {
         let mut nodes = Vec::with_capacity(cap_hint);
-        let mut names = NameToNodeDef::new();
+
+        let origin = Origin::new_builtin();
+        let typ = Type::new_function(
+            &Type::new_void(),
+            &[Type::new_int()],
+            &Origin::new_builtin(),
+        );
 
         nodes.push(Node {
             kind: NodeKind::FnDef(String::from("builtin.println")),
-            origin: Origin::new_builtin(),
-            typ: Type::new_function(
-                &Type::new_void(),
-                &[Type::new_int()],
-                &Origin::new_builtin(),
-            ),
+            origin,
+            typ: typ.clone(),
             children: Vec::new(), // FIXME?
         });
-        names.insert(String::from("builtin.println"), NodeIndex(nodes.len() - 1));
 
-        (nodes, names)
+        nodes
     }
 
     fn peek_token(&self) -> Option<&Token> {
@@ -504,9 +522,9 @@ impl<'a> Parser<'a> {
     #[warn(unused_results)]
     pub fn parse(&mut self) -> Vec<Node> {
         let mut decls = Vec::new();
-        let (builtins_nodes, builtin_names) = Self::builtins(self.tokens.len());
+        let builtins_nodes = Self::builtins(self.tokens.len());
         decls.extend_from_slice(&builtins_nodes);
-        self.name_to_node_def = builtin_names;
+        self.name_to_type = NameToType::new();
 
         if let Some(p) = self.parse_package_clause() {
             decls.push(p);
@@ -546,49 +564,47 @@ impl<'a> Parser<'a> {
             }
         }
 
-        self.resolve_names(&mut decls);
+        self.resolve_nodes(&mut decls);
         decls
     }
 
-    fn resolve_names(&mut self, nodes: &mut [Node]) {
-        let errors = nodes
-            .iter_mut()
-            .filter_map(|node| {
-                let name = match &node.kind {
-                    NodeKind::Identifier(s) => s,
-                    _ => return None,
-                };
+    fn resolve_node(&mut self, node: &Node) {
+        match &node.kind {
+            // Nothing to do.
+            NodeKind::Package(_) | NodeKind::Number(_) | NodeKind::Bool(_) => {}
 
-                if let Some(_def) = self.name_to_node_def.get(name) {
-                    None
-                } else {
-                    Some(Error::new(
-                        ErrorKind::UnknownIdentifier,
-                        node.origin,
-                        format!("unknown identifier: {}", name),
-                    ))
+            NodeKind::Identifier(_name) => {
+                // todo?
+            }
+
+            // Recurse.
+            NodeKind::Add | NodeKind::Multiply | NodeKind::Divide | NodeKind::FnCall => {
+                for op in &node.children {
+                    self.resolve_node(op)
                 }
-            })
-            .collect::<Vec<Error>>();
+            }
+            NodeKind::FnDef(name) => {
+                assert!(matches!(&*node.typ.kind, TypeKind::Function(_, _)));
+                if let Some((old_typ, old_origin)) = self.name_to_type.get(name) {
+                    self.errors.push(Error::new_name_already_defined(
+                        old_typ,
+                        &node.typ,
+                        name,
+                        &old_origin,
+                        &node.origin,
+                        &self.file_id_to_name,
+                    ));
+                } else {
+                    self.name_to_type
+                        .insert(name.to_owned(), (node.typ.clone(), node.origin));
+                }
+            }
+        }
+    }
 
-        self.errors.extend(errors);
-
-        // Second phase: update types of identifiers.
-        let idx_and_types = nodes
-            .iter()
-            .enumerate()
-            .filter_map(|(i, node)| {
-                let name = match &node.kind {
-                    NodeKind::Identifier(s) if *node.typ.kind == TypeKind::Unknown => s,
-                    _ => return None,
-                };
-
-                let def_idx = *self.name_to_node_def.get(name).unwrap();
-                Some((i, nodes[def_idx.0].typ.clone()))
-            })
-            .collect::<Vec<_>>();
-        for (idx, typ) in idx_and_types {
-            nodes[idx].typ = typ;
+    fn resolve_nodes(&mut self, nodes: &mut [Node]) {
+        for node in nodes {
+            self.resolve_node(node);
         }
     }
 }
@@ -605,7 +621,10 @@ mod tests {
 
         assert!(lexer.errors.is_empty());
 
-        let mut parser = Parser::new(input, &lexer);
+        let mut file_id_to_name = HashMap::new();
+        file_id_to_name.insert(1, String::from("test.go"));
+
+        let mut parser = Parser::new(input, &lexer, &file_id_to_name);
         let root = parser.parse_expr().unwrap();
 
         assert!(parser.errors.is_empty());
@@ -623,7 +642,10 @@ mod tests {
 
         assert!(lexer.errors.is_empty());
 
-        let mut parser = Parser::new(input, &lexer);
+        let mut file_id_to_name = HashMap::new();
+        file_id_to_name.insert(1, String::from("test.go"));
+
+        let mut parser = Parser::new(input, &lexer, &file_id_to_name);
         let root = parser.parse_expr().unwrap();
 
         assert!(parser.errors.is_empty());
