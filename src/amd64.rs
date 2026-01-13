@@ -1048,6 +1048,7 @@ impl Register {
         }
     }
 
+    // TODO: Use.
     fn is_high_byte(&self) -> bool {
         matches!(
             self,
