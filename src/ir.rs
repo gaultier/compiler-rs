@@ -9,7 +9,7 @@ use log::trace;
 use serde::Serialize;
 
 use crate::{
-    ast::{NameToType, Node, NodeKind},
+    ast::{Node, NodeKind},
     origin::Origin,
     type_checker::{Size, Type, TypeKind},
 };
@@ -190,13 +190,7 @@ impl Emitter {
         }
     }
 
-    fn emit_node(
-        &mut self,
-        fn_def: &mut FnDef,
-        node: &Node,
-        nodes: &[Node],
-        name_to_node_def: &NameToType,
-    ) -> Vec<Instruction> {
+    fn emit_node(&mut self, fn_def: &mut FnDef, node: &Node) -> Vec<Instruction> {
         match &node.kind {
             crate::ast::NodeKind::Package(_) | crate::ast::NodeKind::FnDef(_) => {
                 panic!(
@@ -270,7 +264,7 @@ impl Emitter {
                 let mut operands = Vec::with_capacity(args.len() + 1);
                 operands.push(fn_name);
                 for arg in args {
-                    let ir_arg = self.emit_node(fn_def, arg, nodes, name_to_node_def);
+                    let ir_arg = self.emit_node(fn_def, arg);
                     let (vreg, typ) = ir_arg
                         .first()
                         .map(|x| (x.res_vreg.unwrap(), &x.typ))
@@ -302,13 +296,13 @@ impl Emitter {
                 assert_eq!(*ast_lhs.typ.kind, TypeKind::Number);
                 assert_eq!(*node.typ.kind, TypeKind::Number);
 
-                let ir_lhs = self.emit_node(fn_def, ast_lhs, nodes, name_to_node_def);
+                let ir_lhs = self.emit_node(fn_def, ast_lhs);
                 assert_eq!(ir_lhs.len(), 1);
                 let (ir_lhs_vreg, ir_lhs_typ) =
                     (ir_lhs[0].res_vreg.unwrap(), ir_lhs[0].typ.clone());
                 fn_def.instructions.extend(ir_lhs);
 
-                let ir_rhs = self.emit_node(fn_def, ast_rhs, nodes, name_to_node_def);
+                let ir_rhs = self.emit_node(fn_def, ast_rhs);
                 assert_eq!(ir_rhs.len(), 1);
                 let (ir_rhs_vreg, ir_rhs_typ) =
                     (ir_rhs[0].res_vreg.unwrap(), ir_rhs[0].typ.clone());
@@ -336,21 +330,17 @@ impl Emitter {
         }
     }
 
-    fn emit_nodes(&mut self, fn_def: &mut FnDef, nodes: &[Node], name_to_node_def: &NameToType) {
-        for node in nodes {
-            let ins = self.emit_node(fn_def, node, nodes, name_to_node_def);
-            fn_def.instructions.extend(ins);
-        }
-    }
-
-    fn emit_def(&mut self, node: &Node, name_to_node_def: &NameToType) -> Option<FnDef> {
+    fn emit_def(&mut self, node: &Node) -> Option<FnDef> {
         match &node.kind {
             crate::ast::NodeKind::Package(_) => None,
             // Start of a new function.
             crate::ast::NodeKind::FnDef(fn_name) => {
                 let mut fn_def =
                     FnDef::new(fn_name_ast_to_ir(fn_name, &node.typ.to_string()), &node.typ);
-                self.emit_nodes(&mut fn_def, &node.children, name_to_node_def);
+                for node in &node.children {
+                    let ins = self.emit_node(&mut fn_def, node);
+                    fn_def.instructions.extend(ins);
+                }
 
                 fn_def.live_ranges = fn_def.compute_live_ranges();
                 Some(fn_def)
@@ -359,9 +349,9 @@ impl Emitter {
         }
     }
 
-    pub fn emit(&mut self, nodes: &[Node], name_to_node_def: &NameToType) {
+    pub fn emit(&mut self, nodes: &[Node]) {
         for node in nodes {
-            if let Some(def) = self.emit_def(node, name_to_node_def) {
+            if let Some(def) = self.emit_def(node) {
                 self.fn_defs.push(def);
             }
         }

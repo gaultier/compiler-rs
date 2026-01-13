@@ -210,7 +210,7 @@ pub fn compile(
     }
 
     let mut ir_emitter = ir::Emitter::new();
-    ir_emitter.emit(&ast_nodes, &parser.name_to_type);
+    ir_emitter.emit(&ast_nodes);
     trace!("ir_emitter: {:#?}", ir_emitter);
 
     let mut ir_text = String::with_capacity(input.len() * 3);
