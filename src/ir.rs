@@ -226,8 +226,15 @@ impl Emitter {
                     panic!("invalid fn call function name: {:#?}", node)
                 };
 
+                let arg_type = node.children.first().as_ref().map(|x| &*x.typ.kind);
+                let real_fn_name = match (ast_fn_name.as_str(), arg_type) {
+                    ("println", Some(TypeKind::Bool)) => "builtin.println_bool",
+                    ("println", Some(TypeKind::Number)) => "builtin.println_u64",
+                    _ => ast_fn_name,
+                };
+
                 let fn_name = Operand {
-                    kind: OperandKind::Fn(String::from(ast_fn_name.to_owned())),
+                    kind: OperandKind::Fn(String::from(real_fn_name.to_owned())),
                     typ: node.typ.clone(),
                 };
 
