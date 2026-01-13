@@ -567,7 +567,7 @@ impl<'a> Parser<'a> {
                         .insert(name.to_owned(), (node.typ.clone(), node.origin));
                 }
 
-                for mut op in &mut node.children {
+                for op in &mut node.children {
                     self.resolve_node(op)
                 }
             }
@@ -575,7 +575,7 @@ impl<'a> Parser<'a> {
     }
 
     fn resolve_nodes(&mut self, nodes: &mut [Node]) {
-        for mut node in nodes {
+        for node in nodes {
             self.resolve_node(node);
         }
     }

@@ -10,7 +10,7 @@ use crate::{
     amd64,
     ir::{self},
     origin::Origin,
-    register_alloc::{MemoryLocation, RegisterMapping},
+    register_alloc::RegisterMapping,
 };
 
 #[repr(u8)]

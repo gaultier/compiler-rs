@@ -250,7 +250,7 @@ impl Emitter {
                     .as_ref()
                     .map(|x| x.typ.to_string())
                     .unwrap_or_default();
-                let real_fn_name = fn_name_ast_to_ir(&ast_fn_name, &arg_type);
+                let real_fn_name = fn_name_ast_to_ir(ast_fn_name, &arg_type);
                 let fn_name = Operand {
                     kind: OperandKind::Fn(real_fn_name.to_owned()),
                     typ: node.typ.clone(),
