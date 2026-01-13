@@ -5,6 +5,7 @@ use std::{
     panic,
 };
 
+use log::trace;
 use serde::Serialize;
 
 use crate::{
@@ -226,10 +227,15 @@ impl Emitter {
                     panic!("invalid fn call function name: {:#?}", node)
                 };
 
-                let arg_type = node.children.first().as_ref().map(|x| &*x.typ.kind);
-                let real_fn_name = match (ast_fn_name.as_str(), arg_type) {
-                    ("println", Some(TypeKind::Bool)) => "builtin.println_bool",
-                    ("println", Some(TypeKind::Number)) => "builtin.println_u64",
+                let arg_type = node
+                    .children
+                    .first()
+                    .as_ref()
+                    .map(|x| x.typ.to_string())
+                    .unwrap_or_default();
+                let real_fn_name = match (ast_fn_name.as_str(), arg_type.as_str()) {
+                    ("println", "func(bool)") => "builtin.println_bool",
+                    ("println", "func(int)") => "builtin.println_u64",
                     _ => ast_fn_name,
                 };
 
@@ -260,6 +266,11 @@ impl Emitter {
                     operands.push(Operand::new_vreg(vreg, typ));
                     fn_def.instructions.extend(ir_arg);
                 }
+
+                trace!(
+                    "ir: emit fn call: ast_name={} real_name={} arg_type={:?}",
+                    ast_fn_name, real_fn_name, arg_type,
+                );
 
                 vec![Instruction {
                     kind: InstructionKind::FnCall,

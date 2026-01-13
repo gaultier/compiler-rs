@@ -50,12 +50,20 @@ impl Display for Type {
             TypeKind::Number => write!(f, "int"),
             TypeKind::Bool => f.write_str("bool"),
             TypeKind::Function(ret, args) => {
-                f.write_str("func (")?;
+                f.write_str("func(")?;
                 for arg in args {
                     arg.fmt(f)?;
                 }
                 f.write_str(")")?;
-                ret.fmt(f)
+
+                match &*ret.kind {
+                    TypeKind::Unknown => panic!("invalid return type: {:#?}", ret),
+                    TypeKind::Void => {} // Noop
+                    _ => {
+                        ret.fmt(f)?;
+                    }
+                };
+                Ok(())
             }
         }?;
 

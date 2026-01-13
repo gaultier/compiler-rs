@@ -84,7 +84,7 @@ impl<'a> Parser<'a> {
         );
 
         nodes.push(Node {
-            kind: NodeKind::FnDef(String::from("builtin.println")),
+            kind: NodeKind::FnDef(String::from("println")),
             origin,
             typ: typ.clone(),
             children: Vec::new(), // FIXME?
@@ -346,8 +346,7 @@ impl<'a> Parser<'a> {
             None
         })?;
 
-        self
-            .expect_token_exactly_one(TokenKind::RightParen, "function call")?;
+        self.expect_token_exactly_one(TokenKind::RightParen, "function call")?;
 
         Some(Node {
             kind: NodeKind::FnCall,
@@ -384,8 +383,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_package_clause(&mut self) -> Option<Node> {
-        self
-            .expect_token_exactly_one(TokenKind::KeywordPackage, "package clause")?;
+        self.expect_token_exactly_one(TokenKind::KeywordPackage, "package clause")?;
 
         let package = if let Some(p) = self.match_kind(TokenKind::Identifier) {
             p
@@ -441,18 +439,15 @@ impl<'a> Parser<'a> {
             return None;
         };
 
-        self
-            .expect_token_exactly_one(TokenKind::LeftParen, "function declaration")?;
+        self.expect_token_exactly_one(TokenKind::LeftParen, "function declaration")?;
 
         // TODO: Args.
 
-        self
-            .expect_token_exactly_one(TokenKind::RightParen, "function declaration")?;
+        self.expect_token_exactly_one(TokenKind::RightParen, "function declaration")?;
 
         // TODO: Return type.
 
-        self
-            .expect_token_exactly_one(TokenKind::LeftCurly, "function declaration")?;
+        self.expect_token_exactly_one(TokenKind::LeftCurly, "function declaration")?;
 
         let mut stmts = Vec::new();
 
@@ -470,8 +465,7 @@ impl<'a> Parser<'a> {
             stmts.push(stmt);
         }
 
-        self
-            .expect_token_exactly_one(TokenKind::RightCurly, "function declaration")?;
+        self.expect_token_exactly_one(TokenKind::RightCurly, "function declaration")?;
 
         Some(Node {
             kind: NodeKind::FnDef(Self::str_from_source(self.input, &name.origin).to_owned()),
