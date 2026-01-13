@@ -543,14 +543,13 @@ impl<'a> Parser<'a> {
 
             // Recurse.
             NodeKind::Add | NodeKind::Multiply | NodeKind::Divide | NodeKind::FnCall => {
-                for mut op in &mut node.children {
+                for op in &mut node.children {
                     self.resolve_node(op)
                 }
                 if *node.typ.kind == TypeKind::Unknown {
                     node.typ = node.children.first().map(|x| x.typ.clone()).unwrap();
                     assert_ne!(*node.typ.kind, TypeKind::Unknown);
                 }
-                dbg!(&node.typ);
             }
             NodeKind::FnDef(name) => {
                 assert!(matches!(&*node.typ.kind, TypeKind::Function(_, _)));

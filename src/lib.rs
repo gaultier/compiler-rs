@@ -241,26 +241,22 @@ pub fn compile(
             register_alloc::regalloc(&fn_def.live_ranges, &vreg_to_size, &asm::abi(&target_arch));
         trace!("vreg_to_memory_location: {:#?}", vreg_to_memory_location);
 
-        let (fn_asm_instructions, _) = asm::emit_fn_def(
-            fn_def,
-            &vreg_to_memory_location,
-            stack_offset,
-            &target_arch,
-        );
+        let (fn_asm_instructions, _) =
+            asm::emit_fn_def(fn_def, &vreg_to_memory_location, stack_offset, &target_arch);
 
         trace!(
             "asm_instructions: fn_name={} ins={:#?}",
             fn_def.name, fn_asm_instructions
         );
         writeln!(&mut asm_text, "{}:\n", &fn_def.name).unwrap();
+        asm_instructions.extend(fn_asm_instructions);
+
         for ins in &asm_instructions {
             writeln!(&mut asm_text, "  {}", ins).unwrap();
         }
         writeln!(&mut asm_text, "\n").unwrap();
 
         trace!("asm_text: {}:\n{}", fn_def.name, &asm_text);
-
-        asm_instructions.extend(fn_asm_instructions);
     }
 
     let encoding = Encoding::default(); // asm::encode(&asm_instructions, &target_arch);
