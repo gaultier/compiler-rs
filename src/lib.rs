@@ -263,7 +263,8 @@ pub fn compile(
 
     trace!("asm_text: {}", &asm_text);
 
-    let encoding = Encoding::default(); // asm::encode(&asm_instructions, &target_arch);
+    let encoding = asm::encode(&asm_instructions, &target_arch);
+    trace!("asm encoded: {:02x?}", &encoding.instructions);
 
     //let asm_eval = asm::eval(&asm_instructions);
     //trace!("asm_eval: {:#?}", asm_eval);
