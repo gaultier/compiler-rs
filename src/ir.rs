@@ -190,7 +190,7 @@ impl Emitter {
         }
     }
 
-    fn emit_node(&mut self, fn_def: &mut FnDef, node: &Node) -> Vec<Instruction> {
+    fn emit_node(fn_def: &mut FnDef, node: &Node) -> Vec<Instruction> {
         match &node.kind {
             crate::ast::NodeKind::Package(_) | crate::ast::NodeKind::FnDef(_) => {
                 panic!(
@@ -264,7 +264,7 @@ impl Emitter {
                 let mut operands = Vec::with_capacity(args.len() + 1);
                 operands.push(fn_name);
                 for arg in args {
-                    let ir_arg = self.emit_node(fn_def, arg);
+                    let ir_arg = Self::emit_node(fn_def, arg);
                     let (vreg, typ) = ir_arg
                         .first()
                         .map(|x| (x.res_vreg.unwrap(), &x.typ))
@@ -296,13 +296,13 @@ impl Emitter {
                 assert_eq!(*ast_lhs.typ.kind, TypeKind::Number);
                 assert_eq!(*node.typ.kind, TypeKind::Number);
 
-                let ir_lhs = self.emit_node(fn_def, ast_lhs);
+                let ir_lhs = Self::emit_node(fn_def, ast_lhs);
                 assert_eq!(ir_lhs.len(), 1);
                 let (ir_lhs_vreg, ir_lhs_typ) =
                     (ir_lhs[0].res_vreg.unwrap(), ir_lhs[0].typ.clone());
                 fn_def.instructions.extend(ir_lhs);
 
-                let ir_rhs = self.emit_node(fn_def, ast_rhs);
+                let ir_rhs = Self::emit_node(fn_def, ast_rhs);
                 assert_eq!(ir_rhs.len(), 1);
                 let (ir_rhs_vreg, ir_rhs_typ) =
                     (ir_rhs[0].res_vreg.unwrap(), ir_rhs[0].typ.clone());
@@ -338,7 +338,7 @@ impl Emitter {
                 let mut fn_def =
                     FnDef::new(fn_name_ast_to_ir(fn_name, &node.typ.to_string()), &node.typ);
                 for node in &node.children {
-                    let ins = self.emit_node(&mut fn_def, node);
+                    let ins = Self::emit_node(&mut fn_def, node);
                     fn_def.instructions.extend(ins);
                 }
 
