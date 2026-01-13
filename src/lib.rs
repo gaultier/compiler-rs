@@ -206,7 +206,7 @@ pub fn compile(
     if !parser.errors.is_empty() {
         return CompileResult {
             lex_tokens: parser.tokens,
-            ast_nodes: ast_nodes,
+            ast_nodes,
             errors: parser.errors,
             ..Default::default()
         };
@@ -242,7 +242,7 @@ pub fn compile(
         trace!("vreg_to_memory_location: {:#?}", vreg_to_memory_location);
 
         let (fn_asm_instructions, _) = asm::emit_fn_def(
-            &fn_def,
+            fn_def,
             &vreg_to_memory_location,
             stack_offset,
             &target_arch,
@@ -270,7 +270,7 @@ pub fn compile(
 
     CompileResult {
         lex_tokens: parser.tokens,
-        ast_nodes: ast_nodes,
+        ast_nodes,
         errors: parser.errors,
         ir_fn_defs: ir_emitter.fn_defs,
         ir_text: String::from_utf8(ir_text).unwrap(),

@@ -768,7 +768,7 @@ impl Emitter {
         }
 
         for ir in &fn_def.instructions {
-            self.instruction_selection(&ir, vreg_to_memory_location);
+            self.instruction_selection(ir, vreg_to_memory_location);
         }
 
         // Restore stack.

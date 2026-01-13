@@ -234,7 +234,7 @@ impl Emitter {
                 };
 
                 let fn_name = Operand {
-                    kind: OperandKind::Fn(String::from(real_fn_name.to_owned())),
+                    kind: OperandKind::Fn(real_fn_name.to_owned()),
                     typ: node.typ.clone(),
                 };
 
@@ -279,13 +279,13 @@ impl Emitter {
                 assert_eq!(*ast_lhs.typ.kind, TypeKind::Number);
                 assert_eq!(*node.typ.kind, TypeKind::Number);
 
-                let ir_lhs = self.emit_node(fn_def, &ast_lhs, nodes, name_to_node_def);
+                let ir_lhs = self.emit_node(fn_def, ast_lhs, nodes, name_to_node_def);
                 assert_eq!(ir_lhs.len(), 1);
                 let (ir_lhs_vreg, ir_lhs_typ) =
                     (ir_lhs[0].res_vreg.unwrap(), ir_lhs[0].typ.clone());
                 fn_def.instructions.extend(ir_lhs);
 
-                let ir_rhs = self.emit_node(fn_def, &ast_rhs, nodes, name_to_node_def);
+                let ir_rhs = self.emit_node(fn_def, ast_rhs, nodes, name_to_node_def);
                 assert_eq!(ir_rhs.len(), 1);
                 let (ir_rhs_vreg, ir_rhs_typ) =
                     (ir_rhs[0].res_vreg.unwrap(), ir_rhs[0].typ.clone());

@@ -272,7 +272,7 @@ impl<'a> Parser<'a> {
                     self.current_or_last_token_origin().unwrap_or(token.origin),
                     format!("expected expression for the right-hand side of a + or - expression but found: {:?}",found),
                 );
-                return None;
+                None
             })?;
 
         Some(Node {
@@ -346,12 +346,8 @@ impl<'a> Parser<'a> {
             None
         })?;
 
-        if self
-            .expect_token_exactly_one(TokenKind::RightParen, "function call")
-            .is_none()
-        {
-            return None;
-        }
+        self
+            .expect_token_exactly_one(TokenKind::RightParen, "function call")?;
 
         Some(Node {
             kind: NodeKind::FnCall,
@@ -388,12 +384,8 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_package_clause(&mut self) -> Option<Node> {
-        if self
-            .expect_token_exactly_one(TokenKind::KeywordPackage, "package clause")
-            .is_none()
-        {
-            return None;
-        }
+        self
+            .expect_token_exactly_one(TokenKind::KeywordPackage, "package clause")?;
 
         let package = if let Some(p) = self.match_kind(TokenKind::Identifier) {
             p
@@ -407,7 +399,7 @@ impl<'a> Parser<'a> {
         };
 
         Some(Node {
-            kind: NodeKind::Package(Self::str_from_source(&self.input, &package.origin).to_owned()),
+            kind: NodeKind::Package(Self::str_from_source(self.input, &package.origin).to_owned()),
             origin: package.origin,
             typ: Type::new_void(),
             children: Vec::new(),
@@ -431,18 +423,12 @@ impl<'a> Parser<'a> {
                 self.current_or_last_token_origin().unwrap(),
                 format!("failed to parse {}: missing {:#?}", context, token_kind),
             );
-            return None;
+            None
         }
     }
 
     fn parse_function_declaration(&mut self) -> Option<Node> {
-        let func = if let Some(func) =
-            self.expect_token_exactly_one(TokenKind::KeywordFunc, "function declaration")
-        {
-            func
-        } else {
-            return None;
-        };
+        let func = self.expect_token_exactly_one(TokenKind::KeywordFunc, "function declaration")?;
 
         let name = if let Some(name) = self.match_kind(TokenKind::Identifier) {
             name
@@ -455,30 +441,18 @@ impl<'a> Parser<'a> {
             return None;
         };
 
-        if self
-            .expect_token_exactly_one(TokenKind::LeftParen, "function declaration")
-            .is_none()
-        {
-            return None;
-        }
+        self
+            .expect_token_exactly_one(TokenKind::LeftParen, "function declaration")?;
 
         // TODO: Args.
 
-        if self
-            .expect_token_exactly_one(TokenKind::RightParen, "function declaration")
-            .is_none()
-        {
-            return None;
-        }
+        self
+            .expect_token_exactly_one(TokenKind::RightParen, "function declaration")?;
 
         // TODO: Return type.
 
-        if self
-            .expect_token_exactly_one(TokenKind::LeftCurly, "function declaration")
-            .is_none()
-        {
-            return None;
-        }
+        self
+            .expect_token_exactly_one(TokenKind::LeftCurly, "function declaration")?;
 
         let mut stmts = Vec::new();
 
@@ -496,15 +470,11 @@ impl<'a> Parser<'a> {
             stmts.push(stmt);
         }
 
-        if self
-            .expect_token_exactly_one(TokenKind::RightCurly, "function declaration")
-            .is_none()
-        {
-            return None;
-        }
+        self
+            .expect_token_exactly_one(TokenKind::RightCurly, "function declaration")?;
 
         Some(Node {
-            kind: NodeKind::FnDef(Self::str_from_source(&self.input, &name.origin).to_owned()),
+            kind: NodeKind::FnDef(Self::str_from_source(self.input, &name.origin).to_owned()),
             origin: func.origin,
             typ: Type::new_function(&Type::new_void(), &[], &func.origin), // TODO
             children: stmts,
@@ -580,7 +550,7 @@ impl<'a> Parser<'a> {
             // Recurse.
             NodeKind::Add | NodeKind::Multiply | NodeKind::Divide | NodeKind::FnCall => {
                 for mut op in &mut node.children {
-                    self.resolve_node(&mut op)
+                    self.resolve_node(op)
                 }
                 if *node.typ.kind == TypeKind::Unknown {
                     node.typ = node.children.first().map(|x| x.typ.clone()).unwrap();
@@ -595,9 +565,9 @@ impl<'a> Parser<'a> {
                         old_typ,
                         &node.typ,
                         name,
-                        &old_origin,
+                        old_origin,
                         &node.origin,
-                        &self.file_id_to_name,
+                        self.file_id_to_name,
                     ));
                 } else {
                     self.name_to_type
@@ -605,7 +575,7 @@ impl<'a> Parser<'a> {
                 }
 
                 for mut op in &mut node.children {
-                    self.resolve_node(&mut op)
+                    self.resolve_node(op)
                 }
             }
         }
@@ -613,7 +583,7 @@ impl<'a> Parser<'a> {
 
     fn resolve_nodes(&mut self, nodes: &mut [Node]) {
         for mut node in nodes {
-            self.resolve_node(&mut node);
+            self.resolve_node(node);
         }
     }
 }

@@ -140,7 +140,7 @@ impl Lexer {
             }
             match c {
                 '\n' => {
-                    let origin = Origin {
+                    let _origin = Origin {
                         len: 1,
                         ..self.origin
                     };
