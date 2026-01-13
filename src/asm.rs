@@ -64,24 +64,11 @@ pub struct Encoding {
     pub symbols: BTreeMap<String, Symbol>,
 }
 
-pub type EvalResult = BTreeMap<MemoryLocation, ir::EvalValue>;
-
 impl Display for Register {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Register::Amd64(register) => std::fmt::Display::fmt(register, f),
         }
-    }
-}
-
-pub fn eval(instructions: &[Instruction]) -> EvalResult {
-    match instructions.first() {
-        Some(Instruction::Amd64(_)) => {
-            let mut interpreter = amd64::Interpreter::new();
-            interpreter.eval(instructions);
-            interpreter.state
-        }
-        _ => EvalResult::new(),
     }
 }
 

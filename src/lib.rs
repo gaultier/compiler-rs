@@ -141,7 +141,6 @@ mod wasm32 {
             //ir_eval: compiled.ir_eval,
             //vreg_to_memory_location: compiled.vreg_to_memory_location,
             asm_encoded: compiled.asm_encoded,
-            //asm_eval: compiled.asm_eval.into_iter().collect(),
         };
 
         let json = serde_json::to_string(&json_compiled).unwrap();
@@ -164,7 +163,6 @@ mod wasm32 {
         //pub ir_eval: ir::EvalResult,
         //pub vreg_to_memory_location: RegisterMapping,
         pub asm_encoded: Encoding,
-        //pub asm_eval: Vec<(MemoryLocation, ir::EvalValue)>,
     }
 }
 
@@ -180,7 +178,6 @@ pub struct CompileResult {
     pub asm_instructions: Vec<asm::Instruction>,
     pub asm_text: String,
     pub asm_encoded: Encoding,
-    pub asm_eval: asm::EvalResult,
 }
 
 pub fn compile(
@@ -269,9 +266,6 @@ pub fn compile(
         encoding.entrypoint, &encoding.instructions
     );
 
-    //let asm_eval = asm::eval(&asm_instructions);
-    //trace!("asm_eval: {:#?}", asm_eval);
-
     CompileResult {
         lex_tokens: parser.tokens,
         ast_nodes,
@@ -283,7 +277,6 @@ pub fn compile(
         asm_instructions,
         asm_text,
         asm_encoded: encoding,
-        asm_eval: asm::EvalResult::default(),
     }
 }
 
@@ -306,17 +299,5 @@ mod tests {
         assert_eq!(compiled.ir_instructions.len(), 7);
         // Due to spills.
         assert!(compiled.asm_instructions.len() >= compiled.ir_instructions.len());
-        // Due to spills.
-        assert!(compiled.asm_eval.len() >= compiled.vreg_to_memory_location.len(),);
-
-        for (vreg, ir_val) in &compiled.ir_eval {
-            let preg = &compiled.vreg_to_memory_location[vreg];
-            let asm_val = compiled.asm_eval.get(&preg).unwrap();
-            assert_eq!(
-                ir_val, asm_val,
-                "vreg={:#?} preg={:#?} asm_val={:#?}",
-                vreg, preg, asm_val
-            );
-        }
     }
 }

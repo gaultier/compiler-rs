@@ -16,7 +16,6 @@
             <div id="ir_eval"></div>
             <div id="regalloc"></div>
             <div id="asm"></div>
-            <div id="asm_eval"></div>
         </div>
     </body>
     <script>
@@ -162,18 +161,6 @@
             const asm_dom = document.getElementById("asm");
             asm_dom.innerText = res.asm_encoded.instructions;
 
-            const asm_eval_dom = document.getElementById("asm_eval");
-            asm_eval_dom.innerText = "";
-            for (const [mem_loc, val] of res.asm_eval) {
-                const item = document.createElement("span");
-                if (mem_loc.Register != null && mem_loc.Register.Amd64 != null) {
-                    item.innerText = `${mem_loc.Register.Amd64}: ${val.kind.Num}`;
-                } else if (mem_loc.Stack != null) {
-                    item.innerText = `stack ${mem_loc.Stack}: ${val.kind.Num}`;
-                }
-
-                asm_eval_dom.appendChild(item);
-            }
         }
 
         async function loadWasm() {
