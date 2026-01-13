@@ -50,7 +50,7 @@ impl Display for Type {
             TypeKind::Number => write!(f, "int"),
             TypeKind::Bool => f.write_str("bool"),
             TypeKind::Function(ret, args) => {
-                f.write_str("func(")?;
+                f.write_str("(")?;
                 for arg in args {
                     arg.fmt(f)?;
                 }

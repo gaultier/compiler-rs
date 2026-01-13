@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    io::{Write, stdout},
-};
+use std::collections::HashMap;
 
 use compiler_rs_lib::{
     asm::{self, Os},
@@ -58,15 +55,14 @@ fn main() {
     for err in &compiled.errors {
         err.write(&mut std::io::stderr(), &file_content, &file_id_to_name)
             .unwrap();
-        std::io::stderr().write_all(b"\n").unwrap();
+        eprintln!()
     }
 
     println!("--- IR ---");
     println!("fn_defs: {:#?}", &compiled.ir_fn_defs);
     for fn_def in &compiled.ir_fn_defs {
         for (i, ins) in fn_def.instructions.iter().enumerate() {
-            print!("{}: ", i);
-            ins.write(&mut stdout()).unwrap();
+            print!("{}: {}", i, ins);
         }
     }
     println!("eval: {:#?}", &compiled.ir_eval);

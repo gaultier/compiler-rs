@@ -216,13 +216,17 @@ pub fn compile(
     ir_emitter.emit(&ast_nodes, &parser.name_to_type);
     trace!("ir_emitter: {:#?}", ir_emitter);
 
-    let mut ir_text = Vec::with_capacity(input.len() * 3);
+    let mut ir_text = String::with_capacity(input.len() * 3);
     for fn_def in &ir_emitter.fn_defs {
+        writeln!(&mut ir_text, "{} {{", fn_def).unwrap();
+
         for ins in &fn_def.instructions {
-            ins.write(&mut ir_text).unwrap();
+            writeln!(&mut ir_text, "{}", ins).unwrap();
         }
+
+        write!(&mut ir_text, "\n}}").unwrap();
     }
-    trace!("ir_text: {}", unsafe { str::from_utf8_unchecked(&ir_text) });
+    trace!("ir_text: {}", &ir_text);
 
     //let ir_eval = ir::eval(&ir_emitter.instructions);
     //trace!("ir_eval: {:#?}", ir_eval);
@@ -269,7 +273,7 @@ pub fn compile(
         ast_nodes,
         errors: parser.errors,
         ir_fn_defs: ir_emitter.fn_defs,
-        ir_text: String::from_utf8(ir_text).unwrap(),
+        ir_text,
         ir_eval: ir::EvalResult::default(),
         vreg_to_memory_locations: Vec::new(),
         asm_instructions,

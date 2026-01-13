@@ -69,6 +69,13 @@ pub struct FnDef {
     vreg: VirtualRegister,
     pub live_ranges: LiveRanges,
     vreg_to_type: BTreeMap<VirtualRegister, Type>,
+    typ: Type,
+}
+
+impl Display for FnDef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "func {}{}", self.name, self.typ)
+    }
 }
 
 impl Display for VirtualRegister {
@@ -90,13 +97,14 @@ impl Default for Emitter {
 }
 
 impl FnDef {
-    fn new(name: &str) -> Self {
+    fn new(name: &str, typ: &Type) -> Self {
         Self {
             name: name.to_owned(),
             instructions: Vec::new(),
             vreg: VirtualRegister(0),
             live_ranges: LiveRanges::new(),
             vreg_to_type: BTreeMap::new(),
+            typ: typ.clone(),
         }
     }
 
@@ -234,8 +242,8 @@ impl Emitter {
                     .map(|x| x.typ.to_string())
                     .unwrap_or_default();
                 let real_fn_name = match (ast_fn_name.as_str(), arg_type.as_str()) {
-                    ("println", "func(bool)") => "builtin.println_bool",
-                    ("println", "func(int)") => "builtin.println_u64",
+                    ("println", "(bool)") => "builtin.println_bool",
+                    ("println", "(int)") => "builtin.println_u64",
                     _ => ast_fn_name,
                 };
 
@@ -336,7 +344,7 @@ impl Emitter {
             crate::ast::NodeKind::Package(_) => None,
             // Start of a new function.
             crate::ast::NodeKind::FnDef(fn_name) => {
-                let mut fn_def = FnDef::new(&fn_name.clone());
+                let mut fn_def = FnDef::new(&fn_name.clone(), &node.typ);
                 self.emit_nodes(&mut fn_def, &node.children, name_to_node_def);
 
                 fn_def.live_ranges = fn_def.compute_live_ranges();
@@ -356,22 +364,19 @@ impl Emitter {
     }
 }
 
-impl Operand {
-    pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+impl Display for Operand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.kind {
             OperandKind::Num(n) => {
-                write!(w, "{}", n)
+                write!(f, "{}", n)
             }
             OperandKind::Bool(b) => {
-                write!(w, "{}", b)
+                write!(f, "{}", b)
             }
-            OperandKind::VirtualRegister(r) => write!(w, "v{}", r.0),
-            OperandKind::Fn(name) => w.write_all(name.as_bytes()),
+            OperandKind::VirtualRegister(r) => write!(f, "v{}", r.0),
+            OperandKind::Fn(name) => f.write_str(name),
         }?;
-        w.write_all(b" ")?;
-        Ok(())
-
-        // self.typ.write(w)
+        f.write_str(" ")
     }
 }
 
@@ -398,37 +403,37 @@ impl Operand {
     }
 }
 
-impl Instruction {
-    pub fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+impl Display for Instruction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(vreg) = self.res_vreg {
-            write!(w, "v{} {} := ", vreg.0, self.typ)?;
+            write!(f, "v{} {} := ", vreg.0, self.typ)?;
         }
 
         match self.kind {
             InstructionKind::IAdd => {
-                write!(w, "iadd")?;
+                write!(f, "iadd")?;
             }
             InstructionKind::IMultiply => {
-                write!(w, "imul")?;
+                write!(f, "imul")?;
             }
             InstructionKind::IDivide => {
-                write!(w, "idiv")?;
+                write!(f, "idiv")?;
             }
             InstructionKind::Set => {
-                write!(w, "set")?;
+                write!(f, "set")?;
             }
             InstructionKind::FnCall => {
-                write!(w, "call")?;
+                write!(f, "call")?;
             }
         };
-        write!(w, " ")?;
+        write!(f, " ")?;
 
         for op in &self.operands {
-            op.write(w)?;
-            write!(w, " ")?;
+            op.fmt(f)?;
+            write!(f, " ")?;
         }
 
-        writeln!(w)
+        writeln!(f)
     }
 }
 
