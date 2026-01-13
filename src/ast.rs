@@ -568,7 +568,7 @@ impl<'a> Parser<'a> {
         decls
     }
 
-    fn resolve_node(&mut self, node: &Node) {
+    fn resolve_node(&mut self, node: &mut Node) {
         match &node.kind {
             // Nothing to do.
             NodeKind::Package(_) | NodeKind::Number(_) | NodeKind::Bool(_) => {}
@@ -579,9 +579,14 @@ impl<'a> Parser<'a> {
 
             // Recurse.
             NodeKind::Add | NodeKind::Multiply | NodeKind::Divide | NodeKind::FnCall => {
-                for op in &node.children {
-                    self.resolve_node(op)
+                for mut op in &mut node.children {
+                    self.resolve_node(&mut op)
                 }
+                if *node.typ.kind == TypeKind::Unknown {
+                    node.typ = node.children.first().map(|x| x.typ.clone()).unwrap();
+                    assert_ne!(*node.typ.kind, TypeKind::Unknown);
+                }
+                dbg!(&node.typ);
             }
             NodeKind::FnDef(name) => {
                 assert!(matches!(&*node.typ.kind, TypeKind::Function(_, _)));
@@ -598,13 +603,17 @@ impl<'a> Parser<'a> {
                     self.name_to_type
                         .insert(name.to_owned(), (node.typ.clone(), node.origin));
                 }
+
+                for mut op in &mut node.children {
+                    self.resolve_node(&mut op)
+                }
             }
         }
     }
 
     fn resolve_nodes(&mut self, nodes: &mut [Node]) {
-        for node in nodes {
-            self.resolve_node(node);
+        for mut node in nodes {
+            self.resolve_node(&mut node);
         }
     }
 }
