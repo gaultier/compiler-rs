@@ -264,7 +264,10 @@ pub fn compile(
     trace!("asm_text: {}", &asm_text);
 
     let encoding = asm::encode(&asm_instructions, &target_arch);
-    trace!("asm encoded: {:02x?}", &encoding.instructions);
+    trace!(
+        "asm encoded: entrypoint={:#X} bin={:#04X?}",
+        encoding.entrypoint, &encoding.instructions
+    );
 
     //let asm_eval = asm::eval(&asm_instructions);
     //trace!("asm_eval: {:#?}", asm_eval);
