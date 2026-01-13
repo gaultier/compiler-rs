@@ -218,13 +218,13 @@ pub fn compile(
 
     let mut ir_text = String::with_capacity(input.len() * 3);
     for fn_def in &ir_emitter.fn_defs {
-        writeln!(&mut ir_text, "{} {{", fn_def).unwrap();
+        writeln!(&mut ir_text, "\n{} {{", fn_def).unwrap();
 
         for ins in &fn_def.instructions {
-            writeln!(&mut ir_text, "{}", ins).unwrap();
+            writeln!(&mut ir_text, "  {}", ins).unwrap();
         }
 
-        write!(&mut ir_text, "\n}}").unwrap();
+        writeln!(&mut ir_text, "\n}}").unwrap();
     }
     trace!("ir_text: {}", &ir_text);
 
@@ -252,16 +252,16 @@ pub fn compile(
             "asm_instructions: fn_name={} ins={:#?}",
             fn_def.name, fn_asm_instructions
         );
-        writeln!(&mut asm_text, "{}:\n", &fn_def.name).unwrap();
-        asm_instructions.extend(fn_asm_instructions);
+        writeln!(&mut asm_text, "{}:", &fn_def.name).unwrap();
 
-        for ins in &asm_instructions {
+        for ins in &fn_asm_instructions {
             writeln!(&mut asm_text, "  {}", ins).unwrap();
         }
         writeln!(&mut asm_text, "\n").unwrap();
-
-        trace!("asm_text: {}:\n{}", fn_def.name, &asm_text);
+        asm_instructions.extend(fn_asm_instructions);
     }
+
+    trace!("asm_text: {}", &asm_text);
 
     let encoding = Encoding::default(); // asm::encode(&asm_instructions, &target_arch);
 

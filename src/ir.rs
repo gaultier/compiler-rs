@@ -96,10 +96,19 @@ impl Default for Emitter {
     }
 }
 
+fn fn_name_ast_to_ir(ast_name: &str, typ_str: &str) -> String {
+    match (ast_name, typ_str) {
+        ("println", "(bool)") => "builtin.println_bool",
+        ("println", "(int)") => "builtin.println_u64",
+        _ => ast_name,
+    }
+    .to_owned()
+}
+
 impl FnDef {
-    fn new(name: &str, typ: &Type) -> Self {
+    fn new(name: String, typ: &Type) -> Self {
         Self {
-            name: name.to_owned(),
+            name,
             instructions: Vec::new(),
             vreg: VirtualRegister(0),
             live_ranges: LiveRanges::new(),
@@ -241,12 +250,7 @@ impl Emitter {
                     .as_ref()
                     .map(|x| x.typ.to_string())
                     .unwrap_or_default();
-                let real_fn_name = match (ast_fn_name.as_str(), arg_type.as_str()) {
-                    ("println", "(bool)") => "builtin.println_bool",
-                    ("println", "(int)") => "builtin.println_u64",
-                    _ => ast_fn_name,
-                };
-
+                let real_fn_name = fn_name_ast_to_ir(&ast_fn_name, &arg_type);
                 let fn_name = Operand {
                     kind: OperandKind::Fn(real_fn_name.to_owned()),
                     typ: node.typ.clone(),
@@ -344,7 +348,8 @@ impl Emitter {
             crate::ast::NodeKind::Package(_) => None,
             // Start of a new function.
             crate::ast::NodeKind::FnDef(fn_name) => {
-                let mut fn_def = FnDef::new(&fn_name.clone(), &node.typ);
+                let mut fn_def =
+                    FnDef::new(fn_name_ast_to_ir(fn_name, &node.typ.to_string()), &node.typ);
                 self.emit_nodes(&mut fn_def, &node.children, name_to_node_def);
 
                 fn_def.live_ranges = fn_def.compute_live_ranges();
@@ -357,7 +362,6 @@ impl Emitter {
     pub fn emit(&mut self, nodes: &[Node], name_to_node_def: &NameToType) {
         for node in nodes {
             if let Some(def) = self.emit_def(node, name_to_node_def) {
-                dbg!(&def);
                 self.fn_defs.push(def);
             }
         }

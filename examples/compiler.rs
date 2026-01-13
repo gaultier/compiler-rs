@@ -45,12 +45,6 @@ fn main() {
     };
     let compiled = compile(&file_content, 1, &file_id_to_name, target_arch);
 
-    println!("--- Lex ---");
-    println!("tokens: {:#?}", &compiled.lex_tokens);
-
-    println!("--- Parse ---");
-    println!("nodes: {:#?}", &compiled.ast_nodes);
-
     println!("--- Errors ---");
     for err in &compiled.errors {
         err.write(&mut std::io::stderr(), &file_content, &file_id_to_name)
@@ -58,24 +52,8 @@ fn main() {
         eprintln!()
     }
 
-    println!("--- IR ---");
-    println!("fn_defs: {:#?}", &compiled.ir_fn_defs);
-    for fn_def in &compiled.ir_fn_defs {
-        for (i, ins) in fn_def.instructions.iter().enumerate() {
-            print!("{}: {}", i, ins);
-        }
-    }
-    println!("eval: {:#?}", &compiled.ir_eval);
-
     //println!("--- RegAlloc ---");
     //println!("vreg_to_mem_loc: {:#?}", &compiled.vreg_to_memory_location);
-
-    println!("--- ASM ---");
-    println!("instructions: {:#?}", &compiled.asm_instructions);
-    println!("{}", &compiled.asm_text);
-    println!("encoded: {:x?}", &compiled.asm_encoded);
-
-    println!("eval: {:#?}", &compiled.asm_eval);
 
     if !compiled.errors.is_empty() {
         std::process::exit(1)
