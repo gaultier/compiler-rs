@@ -45,7 +45,7 @@ fn main() {
     };
     let compiled = compile(&file_content, 1, &file_id_to_name, target_arch);
 
-    println!("--- Errors ---");
+    println!("--- Errors: {} ---", compiled.errors.len());
     for err in &compiled.errors {
         err.write(&mut std::io::stderr(), &file_content, &file_id_to_name)
             .unwrap();
