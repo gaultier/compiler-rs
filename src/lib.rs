@@ -9,6 +9,7 @@ pub mod macho;
 mod origin;
 pub mod register_alloc;
 pub mod type_checker;
+mod utils;
 
 use std::{
     collections::{BTreeMap, HashMap},

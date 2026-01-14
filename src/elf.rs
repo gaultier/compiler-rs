@@ -7,7 +7,10 @@ use std::os::unix::fs::OpenOptionsExt;
 
 use log::trace;
 
-use crate::asm::{Encoding, Visibility};
+use crate::{
+    asm::{Encoding, Visibility},
+    utils,
+};
 
 #[derive(Debug)]
 #[repr(u32)]
@@ -104,10 +107,6 @@ fn make_symtab_info(kind: SymbolKind, binding: SymbolBinding) -> u8 {
     ((binding as u8) << 4) | ((kind as u8) & 0xf)
 }
 
-fn round_up(n: usize, rnd: usize) -> usize {
-    (n + (rnd - 1)) & !(rnd - 1)
-}
-
 pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
     let page_size: usize = 4 * 1024; // FIXME
     let vm_start = 1 << 22;
@@ -181,7 +180,8 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
             kind: SectionHeaderKind::Strtab,
             flags: 0,
             addr: 0,
-            offset: page_size as u64 + round_up(encoding.instructions.len(), page_size) as u64,
+            offset: page_size as u64
+                + utils::round_up(encoding.instructions.len(), page_size) as u64,
             size: strings_size as u64,
             align: 1,
             ..Default::default()
@@ -193,7 +193,7 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
             flags: 0,
             addr: 0,
             offset: page_size as u64
-                + round_up(encoding.instructions.len(), page_size) as u64
+                + utils::round_up(encoding.instructions.len(), page_size) as u64
                 + strings_size as u64,
             size: (symtab.len() * std::mem::size_of::<Symtab>()) as u64,
             align: std::mem::align_of::<Symtab>() as u64,
@@ -228,7 +228,7 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
 
         // Section header table offset.
         let section_header_table_offset = page_size as u64
-            + round_up(encoding.instructions.len(), page_size) as u64
+            + utils::round_up(encoding.instructions.len(), page_size) as u64
             + strings_size as u64
             + (symtab.len() * std::mem::size_of::<Symtab>()) as u64;
         w.write_all(&section_header_table_offset.to_le_bytes())?;
@@ -280,7 +280,7 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
     w.write_all(&encoding.instructions)?;
 
     // Pad.
-    for _ in encoding.instructions.len()..round_up(encoding.instructions.len(), page_size) {
+    for _ in encoding.instructions.len()..utils::round_up(encoding.instructions.len(), page_size) {
         w.write_all(&[0])?;
     }
 

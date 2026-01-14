@@ -4,7 +4,7 @@ use std::{fs::OpenOptions, io::Write};
 
 use log::trace;
 
-use crate::asm::Encoding;
+use crate::{asm::Encoding, utils};
 
 #[repr(u32)]
 enum CpuKind {
@@ -37,8 +37,8 @@ struct Header {
 #[repr(C)]
 struct SegmentLoad64 {
     name: [u8; 16],
-    addr: u64,
-    addr_size: u64,
+    vm_addr: u64,
+    vm_size: u64,
     file_offset: u64,
     file_size: u64,
     max_vmem_protect: u32,
@@ -51,6 +51,13 @@ struct SegmentLoad64 {
 enum LoadCommandKind {
     Symtab = 0x2,
     Segment64 = 0x19,
+}
+
+#[repr(u32)]
+enum Permissions {
+    Read = 0b01,
+    Write = 0b10,
+    Exec = 0b100,
 }
 
 #[repr(C)]
@@ -70,17 +77,31 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
     assert_eq!(std::mem::size_of::<SegmentLoad64>(), 64);
     assert_eq!(std::mem::size_of::<LoadCommand>(), 8);
 
-    let cmds = [SegmentLoad64 {
-        name: *b"__PAGEZERO\0\0\0\0\0\0",
-        addr: 0,
-        addr_size: u32::MAX as u64,
-        file_offset: 0,
-        file_size: 0,
-        max_vmem_protect: 0,
-        init_vmem_protect: 0,
-        sections_count: 0,
-        flags: 0,
-    }];
+    let page_size = 4 * 1024; // TODO: On ARM: 16KiB.
+    let cmds = [
+        SegmentLoad64 {
+            name: *b"__PAGEZERO\0\0\0\0\0\0",
+            vm_addr: 0,
+            vm_size: u32::MAX as u64,
+            file_offset: 0,
+            file_size: 0,
+            max_vmem_protect: 0,
+            init_vmem_protect: 0,
+            sections_count: 0,
+            flags: 0,
+        },
+        SegmentLoad64 {
+            name: *b"__TEXT\0\0\0\0\0\0\0\0\0\0",
+            vm_addr: u32::MAX as u64 + 1,
+            vm_size: utils::round_up(encoding.instructions.len(), page_size) as u64,
+            file_offset: 0,
+            file_size: utils::round_up(encoding.instructions.len(), page_size) as u64,
+            max_vmem_protect: Permissions::Read as u32 | Permissions::Exec as u32,
+            init_vmem_protect: Permissions::Read as u32 | Permissions::Exec as u32,
+            sections_count: 0, // TODO: 1.
+            flags: 0,
+        },
+    ];
     let cmds_bytes_count = ((std::mem::size_of::<LoadCommand>()
         + std::mem::size_of::<SegmentLoad64>())
         * cmds.len()) as u32;
