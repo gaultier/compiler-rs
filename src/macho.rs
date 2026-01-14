@@ -103,7 +103,7 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
         },
     ];
     let cmds_bytes_count = ((std::mem::size_of::<LoadCommand>()
-        + std::mem::size_of::<SegmentLoad64>())
+        + std::mem::size_of::<SegmentLoad64>()) // FIXME: variable size.
         * cmds.len()) as u32;
 
     let header = Header {
