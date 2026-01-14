@@ -5,6 +5,7 @@ pub mod elf;
 pub mod error;
 pub mod ir;
 pub mod lex;
+pub mod macho;
 mod origin;
 pub mod register_alloc;
 pub mod type_checker;

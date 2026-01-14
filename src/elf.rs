@@ -307,7 +307,8 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
             )
         })?;
     }
-    Ok(())
+
+    w.flush()
 }
 
 pub fn write_to_file(file_name: &str, encoding: &Encoding) -> std::io::Result<()> {

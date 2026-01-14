@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use compiler_rs_lib::{
     asm::{self, Os},
-    compile, elf,
+    compile, elf, macho,
 };
 use log::{LevelFilter, Log};
 
@@ -59,8 +59,9 @@ fn main() {
         std::process::exit(1)
     };
 
+    let output_file_name = "hello.bin"; // FIXME
     match target_os {
-        Os::Linux => elf::write_to_file("hello.bin", &compiled.asm_encoded).unwrap(),
-        Os::MacOS => todo!(),
+        Os::Linux => elf::write_to_file(output_file_name, &compiled.asm_encoded).unwrap(),
+        Os::MacOS => macho::write_to_file(output_file_name, &compiled.asm_encoded).unwrap(),
     };
 }
