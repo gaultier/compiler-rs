@@ -25,7 +25,7 @@ enum FileKind {
 #[repr(C)]
 struct Header {
     magic: u32,
-    cpu_kind: CpuKind,
+    cpu_kind: u32, // CpuKind + 1 bit set for 64 bits.
     cpu_subkind: u32,
     file_kind: FileKind,
     cmds_count: u32,
@@ -86,8 +86,8 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
         * cmds.len()) as u32;
 
     let header = Header {
-        magic: 0xfe_ed_fa_cf, // 64 bits.
-        cpu_kind: CpuKind::X86,
+        magic: 0xfe_ed_fa_cf,                       // 64 bits.
+        cpu_kind: CpuKind::X86 as u32 | 0x01000000, // 64 bits.
         cpu_subkind: CpuSubKindX86::All as u32,
         file_kind: FileKind::DemandPagedExecutable,
         cmds_count: cmds.len() as u32,
