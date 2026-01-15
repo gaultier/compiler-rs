@@ -1651,9 +1651,9 @@ impl Instruction {
                 .index_scale
                 .map(|(reg, _)| reg.to_3_bits())
                 .unwrap_or_else(|| {
-                    assert!(addr.index_scale.is_none());
                     assert_eq!(scale, 0);
-                    assert_eq!(addr.base, Some(Register::Rsp));
+                    // R12 or RSP: they share the same 3 bits representation.
+                    assert_eq!(addr.base.unwrap().to_3_bits(), Register::Rsp.to_3_bits());
 
                     0b100
                 })
