@@ -1757,17 +1757,22 @@ impl Instruction {
                         w.write_all(&[0xB0 | reg.to_3_bits()])?;
                         Instruction::encode_imm(w, *imm, &Size::_8)?;
                     }
+                    // MOV r16, imm16
                     (Operand::Register(reg), Operand::Immediate(imm)) if reg.is_16_bits() => {
                         Instruction::encode_rex_from_operands(w, false, None, None, Some(lhs))?;
                         w.write_all(&[0xB8 | reg.to_3_bits()])?;
                         Instruction::encode_imm(w, *imm, &Size::_16)?;
                     }
+                    // MOV r32, imm32
                     (Operand::Register(reg), Operand::Immediate(imm)) if reg.is_32_bits() => {
                         Instruction::encode_rex_from_operands(w, false, None, None, Some(lhs))?;
                         w.write_all(&[0xB8 | reg.to_3_bits()])?;
                         Instruction::encode_imm(w, *imm, &Size::_32)?;
                     }
-                    (Operand::Register(reg), Operand::Immediate(imm)) if reg.is_64_bits() => {
+                    // MOV r64, imm64
+                    (Operand::Register(reg), Operand::Immediate(imm))
+                        if reg.is_64_bits() && *imm > u32::MAX as i64 =>
+                    {
                         Instruction::encode_rex_from_operands(w, true, None, None, Some(lhs))?;
                         w.write_all(&[0xB8 | reg.to_3_bits()])?;
                         Instruction::encode_imm(w, *imm, &Size::_64)?;
@@ -2207,6 +2212,17 @@ impl Instruction {
 
                 let op = self.operands.first().unwrap();
                 if !op.is_rm() {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
+
+                // Ambiguous?
+                if matches!(
+                    op,
+                    Operand::EffectiveAddress(EffectiveAddress {
+                        size_override: None,
+                        ..
+                    })
+                ) {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
 
@@ -2655,10 +2671,10 @@ mod tests {
                 ],
                 origin: Origin::new_unknown(),
             };
-            let mut w = Vec::with_capacity(5);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols).unwrap();
-            assert_eq!(&w, &[0x67, 0x81, 0x03, 0x00, 0x00, 0x00, 0x00]);
+            let mut w = Vec::new();
+            // Error on overflow.
+            assert!(ins.encode(&mut w, &symbols).is_err());
         }
         {
             let ins = Instruction {
@@ -2834,6 +2850,22 @@ mod tests {
                     index_scale: Some((Register::Rbx, Scale::_4)),
                     displacement: 1,
                     size_override: None,
+                })],
+                origin: Origin::new_unknown(),
+            };
+            let mut w = Vec::new();
+            let symbols = BTreeMap::new();
+            // Error due to ambiguous size.
+            assert!(ins.encode(&mut w, &symbols).is_err());
+        }
+        {
+            let ins = Instruction {
+                kind: InstructionKind::IDiv,
+                operands: vec![Operand::EffectiveAddress(EffectiveAddress {
+                    base: Some(Register::R12),
+                    index_scale: Some((Register::Rbx, Scale::_4)),
+                    displacement: 1,
+                    size_override: Some(Size::_64),
                 })],
                 origin: Origin::new_unknown(),
             };
