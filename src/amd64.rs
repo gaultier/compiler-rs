@@ -2367,12 +2367,11 @@ impl Instruction {
                 }
 
                 let op = self.operands.first().unwrap();
-                if op.size() == Size::_8 {
+                if op.size() == Size::_8 || op.size() == Size::_32 {
                     return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                 }
                 match op {
                     // pop r16
-                    // pop r32
                     // pop r64
                     // Encoding: O 	opcode + rd (w)
                     Operand::Register(reg) => {
