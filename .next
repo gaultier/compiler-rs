@@ -1,2 +1,2 @@
-amd64: fn is_size_ambiguous()
+amd64: cdq/cqo for idiv
 macho: text
