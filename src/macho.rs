@@ -217,17 +217,22 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
     };
     w.write_all(bytes)?;
 
-    let mut written = std::mem::size_of::<Header>();
     for cmd in &cmds {
+        let mut written = 0;
         cmd.write(w)?;
         written += cmd.bin_size();
-    }
-    w.write_all(&encoding.instructions)?;
-    written += encoding.instructions.len();
 
-    let padding = file_size - written;
-    for _ in 0..padding {
-        w.write_all(&[0])?;
+        if cmd.name == *b"__TEXT\0\0\0\0\0\0\0\0\0\0" {
+            w.write_all(&encoding.instructions)?;
+            written += encoding.instructions.len();
+        }
+
+        if cmd.file_size != 0 {
+            let padding = cmd.file_size as usize - written;
+            for _ in 0..padding {
+                w.write_all(&[0])?;
+            }
+        }
     }
 
     trace!("macho: written {} bytes", file_size);
