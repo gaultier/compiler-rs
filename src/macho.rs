@@ -46,6 +46,12 @@ struct SegmentLoad {
     sections: Vec<Section>,
 }
 
+#[repr(u32)]
+enum SectionFlag {
+    OnlyContainsTrueMachineInstructions = 0x80000000,
+    ContainsSomeMachineInstructions = 0x400,
+}
+
 struct Section {
     section_name: [u8; 16],
     segment_name: [u8; 16],
@@ -56,6 +62,7 @@ struct Section {
     relocations_file_offset: u32,
     relocations_count: u32,
     flags: u32,
+    typ: u8,
     reserved: [u32; 3],
 }
 
@@ -96,7 +103,9 @@ impl SegmentLoad {
         w.write_all(&(self.sections.len() as u32).to_le_bytes())?;
         w.write_all(&self.flags.to_le_bytes())?;
 
-        for sec in &self.sections {}
+        for sec in &self.sections {
+            sec.write(w)?;
+        }
 
         Ok(())
     }
@@ -112,8 +121,27 @@ impl SegmentLoad {
 }
 
 impl Section {
+    fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+        w.write_all(&self.section_name)?;
+        w.write_all(&self.segment_name)?;
+        w.write_all(&self.section_addr.to_le_bytes())?;
+        w.write_all(&self.section_size.to_le_bytes())?;
+        w.write_all(&self.section_file_offset.to_le_bytes())?;
+        w.write_all(&self.alignment.to_le_bytes())?;
+        w.write_all(&self.relocations_file_offset.to_le_bytes())?;
+        w.write_all(&self.relocations_count.to_le_bytes())?;
+
+        let flags_typ = self.flags << 8 | (self.typ as u32);
+        w.write_all(&flags_typ.to_le_bytes())?;
+        for r in &self.reserved {
+            w.write_all(&r.to_le_bytes())?;
+        }
+
+        Ok(())
+    }
+
     fn bin_size(&self) -> usize {
-        0 // TODO
+        80
     }
 }
 
@@ -121,7 +149,8 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
     assert_eq!(std::mem::size_of::<Header>(), 32);
 
     let page_size = 4 * 1024; // TODO: On ARM: 16KiB.
-    let cmds = [
+    let text_start = u32::MAX as u64 + 1;
+    let mut cmds = [
         SegmentLoad {
             name: *b"__PAGEZERO\0\0\0\0\0\0",
             vm_addr: 0,
@@ -135,17 +164,38 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
         },
         SegmentLoad {
             name: *b"__TEXT\0\0\0\0\0\0\0\0\0\0",
-            vm_addr: u32::MAX as u64 + 1,
+            vm_addr: text_start,
             vm_size: utils::round_up(encoding.instructions.len(), page_size) as u64,
             file_offset: 0,
             file_size: utils::round_up(encoding.instructions.len(), page_size) as u64,
             max_vmem_protect: Permissions::Read as u32 | Permissions::Exec as u32,
             init_vmem_protect: Permissions::Read as u32 | Permissions::Exec as u32,
-            sections: Vec::new(), // TODO: 1
+            sections: vec![Section {
+                section_name: *b"__text\0\0\0\0\0\0\0\0\0\0",
+                segment_name: *b"__TEXT\0\0\0\0\0\0\0\0\0\0",
+                section_addr: text_start,
+                section_size: encoding.instructions.len() as u64,
+                section_file_offset: 0, // Backpatched.
+                alignment: 1,
+                relocations_file_offset: 0,
+                relocations_count: 0,
+                flags: SectionFlag::OnlyContainsTrueMachineInstructions as u32
+                    | SectionFlag::ContainsSomeMachineInstructions as u32,
+                typ: 0,
+                reserved: [0; 3],
+            }],
             flags: 0,
         },
     ];
     let cmds_bytes_count = cmds.iter().map(|x| x.bin_size()).sum::<usize>() as u32;
+    let file_size = utils::round_up(
+        cmds_bytes_count as usize + encoding.instructions.len(),
+        page_size,
+    );
+    // Machine instructions follow the load commands.
+    cmds[1].sections[0].section_file_offset = cmds_bytes_count;
+    cmds[1].file_size = file_size as u64;
+
     let header = Header {
         magic: 0xfe_ed_fa_cf,                       // 64 bits.
         cpu_kind: CpuKind::X86 as u32 | 0x01000000, // 64 bits.
@@ -168,6 +218,9 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
     for cmd in &cmds {
         cmd.write(w)?;
     }
+    w.write_all(&encoding.instructions)?;
+
+    trace!("macho: written {} byte", file_size);
 
     w.flush()
 }
