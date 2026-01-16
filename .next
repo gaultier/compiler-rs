@@ -1,2 +1,2 @@
 amd64: cdq/cqo for idiv
-macho: fix alignment for file_size
+macho: generate LC_UNIXTHREAD

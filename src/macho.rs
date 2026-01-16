@@ -173,7 +173,7 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
             sections: vec![Section {
                 section_name: *b"__text\0\0\0\0\0\0\0\0\0\0",
                 segment_name: *b"__TEXT\0\0\0\0\0\0\0\0\0\0",
-                section_addr: text_start + encoding.entrypoint as u64,
+                section_addr: text_start,
                 section_size: encoding.instructions.len() as u64,
                 section_file_offset: 0, // Backpatched.
                 alignment: 0,
