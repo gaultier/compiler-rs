@@ -149,12 +149,12 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
     assert_eq!(std::mem::size_of::<Header>(), 32);
 
     let page_size = 4 * 1024; // TODO: On ARM: 16KiB.
-    let text_start = u32::MAX as u64 + 1;
+    let text_start = 1u64 << 32;
     let mut cmds = [
         SegmentLoad {
             name: *b"__PAGEZERO\0\0\0\0\0\0",
             vm_addr: 0,
-            vm_size: u32::MAX as u64,
+            vm_size: text_start,
             file_offset: 0,
             file_size: 0,
             max_vmem_protect: 0,
@@ -167,7 +167,7 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
             vm_addr: text_start,
             vm_size: utils::round_up(encoding.instructions.len(), page_size) as u64,
             file_offset: 0,
-            file_size: utils::round_up(encoding.instructions.len(), page_size) as u64,
+            file_size: 0, // Backpatched.
             max_vmem_protect: Permissions::Read as u32 | Permissions::Exec as u32,
             init_vmem_protect: Permissions::Read as u32 | Permissions::Exec as u32,
             sections: vec![Section {
@@ -194,7 +194,8 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
     );
     // Machine instructions follow the load commands.
     cmds[1].sections[0].section_file_offset = cmds_bytes_count;
-    cmds[1].file_size = file_size as u64;
+    cmds[1].file_size =
+        utils::round_up(cmds[1].bin_size() + encoding.instructions.len(), page_size) as u64;
 
     let header = Header {
         magic: 0xfe_ed_fa_cf,                       // 64 bits.
@@ -220,7 +221,7 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
     }
     w.write_all(&encoding.instructions)?;
 
-    trace!("macho: written {} byte", file_size);
+    trace!("macho: written {} bytes", file_size);
 
     w.flush()
 }
