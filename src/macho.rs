@@ -193,7 +193,8 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
         page_size,
     );
     // Machine instructions follow the load commands.
-    cmds[1].sections[0].section_file_offset = cmds_bytes_count;
+    cmds[1].sections[0].section_file_offset =
+        std::mem::size_of::<Header>() as u32 + cmds_bytes_count;
     cmds[1].file_size =
         utils::round_up(cmds[1].bin_size() + encoding.instructions.len(), page_size) as u64;
 
@@ -216,10 +217,18 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
     };
     w.write_all(bytes)?;
 
+    let mut written = std::mem::size_of::<Header>();
     for cmd in &cmds {
         cmd.write(w)?;
+        written += cmd.bin_size();
     }
     w.write_all(&encoding.instructions)?;
+    written += encoding.instructions.len();
+
+    let padding = file_size - written;
+    for _ in 0..padding {
+        w.write_all(&[0])?;
+    }
 
     trace!("macho: written {} bytes", file_size);
 
@@ -234,6 +243,8 @@ pub fn write_to_file(file_name: &str, encoding: &Encoding) -> std::io::Result<()
 
     let mut file = opts.open(file_name)?;
     trace!("macho: action=write file={}", file_name);
+
+    file.set_len(0)?;
 
     write(&mut file, encoding)
 }

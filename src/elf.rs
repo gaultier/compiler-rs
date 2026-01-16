@@ -320,5 +320,7 @@ pub fn write_to_file(file_name: &str, encoding: &Encoding) -> std::io::Result<()
     let mut file = opts.open(file_name)?;
     trace!("elf: action=write file={}", file_name);
 
+    file.set_len(0)?;
+
     write(&mut file, encoding)
 }
