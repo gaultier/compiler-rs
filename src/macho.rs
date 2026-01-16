@@ -34,8 +34,7 @@ struct Header {
     reserved: u32,
 }
 
-#[repr(C)]
-struct SegmentLoad64 {
+struct SegmentLoad {
     name: [u8; 16],
     vm_addr: u64,
     vm_size: u64,
@@ -43,8 +42,21 @@ struct SegmentLoad64 {
     file_size: u64,
     max_vmem_protect: u32,
     init_vmem_protect: u32,
-    sections_count: u32,
     flags: u32,
+    sections: Vec<Section>,
+}
+
+struct Section {
+    section_name: [u8; 16],
+    segment_name: [u8; 16],
+    section_addr: u64,
+    section_size: u64,
+    section_file_offset: u32,
+    alignment: u32,
+    relocations_file_offset: u32,
+    relocations_count: u32,
+    flags: u32,
+    reserved: [u32; 3],
 }
 
 #[repr(u32)]
@@ -60,26 +72,57 @@ enum Permissions {
     Exec = 0b100,
 }
 
-#[repr(C)]
-struct LoadCommand {
-    cmd: LoadCommandKind,
-    cmd_size: u32,
-}
-
 #[repr(u32)]
 enum MachoFlags {
     NoUndefinedReferences = (1 << 0),
     Pie = (1 << 21),
 }
 
+impl SegmentLoad {
+    fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+        let cmd_kind = 0x19u32; // SegmentLoad64.
+        let cmd_size: u32 = self.bin_size() as u32;
+
+        w.write_all(&cmd_kind.to_le_bytes())?;
+        w.write_all(&cmd_size.to_le_bytes())?;
+
+        w.write_all(&self.name)?;
+        w.write_all(&self.vm_addr.to_le_bytes())?;
+        w.write_all(&self.vm_size.to_le_bytes())?;
+        w.write_all(&self.file_offset.to_le_bytes())?;
+        w.write_all(&self.file_size.to_le_bytes())?;
+        w.write_all(&self.max_vmem_protect.to_le_bytes())?;
+        w.write_all(&self.init_vmem_protect.to_le_bytes())?;
+        w.write_all(&(self.sections.len() as u32).to_le_bytes())?;
+        w.write_all(&self.flags.to_le_bytes())?;
+
+        for sec in &self.sections {}
+
+        Ok(())
+    }
+
+    fn bin_size(&self) -> usize {
+        72usize
+            + self
+                .sections
+                .iter()
+                .map(|x: &Section| x.bin_size())
+                .sum::<usize>()
+    }
+}
+
+impl Section {
+    fn bin_size(&self) -> usize {
+        0 // TODO
+    }
+}
+
 pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
     assert_eq!(std::mem::size_of::<Header>(), 32);
-    assert_eq!(std::mem::size_of::<SegmentLoad64>(), 64);
-    assert_eq!(std::mem::size_of::<LoadCommand>(), 8);
 
     let page_size = 4 * 1024; // TODO: On ARM: 16KiB.
     let cmds = [
-        SegmentLoad64 {
+        SegmentLoad {
             name: *b"__PAGEZERO\0\0\0\0\0\0",
             vm_addr: 0,
             vm_size: u32::MAX as u64,
@@ -87,10 +130,10 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
             file_size: 0,
             max_vmem_protect: 0,
             init_vmem_protect: 0,
-            sections_count: 0,
             flags: 0,
+            sections: Vec::new(),
         },
-        SegmentLoad64 {
+        SegmentLoad {
             name: *b"__TEXT\0\0\0\0\0\0\0\0\0\0",
             vm_addr: u32::MAX as u64 + 1,
             vm_size: utils::round_up(encoding.instructions.len(), page_size) as u64,
@@ -98,14 +141,11 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
             file_size: utils::round_up(encoding.instructions.len(), page_size) as u64,
             max_vmem_protect: Permissions::Read as u32 | Permissions::Exec as u32,
             init_vmem_protect: Permissions::Read as u32 | Permissions::Exec as u32,
-            sections_count: 0, // TODO: 1.
+            sections: Vec::new(), // TODO: 1
             flags: 0,
         },
     ];
-    let cmds_bytes_count = ((std::mem::size_of::<LoadCommand>()
-        + std::mem::size_of::<SegmentLoad64>()) // FIXME: variable size.
-        * cmds.len()) as u32;
-
+    let cmds_bytes_count = cmds.iter().map(|x| x.bin_size()).sum::<usize>() as u32;
     let header = Header {
         magic: 0xfe_ed_fa_cf,                       // 64 bits.
         cpu_kind: CpuKind::X86 as u32 | 0x01000000, // 64 bits.
@@ -126,20 +166,7 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
     w.write_all(bytes)?;
 
     for cmd in &cmds {
-        let cmd_kind = 0x19u32; // SegmentLoad64.
-        let cmd_size =
-            (std::mem::size_of::<LoadCommand>() + std::mem::size_of::<SegmentLoad64>()) as u32;
-
-        w.write_all(&cmd_kind.to_le_bytes())?;
-        w.write_all(&cmd_size.to_le_bytes())?;
-
-        let bytes = unsafe {
-            std::slice::from_raw_parts(
-                cmd as *const SegmentLoad64 as *const u8,
-                std::mem::size_of::<SegmentLoad64>(),
-            )
-        };
-        w.write_all(bytes)?;
+        cmd.write(w)?;
     }
 
     w.flush()
