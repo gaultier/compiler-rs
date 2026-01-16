@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use compiler_rs_lib::{
-    asm::{self, Os},
+    asm::{self, Encoding, Os},
     compile, elf, macho,
 };
 use log::{LevelFilter, Log};
@@ -62,6 +62,18 @@ fn main() {
     let output_file_name = "hello.bin"; // FIXME
     match target_os {
         Os::Linux => elf::write_to_file(output_file_name, &compiled.asm_encoded).unwrap(),
-        Os::MacOS => macho::write_to_file(output_file_name, &compiled.asm_encoded).unwrap(),
+        Os::MacOS => {
+            // FIXME
+            let encoding = Encoding {
+                instructions: vec![
+                    0x48, 0xc7, 0xc0, 0x01, 0x00, 0x00, 0x02, // mov rax, 0x2000001
+                    0x48, 0xc7, 0xc7, 0x02, 0x00, 0x00, 0x00, // mov rdi, 2
+                    0x0f, 0x05, // syscall
+                ],
+                entrypoint: 0,
+                symbols: BTreeMap::new(),
+            };
+            macho::write_to_file(output_file_name, &encoding).unwrap();
+        }
     };
 }
