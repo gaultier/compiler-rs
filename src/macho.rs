@@ -173,10 +173,10 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
             sections: vec![Section {
                 section_name: *b"__text\0\0\0\0\0\0\0\0\0\0",
                 segment_name: *b"__TEXT\0\0\0\0\0\0\0\0\0\0",
-                section_addr: text_start,
+                section_addr: text_start + encoding.entrypoint as u64,
                 section_size: encoding.instructions.len() as u64,
                 section_file_offset: 0, // Backpatched.
-                alignment: 1,
+                alignment: 0,
                 relocations_file_offset: 0,
                 relocations_count: 0,
                 flags: SectionFlag::OnlyContainsTrueMachineInstructions as u32
@@ -192,7 +192,7 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
         cmds_bytes_count as usize + encoding.instructions.len(),
         page_size,
     );
-    // Machine instructions follow the load commands.
+    // Machine instructions follow the header and load commands.
     cmds[1].sections[0].section_file_offset =
         std::mem::size_of::<Header>() as u32 + cmds_bytes_count;
     cmds[1].file_size =
