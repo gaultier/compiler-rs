@@ -444,6 +444,9 @@ pub enum InstructionKind {
     Pop,
     Ret,
     Syscall,
+    Cwd,
+    Cdq,
+    Cqo,
 }
 
 pub struct Emitter {
@@ -1223,6 +1226,9 @@ impl InstructionKind {
             InstructionKind::Call => "call",
             InstructionKind::Ret => "ret",
             InstructionKind::Syscall => "syscall",
+            InstructionKind::Cwd => "cwd",
+            InstructionKind::Cdq => "cdq",
+            InstructionKind::Cqo => "cqo",
         }
     }
 }
@@ -2417,6 +2423,11 @@ impl Instruction {
                 } else {
                     Err(std::io::Error::from(io::ErrorKind::InvalidData))
                 }
+            }
+            InstructionKind::Cwd | InstructionKind::Cdq => w.write_all(&[0x99]),
+            InstructionKind::Cqo => {
+                Instruction::encode_rex_from_operands(w, true, None, None, None)?;
+                w.write_all(&[0x99])
             }
         }
     }
