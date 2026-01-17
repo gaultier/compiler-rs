@@ -611,13 +611,13 @@ impl Emitter {
                     &Origin::new_synth_codegen(),
                 );
 
-                // `idiv` technically divides the 128 bit `rdx:rax` value. Thus, `rdx` is zeroed
-                // first to only divide `rax`.
-                self.emit_store(
-                    &MemoryLocation::Register(asm::Register::Amd64(Register::Rdx)),
-                    &Operand::Immediate(0),
-                    &ins.origin,
-                );
+                // `idiv` technically divides the 128 bit `rdx:rax` value.
+                // Thus, we need to sign extend first.
+                self.asm.push(Instruction {
+                    kind: InstructionKind::Cqo, // TODO: Depending on the size, cwd/cdq.
+                    operands: vec![vreg_to_memory_location.get(rhs).unwrap().into()],
+                    origin: ins.origin,
+                });
                 self.asm.push(Instruction {
                     kind: InstructionKind::IDiv,
                     operands: vec![vreg_to_memory_location.get(rhs).unwrap().into()],
