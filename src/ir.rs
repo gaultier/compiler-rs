@@ -333,6 +333,9 @@ impl Emitter {
             crate::ast::NodeKind::Divide => {
                 todo!()
             }
+            NodeKind::If(cond) => {
+                todo!()
+            }
         }
     }
 

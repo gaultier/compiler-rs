@@ -199,7 +199,9 @@ pub fn compile(
 
     let mut type_checker = type_checker::Checker::new();
     // TODO: ugly.
-    parser.errors.extend(type_checker.check(&mut ast_nodes));
+    parser
+        .errors
+        .extend(type_checker.check_nodes(&mut ast_nodes));
     trace!("after type checking: {:#?}", parser);
 
     if !parser.errors.is_empty() {

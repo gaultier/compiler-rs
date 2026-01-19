@@ -29,6 +29,7 @@ pub enum TokenKind {
     Eof,
     KeywordPackage,
     KeywordFunc,
+    KeywordIf,
     Unknown,
 }
 
@@ -87,6 +88,7 @@ impl Lexer {
             "true" | "false" => TokenKind::LiteralBool,
             "package" => TokenKind::KeywordPackage,
             "func" => TokenKind::KeywordFunc,
+            "if" => TokenKind::KeywordIf,
             _ => TokenKind::Identifier,
         };
 

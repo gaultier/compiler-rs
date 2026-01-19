@@ -22,9 +22,10 @@ pub enum NodeKind {
     FnCall,
     FnDef(String),
     Package(String),
+    If(Box<Node>),
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 pub struct Node {
     pub kind: NodeKind,
     pub origin: Origin,
@@ -356,10 +357,56 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn parse_statement_if(&mut self) -> Option<Node> {
+        if self.error_mode {
+            return None;
+        }
+
+        let keyword_if = if let Some(k) = self.match_kind(TokenKind::KeywordIf) {
+            k
+        } else {
+            return None;
+        };
+        let cond = self.parse_expr()?;
+
+        self.expect_token_exactly_one(TokenKind::LeftCurly, "if body")?;
+
+        let mut stmts = Vec::new();
+
+        for _ in 0..self.remaining_tokens_count() {
+            match self.peek_token() {
+                None
+                | Some(Token {
+                    kind: TokenKind::RightCurly,
+                    ..
+                }) => break,
+                _ => {}
+            }
+
+            let stmt = self.parse_statement()?;
+            stmts.push(stmt);
+        }
+
+        self.expect_token_exactly_one(TokenKind::RightCurly, "if body")?;
+
+        // TODO: Optional 'else'.
+
+        Some(Node {
+            kind: NodeKind::If(Box::new(cond)),
+            origin: keyword_if.origin,
+            typ: Type::new_void(),
+            children: stmts,
+        })
+    }
+
     fn parse_statement(&mut self) -> Option<Node> {
         if self.error_mode {
             return None;
         }
+
+        if let Some(stmt) = self.parse_statement_if() {
+            return Some(stmt);
+        };
 
         self.parse_expr()
     }
@@ -533,7 +580,7 @@ impl<'a> Parser<'a> {
     }
 
     fn resolve_node(&mut self, node: &mut Node) {
-        match &node.kind {
+        match &mut node.kind {
             // Nothing to do.
             NodeKind::Package(_) | NodeKind::Number(_) | NodeKind::Bool(_) => {}
 
@@ -566,6 +613,13 @@ impl<'a> Parser<'a> {
                     self.name_to_type
                         .insert(name.to_owned(), (node.typ.clone(), node.origin));
                 }
+
+                for op in &mut node.children {
+                    self.resolve_node(op)
+                }
+            }
+            NodeKind::If(cond) => {
+                self.resolve_node(&mut *cond);
 
                 for op in &mut node.children {
                     self.resolve_node(op)
