@@ -2500,7 +2500,7 @@ impl Instruction {
                             w.write_all(&[0xe9])?;
                             w.write_all(&imm32.to_le_bytes())
                         } else {
-                            return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                            Err(std::io::Error::from(io::ErrorKind::InvalidData))
                         }
                     }
                     Operand::Register(_) | Operand::EffectiveAddress(_)
@@ -2514,7 +2514,7 @@ impl Instruction {
                         Ok(())
                     }
                     _ => {
-                        return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                        Err(std::io::Error::from(io::ErrorKind::InvalidData))
                     }
                 }
             }
