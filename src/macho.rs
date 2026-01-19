@@ -34,6 +34,15 @@ struct Header {
     reserved: u32,
 }
 
+enum LoadCommand {
+    SegmentLoad(SegmentLoad),
+    UnixThread(UnixThread),
+}
+
+struct UnixThread {
+    // TODO
+}
+
 struct SegmentLoad {
     name: [u8; 16],
     vm_addr: u64,
@@ -83,6 +92,46 @@ enum Permissions {
 enum MachoFlags {
     NoUndefinedReferences = (1 << 0),
     Pie = (1 << 21),
+}
+
+impl LoadCommand {
+    fn bin_size(&self) -> usize {
+        match self {
+            LoadCommand::SegmentLoad(x) => x.bin_size(),
+            LoadCommand::UnixThread(x) => x.bin_size(),
+        }
+    }
+
+    fn as_segment_load(&self) -> Option<&SegmentLoad> {
+        match self {
+            LoadCommand::SegmentLoad(x) => Some(x),
+            _ => None,
+        }
+    }
+
+    fn as_segment_load_mut(&mut self) -> Option<&mut SegmentLoad> {
+        match self {
+            LoadCommand::SegmentLoad(x) => Some(x),
+            _ => None,
+        }
+    }
+
+    fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+        match self {
+            LoadCommand::SegmentLoad(x) => x.write(w),
+            LoadCommand::UnixThread(x) => x.write(w),
+        }
+    }
+}
+
+impl UnixThread {
+    fn bin_size(&self) -> usize {
+        todo!()
+    }
+
+    fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+        todo!()
+    }
 }
 
 impl SegmentLoad {
@@ -151,7 +200,7 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
     let page_size = 4 * 1024; // TODO: On ARM: 16KiB.
     let text_start = 1u64 << 32;
     let mut cmds = [
-        SegmentLoad {
+        LoadCommand::SegmentLoad(SegmentLoad {
             name: *b"__PAGEZERO\0\0\0\0\0\0",
             vm_addr: 0,
             vm_size: text_start,
@@ -161,8 +210,9 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
             init_vmem_protect: 0,
             flags: 0,
             sections: Vec::new(),
-        },
-        SegmentLoad {
+        }),
+        LoadCommand::UnixThread(UnixThread {}),
+        LoadCommand::SegmentLoad(SegmentLoad {
             name: *b"__TEXT\0\0\0\0\0\0\0\0\0\0",
             vm_addr: text_start,
             vm_size: utils::round_up(encoding.instructions.len(), page_size) as u64,
@@ -185,7 +235,7 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
                 reserved: [0; 3],
             }],
             flags: 0,
-        },
+        }),
     ];
     let cmds_bytes_count = cmds.iter().map(|x| x.bin_size()).sum::<usize>() as u32;
     let file_size = utils::round_up(
@@ -193,9 +243,9 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
         page_size,
     );
     // Machine instructions follow the header and load commands.
-    cmds[1].sections[0].section_file_offset =
+    cmds[1].as_segment_load_mut().unwrap().sections[0].section_file_offset =
         std::mem::size_of::<Header>() as u32 + cmds_bytes_count;
-    cmds[1].file_size =
+    cmds[1].as_segment_load_mut().unwrap().file_size =
         utils::round_up(cmds[1].bin_size() + encoding.instructions.len(), page_size) as u64;
 
     let header = Header {
@@ -222,15 +272,17 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
         cmd.write(w)?;
         written += cmd.bin_size();
 
-        if cmd.name == *b"__TEXT\0\0\0\0\0\0\0\0\0\0" {
-            w.write_all(&encoding.instructions)?;
-            written += encoding.instructions.len();
-        }
+        if let Some(seg) = cmd.as_segment_load() {
+            if seg.name == *b"__TEXT\0\0\0\0\0\0\0\0\0\0" {
+                w.write_all(&encoding.instructions)?;
+                written += encoding.instructions.len();
+            }
 
-        if cmd.file_size != 0 {
-            let padding = cmd.file_size as usize - written;
-            for _ in 0..padding {
-                w.write_all(&[0])?;
+            if seg.file_size != 0 {
+                let padding = seg.file_size as usize - written;
+                for _ in 0..padding {
+                    w.write_all(&[0])?;
+                }
             }
         }
     }
