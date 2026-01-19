@@ -70,6 +70,7 @@ pub struct FnDef {
     pub live_ranges: LiveRanges,
     vreg_to_type: BTreeMap<VirtualRegister, Type>,
     typ: Type,
+    pub origin: Origin,
 }
 
 impl Display for FnDef {
@@ -106,7 +107,7 @@ fn fn_name_ast_to_ir(ast_name: &str, typ_str: &str) -> String {
 }
 
 impl FnDef {
-    fn new(name: String, typ: &Type) -> Self {
+    fn new(name: String, typ: &Type, origin: Origin) -> Self {
         Self {
             name,
             instructions: Vec::new(),
@@ -114,6 +115,7 @@ impl FnDef {
             live_ranges: LiveRanges::new(),
             vreg_to_type: BTreeMap::new(),
             typ: typ.clone(),
+            origin: origin,
         }
     }
 
@@ -335,8 +337,11 @@ impl Emitter {
             crate::ast::NodeKind::Package(_) => None,
             // Start of a new function.
             crate::ast::NodeKind::FnDef(fn_name) => {
-                let mut fn_def =
-                    FnDef::new(fn_name_ast_to_ir(fn_name, &node.typ.to_string()), &node.typ);
+                let mut fn_def = FnDef::new(
+                    fn_name_ast_to_ir(fn_name, &node.typ.to_string()),
+                    &node.typ,
+                    node.origin,
+                );
                 for node in &node.children {
                     let ins = Self::emit_node(&mut fn_def, node);
                     fn_def.instructions.extend(ins);

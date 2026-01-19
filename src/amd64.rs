@@ -18,7 +18,7 @@ use serde::Serialize;
 use crate::{
     asm::{self, Abi, Encoding, Stack, Symbol, Target},
     ir::{self},
-    origin::Origin,
+    origin::{Origin, OriginKind},
     register_alloc::{MemoryLocation, RegisterMapping},
     type_checker::Size,
 };
@@ -779,8 +779,10 @@ impl Emitter {
         &mut self,
         fn_def: &ir::FnDef,
         vreg_to_memory_location: &RegisterMapping,
-        target: &Target,
     ) {
+        if fn_def.origin.kind == OriginKind::Builtin {
+            return;
+        }
         self.asm = Vec::with_capacity(fn_def.instructions.len() * 2);
 
         self.asm.push(Instruction {

@@ -132,7 +132,7 @@ pub(crate) fn emit_fn_def(
     match target.arch {
         Architecture::Amd64 => {
             let mut emitter = amd64::Emitter::new(stack_offset);
-            emitter.emit_fn_def(fn_def, vreg_to_memory_location, &target);
+            emitter.emit_fn_def(fn_def, vreg_to_memory_location);
 
             (
                 emitter.asm.into_iter().map(Instruction::Amd64).collect(),
