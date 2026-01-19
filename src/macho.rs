@@ -153,6 +153,13 @@ impl LoadCommand {
         }
     }
 
+    fn as_unix_thread_mut(&mut self) -> Option<&mut UnixThreadCommand> {
+        match self {
+            LoadCommand::UnixThread(x) => Some(x),
+            _ => None,
+        }
+    }
+
     fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
         w.write_all(&self.kind().to_le_bytes())?;
         w.write_all(&self.size().to_le_bytes())?;
@@ -353,7 +360,7 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
                 r13: 0,
                 r14: 0,
                 r15: 0,
-                rip: text_start + encoding.entrypoint as u64,
+                rip: 0, // Backpatched.
                 rflags: 0,
                 cs: 0,
                 fs: 0,
@@ -402,8 +409,21 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
         std::mem::size_of::<Header>() + cmds_bytes_count as usize,
         page_size,
     ) as u64;
-    cmds[cmd_text_idx].as_segment_load_mut().unwrap().sections[0].section_file_offset =
-        std::mem::size_of::<Header>() as u32 + cmds_bytes_count;
+
+    // Backpatch fields.
+    {
+        let vm_text_start =
+            std::mem::size_of::<Header>() as u64 + cmds_bytes_count as u64 + text_start;
+        cmds[cmd_text_idx].as_segment_load_mut().unwrap().sections[0].section_addr = vm_text_start;
+        match &mut cmds[1].as_unix_thread_mut().unwrap().unix_thread_state {
+            UnixThreadState::X64(unix_thread_state_x64) => {
+                unix_thread_state_x64.rip = vm_text_start
+            }
+        };
+        cmds[cmd_text_idx].as_segment_load_mut().unwrap().sections[0].section_file_offset =
+            std::mem::size_of::<Header>() as u32 + cmds_bytes_count;
+    }
+
     let header = Header {
         magic: 0xfe_ed_fa_cf,                       // 64 bits.
         cpu_kind: CpuKind::X86 as u32 | 0x01000000, // 64 bits.
