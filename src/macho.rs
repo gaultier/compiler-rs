@@ -132,7 +132,7 @@ impl LoadCommand {
         }
     }
 
-    fn size(&self) -> usize {
+    fn size(&self) -> u32 {
         match self {
             LoadCommand::SegmentLoad(x) => x.size(),
             LoadCommand::UnixThread(x) => x.size(),
@@ -205,7 +205,7 @@ impl UnixThreadState {
         }
     }
 
-    fn size(&self) -> usize {
+    fn size(&self) -> u32 {
         let res = match self {
             UnixThreadState::X64(_) => 168,
         };
@@ -218,7 +218,7 @@ impl UnixThreadState {
 }
 
 impl UnixThreadCommand {
-    fn size(&self) -> usize {
+    fn size(&self) -> u32 {
         let res = 8 + 4 /* flavor */ + 4 /* count */ + self.unix_thread_state.size();
 
         // Must be a multiple of size(u32).
@@ -267,13 +267,13 @@ impl SegmentLoadCommand {
         Ok(())
     }
 
-    fn size(&self) -> usize {
-        let res = 72usize
+    fn size(&self) -> u32 {
+        let res = 72
             + self
                 .sections
                 .iter()
                 .map(|x: &Section| x.size())
-                .sum::<usize>();
+                .sum::<u32>();
 
         // Must be a multiple of size(u32).
         assert_eq!(res % 4, 0);
@@ -302,7 +302,7 @@ impl Section {
         Ok(())
     }
 
-    fn size(&self) -> usize {
+    fn size(&self) -> u32 {
         let res = 80;
 
         // Must be a multiple of size(u32).
@@ -385,7 +385,7 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
         *b"__TEXT\0\0\0\0\0\0\0\0\0\0"
     );
 
-    let cmds_bytes_count = cmds.iter().map(|x| x.size()).sum::<usize>() as u32;
+    let cmds_bytes_count = cmds.iter().map(|x| x.size() as usize).sum::<usize>() as u32;
     let file_size = utils::round_up(
         cmds_bytes_count as usize + encoding.instructions.len(),
         page_size,
@@ -394,7 +394,7 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
     cmds[cmd_text_idx].as_segment_load_mut().unwrap().sections[0].section_file_offset =
         std::mem::size_of::<Header>() as u32 + cmds_bytes_count;
     cmds[cmd_text_idx].as_segment_load_mut().unwrap().file_size = utils::round_up(
-        cmds[cmd_text_idx].size() + encoding.instructions.len(),
+        cmds[cmd_text_idx].size() as usize + encoding.instructions.len(),
         page_size,
     ) as u64;
 
@@ -420,7 +420,7 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
     for cmd in &cmds {
         let mut written = 0;
         cmd.write(w)?;
-        written += cmd.size();
+        written += cmd.size() as usize;
 
         if let Some(seg) = cmd.as_segment_load() {
             if seg.name == *b"__TEXT\0\0\0\0\0\0\0\0\0\0" {
