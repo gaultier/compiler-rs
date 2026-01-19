@@ -175,27 +175,27 @@ impl LoadCommand {
 
 impl UnixThreadStateX64 {
     fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
-        w.write(&self.rax.to_le_bytes())?;
-        w.write(&self.rbx.to_le_bytes())?;
-        w.write(&self.rcx.to_le_bytes())?;
-        w.write(&self.rdx.to_le_bytes())?;
-        w.write(&self.rdi.to_le_bytes())?;
-        w.write(&self.rsi.to_le_bytes())?;
-        w.write(&self.rbp.to_le_bytes())?;
-        w.write(&self.rsp.to_le_bytes())?;
-        w.write(&self.r8.to_le_bytes())?;
-        w.write(&self.r9.to_le_bytes())?;
-        w.write(&self.r10.to_le_bytes())?;
-        w.write(&self.r11.to_le_bytes())?;
-        w.write(&self.r12.to_le_bytes())?;
-        w.write(&self.r13.to_le_bytes())?;
-        w.write(&self.r14.to_le_bytes())?;
-        w.write(&self.r15.to_le_bytes())?;
-        w.write(&self.rip.to_le_bytes())?;
-        w.write(&self.rflags.to_le_bytes())?;
-        w.write(&self.cs.to_le_bytes())?;
-        w.write(&self.fs.to_le_bytes())?;
-        w.write(&self.gs.to_le_bytes())?;
+        w.write_all(&self.rax.to_le_bytes())?;
+        w.write_all(&self.rbx.to_le_bytes())?;
+        w.write_all(&self.rcx.to_le_bytes())?;
+        w.write_all(&self.rdx.to_le_bytes())?;
+        w.write_all(&self.rdi.to_le_bytes())?;
+        w.write_all(&self.rsi.to_le_bytes())?;
+        w.write_all(&self.rbp.to_le_bytes())?;
+        w.write_all(&self.rsp.to_le_bytes())?;
+        w.write_all(&self.r8.to_le_bytes())?;
+        w.write_all(&self.r9.to_le_bytes())?;
+        w.write_all(&self.r10.to_le_bytes())?;
+        w.write_all(&self.r11.to_le_bytes())?;
+        w.write_all(&self.r12.to_le_bytes())?;
+        w.write_all(&self.r13.to_le_bytes())?;
+        w.write_all(&self.r14.to_le_bytes())?;
+        w.write_all(&self.r15.to_le_bytes())?;
+        w.write_all(&self.rip.to_le_bytes())?;
+        w.write_all(&self.rflags.to_le_bytes())?;
+        w.write_all(&self.cs.to_le_bytes())?;
+        w.write_all(&self.fs.to_le_bytes())?;
+        w.write_all(&self.gs.to_le_bytes())?;
 
         Ok(())
     }
