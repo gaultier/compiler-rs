@@ -398,8 +398,10 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
         page_size,
     );
     // Machine instructions follow the header and load commands.
-    cmds[cmd_text_idx].as_segment_load_mut().unwrap().file_size =
-        std::mem::size_of::<Header>() as u64 + cmds_bytes_count as u64;
+    cmds[cmd_text_idx].as_segment_load_mut().unwrap().file_size = utils::round_up(
+        std::mem::size_of::<Header>() + cmds_bytes_count as usize,
+        page_size,
+    ) as u64;
     cmds[cmd_text_idx].as_segment_load_mut().unwrap().sections[0].section_file_offset =
         std::mem::size_of::<Header>() as u32 + cmds_bytes_count;
     let header = Header {
