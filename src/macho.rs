@@ -157,6 +157,8 @@ impl LoadCommand {
         w.write_all(&self.kind().to_le_bytes())?;
         w.write_all(&self.size().to_le_bytes())?;
 
+        dbg!(self.kind(), self.size());
+
         match self {
             LoadCommand::SegmentLoad(x) => x.write(w),
             LoadCommand::UnixThread(x) => x.write(w),
@@ -223,6 +225,8 @@ impl UnixThreadCommand {
 
         // Must be a multiple of size(u32).
         assert_eq!(res % 4, 0);
+        // Must include load command kind + size.
+        assert!(res >= 8);
 
         res
     }
@@ -235,7 +239,7 @@ impl UnixThreadCommand {
         let flavor: u32 = self.unix_thread_state.flavor();
         w.write_all(&flavor.to_le_bytes())?;
 
-        let count = 1u32;
+        let count = 168 / std::mem::size_of::<u32>();
         w.write_all(&count.to_le_bytes())?;
 
         self.unix_thread_state.write(w)?;
@@ -277,6 +281,8 @@ impl SegmentLoadCommand {
 
         // Must be a multiple of size(u32).
         assert_eq!(res % 4, 0);
+        // Must include load command kind + size.
+        assert!(res >= 8);
 
         res
     }
@@ -418,23 +424,18 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
     w.write_all(bytes)?;
 
     for cmd in &cmds {
-        let mut written = 0;
         cmd.write(w)?;
-        written += cmd.size() as usize;
+    }
 
-        if let Some(seg) = cmd.as_segment_load() {
-            if seg.name == *b"__TEXT\0\0\0\0\0\0\0\0\0\0" {
-                w.write_all(&encoding.instructions)?;
-                written += encoding.instructions.len();
-            }
+    // Write the instructions.
 
-            if seg.file_size != 0 {
-                let padding = seg.file_size as usize - written;
-                for _ in 0..padding {
-                    w.write_all(&[0])?;
-                }
-            }
-        }
+    w.write_all(&encoding.instructions)?;
+    let written =
+        std::mem::size_of::<Header>() + cmds_bytes_count as usize + encoding.instructions.len();
+
+    let padding = utils::round_up(written, page_size) - written;
+    for _ in 0..padding {
+        w.write_all(&[0])?;
     }
 
     trace!("macho: written {} bytes", file_size);
