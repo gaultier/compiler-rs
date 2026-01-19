@@ -95,10 +95,17 @@ enum MachoFlags {
 }
 
 impl LoadCommand {
-    fn bin_size(&self) -> usize {
+    fn kind(&self) -> u32 {
         match self {
-            LoadCommand::SegmentLoad(x) => x.bin_size(),
-            LoadCommand::UnixThread(x) => x.bin_size(),
+            LoadCommand::SegmentLoad(x) => x.kind(),
+            LoadCommand::UnixThread(x) => x.kind(),
+        }
+    }
+
+    fn size(&self) -> usize {
+        match self {
+            LoadCommand::SegmentLoad(x) => x.size(),
+            LoadCommand::UnixThread(x) => x.size(),
         }
     }
 
@@ -117,6 +124,9 @@ impl LoadCommand {
     }
 
     fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+        w.write_all(&self.kind().to_le_bytes())?;
+        w.write_all(&self.size().to_le_bytes())?;
+
         match self {
             LoadCommand::SegmentLoad(x) => x.write(w),
             LoadCommand::UnixThread(x) => x.write(w),
@@ -125,8 +135,12 @@ impl LoadCommand {
 }
 
 impl UnixThread {
-    fn bin_size(&self) -> usize {
+    fn size(&self) -> usize {
         todo!()
+    }
+
+    fn kind(&self) -> u32 {
+        5
     }
 
     fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
@@ -135,13 +149,11 @@ impl UnixThread {
 }
 
 impl SegmentLoad {
+    fn kind(&self) -> u32 {
+        0x19
+    }
+
     fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
-        let cmd_kind = 0x19u32; // SegmentLoad64.
-        let cmd_size: u32 = self.bin_size() as u32;
-
-        w.write_all(&cmd_kind.to_le_bytes())?;
-        w.write_all(&cmd_size.to_le_bytes())?;
-
         w.write_all(&self.name)?;
         w.write_all(&self.vm_addr.to_le_bytes())?;
         w.write_all(&self.vm_size.to_le_bytes())?;
@@ -159,12 +171,12 @@ impl SegmentLoad {
         Ok(())
     }
 
-    fn bin_size(&self) -> usize {
+    fn size(&self) -> usize {
         72usize
             + self
                 .sections
                 .iter()
-                .map(|x: &Section| x.bin_size())
+                .map(|x: &Section| x.size())
                 .sum::<usize>()
     }
 }
@@ -189,7 +201,7 @@ impl Section {
         Ok(())
     }
 
-    fn bin_size(&self) -> usize {
+    fn size(&self) -> usize {
         80
     }
 }
@@ -237,7 +249,7 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
             flags: 0,
         }),
     ];
-    let cmds_bytes_count = cmds.iter().map(|x| x.bin_size()).sum::<usize>() as u32;
+    let cmds_bytes_count = cmds.iter().map(|x| x.size()).sum::<usize>() as u32;
     let file_size = utils::round_up(
         cmds_bytes_count as usize + encoding.instructions.len(),
         page_size,
@@ -246,7 +258,7 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
     cmds[1].as_segment_load_mut().unwrap().sections[0].section_file_offset =
         std::mem::size_of::<Header>() as u32 + cmds_bytes_count;
     cmds[1].as_segment_load_mut().unwrap().file_size =
-        utils::round_up(cmds[1].bin_size() + encoding.instructions.len(), page_size) as u64;
+        utils::round_up(cmds[1].size() + encoding.instructions.len(), page_size) as u64;
 
     let header = Header {
         magic: 0xfe_ed_fa_cf,                       // 64 bits.
@@ -270,7 +282,7 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
     for cmd in &cmds {
         let mut written = 0;
         cmd.write(w)?;
-        written += cmd.bin_size();
+        written += cmd.size();
 
         if let Some(seg) = cmd.as_segment_load() {
             if seg.name == *b"__TEXT\0\0\0\0\0\0\0\0\0\0" {
