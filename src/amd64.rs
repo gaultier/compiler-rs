@@ -774,6 +774,32 @@ impl Emitter {
                     &Origin::new_synth_codegen(),
                 );
             }
+            (
+                ir::InstructionKind::ICmp,
+                Some(ir::Operand {
+                    kind: ir::OperandKind::VirtualRegister(lhs),
+                    ..
+                }),
+                Some(ir::Operand {
+                    kind: ir::OperandKind::VirtualRegister(rhs),
+                    ..
+                }),
+            ) => {
+                todo!();
+            }
+            (
+                ir::InstructionKind::ICmp,
+                Some(ir::Operand {
+                    kind: ir::OperandKind::VirtualRegister(lhs),
+                    ..
+                }),
+                Some(ir::Operand {
+                    kind: ir::OperandKind::Num(num),
+                    ..
+                }),
+            ) => {
+                todo!();
+            }
             x => panic!("invalid IR operands: {:#?}", x),
         }
     }
@@ -2513,9 +2539,7 @@ impl Instruction {
                         }
                         Ok(())
                     }
-                    _ => {
-                        Err(std::io::Error::from(io::ErrorKind::InvalidData))
-                    }
+                    _ => Err(std::io::Error::from(io::ErrorKind::InvalidData)),
                 }
             }
             InstructionKind::Je => {

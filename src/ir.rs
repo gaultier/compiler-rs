@@ -22,6 +22,7 @@ pub enum InstructionKind {
     IAdd,
     IMultiply,
     IDivide,
+    ICmp,
     Set, // Set virtual register.
     FnCall,
 }
@@ -155,6 +156,7 @@ impl FnDef {
                 InstructionKind::IAdd
                 | InstructionKind::IMultiply
                 | InstructionKind::IDivide
+                | InstructionKind::ICmp
                 | InstructionKind::Set => {
                     let res_vreg = ins.res_vreg.unwrap();
                     assert!(res_vreg.0 > 0);
@@ -422,6 +424,9 @@ impl Display for Instruction {
             InstructionKind::IDivide => {
                 write!(f, "idiv")?;
             }
+            InstructionKind::ICmp => {
+                write!(f, "icmp")?;
+            }
             InstructionKind::Set => {
                 write!(f, "set")?;
             }
@@ -515,6 +520,8 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                 }
             }
             InstructionKind::IAdd => {
+                assert_eq!(ir.operands.len(), 2);
+
                 let lhs = ir.operands.first().unwrap();
                 let lhs = match lhs.kind {
                     OperandKind::Num(num) => EvalValue::new_int(num),
@@ -537,6 +544,8 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                 res.insert(ir.res_vreg.unwrap(), sum);
             }
             InstructionKind::IMultiply => {
+                assert_eq!(ir.operands.len(), 2);
+
                 let lhs = ir.operands.first().unwrap();
                 let lhs = match lhs.kind {
                     OperandKind::Num(num) => EvalValue::new_int(num),
@@ -559,6 +568,8 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                 res.insert(ir.res_vreg.unwrap(), mul);
             }
             InstructionKind::IDivide => {
+                assert_eq!(ir.operands.len(), 2);
+
                 let lhs = ir.operands.first().unwrap();
                 let lhs = match lhs.kind {
                     OperandKind::Num(num) => EvalValue::new_int(num),
@@ -579,6 +590,37 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                     typ: lhs.typ.clone(),
                 };
                 res.insert(ir.res_vreg.unwrap(), div);
+            }
+            InstructionKind::ICmp => {
+                assert_eq!(ir.operands.len(), 2);
+
+                let lhs = ir.operands.first().unwrap();
+                let lhs = match lhs.kind {
+                    OperandKind::Num(num) => EvalValue::new_int(num),
+                    OperandKind::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
+                    _ => panic!("incompatible operands"),
+                };
+
+                let rhs = ir.operands.get(1).unwrap();
+                let rhs = match rhs.kind {
+                    OperandKind::Num(num) => EvalValue::new_int(num),
+                    OperandKind::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
+                    _ => panic!("incompatible operands"),
+                };
+                assert_eq!(lhs.size(), rhs.size());
+
+                let cmp = lhs.as_num().cmp(&rhs.as_num());
+                let cmp_num = match cmp {
+                    std::cmp::Ordering::Less => -1,
+                    std::cmp::Ordering::Equal => 0,
+                    std::cmp::Ordering::Greater => 1,
+                };
+
+                let cmp_res = EvalValue {
+                    kind: EvalValueKind::Num(cmp_num),
+                    typ: lhs.typ.clone(),
+                };
+                res.insert(ir.res_vreg.unwrap(), cmp_res);
             }
             InstructionKind::Set => {
                 let value = ir.operands.first().unwrap();
