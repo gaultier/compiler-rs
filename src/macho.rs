@@ -158,8 +158,6 @@ impl LoadCommand {
         w.write_all(&self.kind().to_le_bytes())?;
         w.write_all(&self.size().to_le_bytes())?;
 
-        dbg!(self.kind(), self.size());
-
         match self {
             LoadCommand::SegmentLoad(x) => x.write(w),
             LoadCommand::UnixThread(x) => x.write(w),
@@ -405,13 +403,13 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
     ) as u64;
 
     // Backpatch fields.
+    let vm_text_start = std::mem::size_of::<Header>() as u64 + cmds_bytes_count as u64 + text_start;
+    let vm_entrypoint = vm_text_start + encoding.entrypoint as u64;
     {
-        let vm_text_start =
-            std::mem::size_of::<Header>() as u64 + cmds_bytes_count as u64 + text_start;
         cmds[cmd_text_idx].as_segment_load_mut().unwrap().sections[0].section_addr = vm_text_start;
         match &mut cmds[1].as_unix_thread_mut().unwrap().unix_thread_state {
             UnixThreadState::X64(unix_thread_state_x64) => {
-                unix_thread_state_x64.rip = vm_text_start
+                unix_thread_state_x64.rip = vm_entrypoint
             }
         };
         cmds[cmd_text_idx].as_segment_load_mut().unwrap().sections[0].section_file_offset =
@@ -453,7 +451,10 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
         w.write_all(&[0])?;
     }
 
-    trace!("macho: written {} bytes", file_size);
+    trace!(
+        "macho: written_bytes={} vm_text_start={:#X} vm_entrypoint={:#X}",
+        file_size, vm_text_start, vm_entrypoint,
+    );
 
     w.flush()
 }
