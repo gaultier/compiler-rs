@@ -1,4 +1,5 @@
 ir: 
+- if
 - jmp
 - je
 - cmp

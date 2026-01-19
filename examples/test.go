@@ -1,6 +1,7 @@
 package main
 
-func main(){
-	println(1 + 3)
+func main() {
+	if true {
+		println(1 + 3)
+	}
 }
-
