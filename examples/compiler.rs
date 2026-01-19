@@ -1,7 +1,7 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
 use compiler_rs_lib::{
-    asm::{self, Encoding, Os},
+    asm::{self, Os, Target},
     compile, elf, macho,
 };
 use log::{LevelFilter, Log};
@@ -32,7 +32,7 @@ fn main() {
     let mut file_id_to_name = HashMap::new();
     file_id_to_name.insert(1, file_name.clone());
 
-    let target_arch = asm::ArchKind::Amd64;
+    let target_arch = asm::Architecture::Amd64;
     let os_str = std::env::args()
         .skip(2)
         .next()
@@ -43,7 +43,11 @@ fn main() {
         "macos" => Os::MacOS,
         x => unimplemented!("{}", x),
     };
-    let compiled = compile(&file_content, 1, &file_id_to_name, target_arch);
+    let target = Target {
+        os: target_os,
+        arch: target_arch,
+    };
+    let compiled = compile(&file_content, 1, &file_id_to_name, &target);
 
     println!("--- Errors: {} ---", compiled.errors.len());
     for err in &compiled.errors {
@@ -60,20 +64,10 @@ fn main() {
     };
 
     let output_file_name = "hello.bin"; // FIXME
-    match target_os {
+    match target.os {
         Os::Linux => elf::write_to_file(output_file_name, &compiled.asm_encoded).unwrap(),
         Os::MacOS => {
-            // FIXME
-            let encoding = Encoding {
-                instructions: vec![
-                    0x48, 0xc7, 0xc0, 0x01, 0x00, 0x00, 0x02, // mov rax, 0x2000001
-                    0x48, 0xc7, 0xc7, 0x02, 0x00, 0x00, 0x00, // mov rdi, 2
-                    0x0f, 0x05, // syscall
-                ],
-                entrypoint: 0,
-                symbols: BTreeMap::new(),
-            };
-            macho::write_to_file(output_file_name, &encoding).unwrap();
+            macho::write_to_file(output_file_name, &compiled.asm_encoded).unwrap();
         }
     };
 }

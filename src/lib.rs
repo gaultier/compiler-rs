@@ -19,7 +19,7 @@ use std::{
 use log::trace;
 
 use crate::{
-    asm::{ArchKind, Encoding},
+    asm::{Encoding, Target},
     ast::{Node, Parser},
     error::Error,
     ir::VirtualRegister,
@@ -32,7 +32,7 @@ use crate::{
 #[cfg(target_arch = "wasm32")]
 mod wasm32 {
     use crate::{
-        asm::{ArchKind, Encoding},
+        asm::{Architecture, Encoding},
         ast::Node,
         error::Error,
         ir::{self, Instruction, LiveRanges},
@@ -124,7 +124,7 @@ mod wasm32 {
         in_ptr: *const u8,
         in_len: usize,
         file_id: FileId,
-        target_arch: ArchKind,
+        target_arch: Architecture,
     ) -> AllocHandle {
         let input_bytes = unsafe {
             std::ptr::slice_from_raw_parts(in_ptr, in_len)
@@ -186,7 +186,7 @@ pub fn compile(
     input: &str,
     file_id: FileId,
     file_id_to_name: &HashMap<FileId, String>,
-    target_arch: ArchKind,
+    target: &Target,
 ) -> CompileResult {
     let mut lexer = Lexer::new(file_id);
     lexer.lex(input);
@@ -241,11 +241,11 @@ pub fn compile(
             .collect::<BTreeMap<VirtualRegister, Size>>();
 
         let (vreg_to_memory_location, stack_offset) =
-            register_alloc::regalloc(&fn_def.live_ranges, &vreg_to_size, &asm::abi(&target_arch));
+            register_alloc::regalloc(&fn_def.live_ranges, &vreg_to_size, &asm::abi(&target.arch));
         trace!("vreg_to_memory_location: {:#?}", vreg_to_memory_location);
 
         let (fn_asm_instructions, _) =
-            asm::emit_fn_def(fn_def, &vreg_to_memory_location, stack_offset, &target_arch);
+            asm::emit_fn_def(fn_def, &vreg_to_memory_location, stack_offset, &target);
 
         trace!(
             "asm_instructions: fn_name={} ins={:#?}",
@@ -262,7 +262,7 @@ pub fn compile(
 
     trace!("asm_text: {}", &asm_text);
 
-    let encoding = asm::encode(&asm_instructions, &target_arch);
+    let encoding = asm::encode(&asm_instructions, &target);
     trace!(
         "asm encoded: entrypoint={:#X} bin={:#04X?}",
         encoding.entrypoint, &encoding.instructions
@@ -291,7 +291,7 @@ mod tests {
     fn test_api() {
         let input = "2 + 3 * 4 / 7";
 
-        let compiled = compile(&input, 1, ArchKind::Amd64);
+        let compiled = compile(&input, 1, Architecture::Amd64);
         assert_eq!(compiled.errors.len(), 0);
         assert_eq!(compiled.lex_tokens.len(), 8 /* including EOF */);
 

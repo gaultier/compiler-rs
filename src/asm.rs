@@ -14,7 +14,7 @@ use crate::{
 };
 
 #[repr(u8)]
-pub enum ArchKind {
+pub enum Architecture {
     Amd64,
     // TODO
 }
@@ -22,6 +22,12 @@ pub enum ArchKind {
 pub enum Os {
     Linux,
     MacOS,
+}
+
+pub struct Target {
+    pub os: Os,
+    pub arch: Architecture,
+    // More: version, CPU features, etc.
 }
 
 pub enum BinaryFormat {
@@ -72,15 +78,15 @@ impl Display for Register {
     }
 }
 
-pub(crate) fn abi(target_arch: &ArchKind) -> Abi {
+pub(crate) fn abi(target_arch: &Architecture) -> Abi {
     match target_arch {
-        ArchKind::Amd64 => amd64::abi(),
+        Architecture::Amd64 => amd64::abi(),
     }
 }
 
-pub(crate) fn encode(instructions: &[Instruction], target_arch: &ArchKind) -> Encoding {
-    match target_arch {
-        ArchKind::Amd64 => amd64::encode(instructions),
+pub(crate) fn encode(instructions: &[Instruction], target: &Target) -> Encoding {
+    match target.arch {
+        Architecture::Amd64 => amd64::encode(instructions, target),
     }
 }
 
@@ -119,14 +125,14 @@ pub(crate) fn emit_fn_def(
     fn_def: &ir::FnDef,
     vreg_to_memory_location: &RegisterMapping,
     stack_offset: isize,
-    target_arch: &ArchKind,
+    target: &Target,
 ) -> (Vec<Instruction>, Stack) {
     trace!("asm: stack_offset={}", stack_offset);
 
-    match target_arch {
-        ArchKind::Amd64 => {
+    match target.arch {
+        Architecture::Amd64 => {
             let mut emitter = amd64::Emitter::new(stack_offset);
-            emitter.emit_fn_def(fn_def, vreg_to_memory_location);
+            emitter.emit_fn_def(fn_def, vreg_to_memory_location, &target);
 
             (
                 emitter.asm.into_iter().map(Instruction::Amd64).collect(),

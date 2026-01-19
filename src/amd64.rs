@@ -16,7 +16,7 @@ use proptest_derive::Arbitrary;
 use serde::Serialize;
 
 use crate::{
-    asm::{self, Abi, Encoding, Stack, Symbol},
+    asm::{self, Abi, Encoding, Stack, Symbol, Target},
     ir::{self},
     origin::Origin,
     register_alloc::{MemoryLocation, RegisterMapping},
@@ -160,6 +160,11 @@ enum ModRmEncoding {
     SlashR,
 }
 
+const SYSCALL_MACOS_EXIT: u32 = 0x2000001;
+const SYSCALL_MACOS_WRITE: u32 = 0x2000004;
+const SYSCALL_LINUX_EXIT: u32 = 60;
+const SYSCALL_LINUX_WRITE: u32 = 1;
+
 impl EffectiveAddress {
     fn is_valid(&self) -> bool {
         match self {
@@ -235,7 +240,7 @@ impl Display for Operand {
     }
 }
 
-pub(crate) fn encode(instructions: &[asm::Instruction]) -> Encoding {
+pub(crate) fn encode(instructions: &[asm::Instruction], target: &Target) -> Encoding {
     let mut w = Vec::with_capacity(instructions.len() * 5);
     let mut symbols = BTreeMap::new();
 
@@ -288,15 +293,43 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> Encoding {
             origin: Origin::new_builtin(),
         },
     );
+    let sys_write = match target.os {
+        asm::Os::Linux => SYSCALL_LINUX_WRITE,
+        asm::Os::MacOS => SYSCALL_MACOS_WRITE,
+    }
+    .to_le_bytes();
     w.extend_from_slice(&[
         // .end:
-        0xb8, 0x01, 0x00, 0x00, 0x00, // mov eax, 0x1; SYSCALL_WRITE_LINUX
-        0xbf, 0x01, 0x00, 0x00, 0x00, // mov edi, 1; STDOUT
-        0x4c, 0x89, 0xce, // mov rsi, r9
-        0x4c, 0x89, 0xc2, // mov rdx, r8
-        0x0f, 0x05, // syscall
-        0xb8, 0x00, 0x00, 0x00, 0x00, // mov eax, 0
-        0x48, 0x81, 0xc4, 0x00, 0x01, 0x00, 0x00, // add rsp, 0x100
+        0xb8,
+        sys_write[0],
+        sys_write[1],
+        sys_write[2],
+        sys_write[3], // mov eax, 0x1; SYSCALL_WRITE
+        0xbf,
+        0x01,
+        0x00,
+        0x00,
+        0x00, // mov edi, 1; STDOUT
+        0x4c,
+        0x89,
+        0xce, // mov rsi, r9
+        0x4c,
+        0x89,
+        0xc2, // mov rdx, r8
+        0x0f,
+        0x05, // syscall
+        0xb8,
+        0x00,
+        0x00,
+        0x00,
+        0x00, // mov eax, 0
+        0x48,
+        0x81,
+        0xc4,
+        0x00,
+        0x01,
+        0x00,
+        0x00, // add rsp, 0x100
         0x5d, // pop rbp
         0xc3, // ret
     ]);
@@ -336,9 +369,16 @@ pub(crate) fn encode(instructions: &[asm::Instruction]) -> Encoding {
 
     // Exit.
     {
+        let sys_exit = match target.os {
+            asm::Os::Linux => SYSCALL_LINUX_EXIT,
+            asm::Os::MacOS => SYSCALL_MACOS_EXIT,
+        };
         let ins_mov = Instruction {
             kind: InstructionKind::Mov,
-            operands: vec![Operand::Register(Register::Eax), Operand::Immediate(60)], //FIXME
+            operands: vec![
+                Operand::Register(Register::Eax),
+                Operand::Immediate(sys_exit as i64),
+            ],
             origin: Origin::new_unknown(),
         };
         ins_mov.encode(&mut w, &symbols).unwrap();
@@ -739,6 +779,7 @@ impl Emitter {
         &mut self,
         fn_def: &ir::FnDef,
         vreg_to_memory_location: &RegisterMapping,
+        target: &Target,
     ) {
         self.asm = Vec::with_capacity(fn_def.instructions.len() * 2);
 
