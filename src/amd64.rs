@@ -487,6 +487,7 @@ pub enum InstructionKind {
     Cwd,
     Cdq,
     Cqo,
+    Jmp,
 }
 
 pub struct Emitter {
@@ -1272,6 +1273,7 @@ impl InstructionKind {
             InstructionKind::Cwd => "cwd",
             InstructionKind::Cdq => "cdq",
             InstructionKind::Cqo => "cqo",
+            InstructionKind::Jmp => "jmp",
         }
     }
 }
@@ -2471,6 +2473,37 @@ impl Instruction {
             InstructionKind::Cqo => {
                 Instruction::encode_rex_from_operands(w, true, None, None, None)?;
                 w.write_all(&[0x99])
+            }
+            InstructionKind::Jmp => {
+                if self.operands.len() != 1 {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
+                let op = &self.operands[0];
+                match op {
+                    Operand::Immediate(imm) => {
+                        if let Ok(imm8) = i8::try_from(*imm) {
+                            w.write_all(&[0xeb, imm8 as u8])
+                        } else if let Ok(imm32) = i32::try_from(*imm) {
+                            w.write_all(&[0xe9])?;
+                            w.write_all(&imm32.to_le_bytes())
+                        } else {
+                            return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                        }
+                    }
+                    Operand::Register(_) | Operand::EffectiveAddress(_)
+                        if op.size() == Size::_64 =>
+                    {
+                        let modrm = Instruction::encode_modrm(ModRmEncoding::Slash4, op, None);
+                        w.write_all(&[0x8f, modrm])?;
+                        if let Operand::EffectiveAddress(addr) = op {
+                            Instruction::encode_sib(w, addr, modrm)?;
+                        }
+                        Ok(())
+                    }
+                    _ => {
+                        return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                    }
+                }
             }
         }
     }
