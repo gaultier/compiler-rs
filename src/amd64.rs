@@ -488,6 +488,7 @@ pub enum InstructionKind {
     Cdq,
     Cqo,
     Jmp,
+    Je,
 }
 
 pub struct Emitter {
@@ -1274,6 +1275,7 @@ impl InstructionKind {
             InstructionKind::Cdq => "cdq",
             InstructionKind::Cqo => "cqo",
             InstructionKind::Jmp => "jmp",
+            InstructionKind::Je => "je",
         }
     }
 }
@@ -2513,6 +2515,27 @@ impl Instruction {
                         return Err(std::io::Error::from(io::ErrorKind::InvalidData));
                     }
                 }
+            }
+            InstructionKind::Je => {
+                if self.operands.len() != 1 {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
+                let op = &self.operands[0];
+                let rel32: i32 = match op {
+                    Operand::Immediate(imm) => {
+                        if let Ok(imm32) = i32::try_from(*imm) {
+                            imm32
+                        } else {
+                            return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                        }
+                    }
+                    _ => {
+                        return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                    }
+                };
+
+                w.write_all(&[0x0F, 0x84])?;
+                w.write_all(&rel32.to_le_bytes())
             }
         }
     }

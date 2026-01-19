@@ -30,3 +30,4 @@ cc 3baff107f9e2b770af5075da82813b21dd8384dafb3a7522ab7d0f0de1aad96c # shrinks to
 cc 5a7f9a03e4d90bb431a5ec5cd1c17014f503ed82e8fbb89b43f6041747463be3 # shrinks to ins = Instruction { kind: Pop, operands: [Register(Ebx)], origin: Origin { line: 0, column: 0, offset: 0, len: 0, kind: Unknown } }
 cc e28ec2b382b3df7b5e11bd48bb858b86ffbe07d0ad855dcfb8208cfa4f6c683c # shrinks to ins = Instruction { kind: Add, operands: [Register(Bx), Immediate(-32769)], origin: Origin { line: 0, column: 0, offset: 0, len: 0, kind: Unknown } }
 cc 36515482b30db54e56832d13c4ad062ef4e2e171c81172cfa2e8313b33fe9be3 # shrinks to ins = Instruction { kind: Cwd, operands: [], origin: Origin { line: 0, column: 0, offset: 0, len: 0, kind: Unknown } }
+cc 3a8d078158895d97c117096ddaa28602fec5d423223a76fe52cb85006151022b # shrinks to ins = Instruction { kind: Add, operands: [Register(Bx), Immediate(32768)], origin: Origin { line: 0, column: 0, offset: 0, len: 0, kind: Unknown } }
