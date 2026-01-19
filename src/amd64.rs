@@ -444,6 +444,9 @@ pub enum InstructionKind {
     Pop,
     Ret,
     Syscall,
+    Cwd,
+    Cdq,
+    Cqo,
 }
 
 pub struct Emitter {
@@ -608,13 +611,13 @@ impl Emitter {
                     &Origin::new_synth_codegen(),
                 );
 
-                // `idiv` technically divides the 128 bit `rdx:rax` value. Thus, `rdx` is zeroed
-                // first to only divide `rax`.
-                self.emit_store(
-                    &MemoryLocation::Register(asm::Register::Amd64(Register::Rdx)),
-                    &Operand::Immediate(0),
-                    &ins.origin,
-                );
+                // `idiv` technically divides the 128 bit `rdx:rax` value.
+                // Thus, we need to sign extend first.
+                self.asm.push(Instruction {
+                    kind: InstructionKind::Cqo, // TODO: Depending on the size, cwd/cdq.
+                    operands: vec![vreg_to_memory_location.get(rhs).unwrap().into()],
+                    origin: ins.origin,
+                });
                 self.asm.push(Instruction {
                     kind: InstructionKind::IDiv,
                     operands: vec![vreg_to_memory_location.get(rhs).unwrap().into()],
@@ -1223,6 +1226,9 @@ impl InstructionKind {
             InstructionKind::Call => "call",
             InstructionKind::Ret => "ret",
             InstructionKind::Syscall => "syscall",
+            InstructionKind::Cwd => "cwd",
+            InstructionKind::Cdq => "cdq",
+            InstructionKind::Cqo => "cqo",
         }
     }
 }
@@ -2417,6 +2423,11 @@ impl Instruction {
                 } else {
                     Err(std::io::Error::from(io::ErrorKind::InvalidData))
                 }
+            }
+            InstructionKind::Cwd | InstructionKind::Cdq => w.write_all(&[0x99]),
+            InstructionKind::Cqo => {
+                Instruction::encode_rex_from_operands(w, true, None, None, None)?;
+                w.write_all(&[0x99])
             }
         }
     }
