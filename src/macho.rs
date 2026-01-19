@@ -364,8 +364,7 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
             name: *b"__TEXT\0\0\0\0\0\0\0\0\0\0",
             vm_addr: text_start,
             vm_size: utils::round_up(encoding.instructions.len(), page_size) as u64,
-            // We assume that the head + all load commands fit in one page.
-            file_offset: page_size as u64,
+            file_offset: 0,
             file_size: 0, // Backpatched.
             max_vmem_protect: Permissions::Read as u32 | Permissions::Exec as u32,
             init_vmem_protect: Permissions::Read as u32 | Permissions::Exec as u32,
@@ -394,17 +393,12 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
 
     let cmds_bytes_count = cmds.iter().map(|x| x.size() as usize).sum::<usize>() as u32;
     let file_size = utils::round_up(
-        cmds_bytes_count as usize + encoding.instructions.len(),
+        std::mem::size_of::<Header>() + cmds_bytes_count as usize + encoding.instructions.len(),
         page_size,
     );
     // Machine instructions follow the header and load commands.
     cmds[cmd_text_idx].as_segment_load_mut().unwrap().sections[0].section_file_offset =
         std::mem::size_of::<Header>() as u32 + cmds_bytes_count;
-    cmds[cmd_text_idx].as_segment_load_mut().unwrap().file_size = utils::round_up(
-        cmds[cmd_text_idx].size() as usize + encoding.instructions.len(),
-        page_size,
-    ) as u64;
-
     let header = Header {
         magic: 0xfe_ed_fa_cf,                       // 64 bits.
         cpu_kind: CpuKind::X86 as u32 | 0x01000000, // 64 bits.
@@ -424,15 +418,26 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
     };
     w.write_all(bytes)?;
 
-    for cmd in &cmds {
+    let mut written = std::mem::size_of::<Header>();
+    for cmd in &mut cmds {
+        if let Some(seg) = cmd.as_segment_load_mut() {
+            // These fields are used in the loader so:
+            // `mmap(seg.file_offset, ..., seg.file_size)`
+            // Thus the  size should be a multiple of `page_size`.
+            // TODO: Should `file_offset` be page-aligned?
+            seg.file_offset = written as u64;
+            seg.file_size = file_size as u64 - written as u64;
+
+            assert_eq!(seg.file_size as usize % page_size, 0);
+        }
         cmd.write(w)?;
+        written += cmd.size() as usize;
     }
 
     // Write the instructions.
 
     w.write_all(&encoding.instructions)?;
-    let written =
-        std::mem::size_of::<Header>() + cmds_bytes_count as usize + encoding.instructions.len();
+    written += encoding.instructions.len();
 
     let padding = utils::round_up(written, page_size) - written;
     for _ in 0..padding {
