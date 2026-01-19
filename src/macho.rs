@@ -239,7 +239,7 @@ impl UnixThreadCommand {
         let flavor: u32 = self.unix_thread_state.flavor();
         w.write_all(&flavor.to_le_bytes())?;
 
-        let count = 168 / std::mem::size_of::<u32>();
+        let count: u32 = 168 / std::mem::size_of::<u32>() as u32;
         w.write_all(&count.to_le_bytes())?;
 
         self.unix_thread_state.write(w)?;
