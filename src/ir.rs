@@ -71,6 +71,7 @@ pub struct FnDef {
     vreg_to_type: BTreeMap<VirtualRegister, Type>,
     typ: Type,
     pub origin: Origin,
+    pub stack_size: usize,
 }
 
 impl Display for FnDef {
@@ -107,7 +108,7 @@ fn fn_name_ast_to_ir(ast_name: &str, typ_str: &str) -> String {
 }
 
 impl FnDef {
-    fn new(name: String, typ: &Type, origin: Origin) -> Self {
+    fn new(name: String, typ: &Type, origin: Origin, stack_size: usize) -> Self {
         Self {
             name,
             instructions: Vec::new(),
@@ -116,6 +117,7 @@ impl FnDef {
             vreg_to_type: BTreeMap::new(),
             typ: typ.clone(),
             origin,
+            stack_size,
         }
     }
 
@@ -337,10 +339,12 @@ impl Emitter {
             crate::ast::NodeKind::Package(_) => None,
             // Start of a new function.
             crate::ast::NodeKind::FnDef(fn_name) => {
+                let stack_size = 0; // TODO
                 let mut fn_def = FnDef::new(
                     fn_name_ast_to_ir(fn_name, &node.typ.to_string()),
                     &node.typ,
                     node.origin,
+                    stack_size,
                 );
                 for node in &node.children {
                     let ins = Self::emit_node(&mut fn_def, node);
