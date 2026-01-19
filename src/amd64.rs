@@ -489,6 +489,7 @@ pub enum InstructionKind {
     Cqo,
     Jmp,
     Je,
+    Cmp,
 }
 
 pub struct Emitter {
@@ -1276,6 +1277,7 @@ impl InstructionKind {
             InstructionKind::Cqo => "cqo",
             InstructionKind::Jmp => "jmp",
             InstructionKind::Je => "je",
+            InstructionKind::Cmp => "cmp",
         }
     }
 }
@@ -2536,6 +2538,25 @@ impl Instruction {
 
                 w.write_all(&[0x0F, 0x84])?;
                 w.write_all(&rel32.to_le_bytes())
+            }
+            InstructionKind::Cmp => {
+                if self.operands.len() != 2 {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
+                let op1 = &self.operands[0];
+                let op2 = &self.operands[1];
+
+                match (op1, op2) {
+                    (Operand::Register(Register::Rax), Operand::Immediate(imm)) => {
+                        let imm32 = i32::try_from(*imm)
+                            .map_err(|_| std::io::Error::from(io::ErrorKind::InvalidData))?;
+
+                        Instruction::encode_rex_from_operands(w, true, None, None, None)?;
+                        w.write_all(&[0x3d])?;
+                        w.write_all(&imm32.to_le_bytes())
+                    }
+                    _ => todo!(),
+                }
             }
         }
     }
