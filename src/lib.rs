@@ -245,7 +245,7 @@ pub fn compile(
         trace!("vreg_to_memory_location: {:#?}", vreg_to_memory_location);
 
         let (fn_asm_instructions, _) =
-            asm::emit_fn_def(fn_def, &vreg_to_memory_location, stack_offset, &target);
+            asm::emit_fn_def(fn_def, &vreg_to_memory_location, stack_offset, target);
 
         trace!(
             "asm_instructions: fn_name={} ins={:#?}",
@@ -262,7 +262,7 @@ pub fn compile(
 
     trace!("asm_text: {}", &asm_text);
 
-    let encoding = asm::encode(&asm_instructions, &target);
+    let encoding = asm::encode(&asm_instructions, target);
     trace!(
         "asm encoded: entrypoint={:#X} bin={:#04X?}",
         encoding.entrypoint, &encoding.instructions

@@ -115,7 +115,7 @@ impl FnDef {
             live_ranges: LiveRanges::new(),
             vreg_to_type: BTreeMap::new(),
             typ: typ.clone(),
-            origin: origin,
+            origin,
         }
     }
 
