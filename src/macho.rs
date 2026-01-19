@@ -106,12 +106,6 @@ struct Section {
 }
 
 #[repr(u32)]
-enum LoadCommandKind {
-    Symtab = 0x2,
-    Segment64 = 0x19,
-}
-
-#[repr(u32)]
 enum Permissions {
     Read = 0b01,
     Write = 0b10,
