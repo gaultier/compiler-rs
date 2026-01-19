@@ -353,7 +353,7 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
                 r13: 0,
                 r14: 0,
                 r15: 0,
-                rip: encoding.entrypoint as u64,
+                rip: text_start + encoding.entrypoint as u64,
                 rflags: 0,
                 cs: 0,
                 fs: 0,
@@ -364,7 +364,8 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
             name: *b"__TEXT\0\0\0\0\0\0\0\0\0\0",
             vm_addr: text_start,
             vm_size: utils::round_up(encoding.instructions.len(), page_size) as u64,
-            file_offset: 0,
+            // We assume that the head + all load commands fit in one page.
+            file_offset: page_size as u64,
             file_size: 0, // Backpatched.
             max_vmem_protect: Permissions::Read as u32 | Permissions::Exec as u32,
             init_vmem_protect: Permissions::Read as u32 | Permissions::Exec as u32,
