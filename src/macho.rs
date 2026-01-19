@@ -392,11 +392,14 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
     );
 
     let cmds_bytes_count = cmds.iter().map(|x| x.size() as usize).sum::<usize>() as u32;
+    // FIXME
     let file_size = utils::round_up(
         std::mem::size_of::<Header>() + cmds_bytes_count as usize + encoding.instructions.len(),
         page_size,
     );
     // Machine instructions follow the header and load commands.
+    cmds[cmd_text_idx].as_segment_load_mut().unwrap().file_size =
+        std::mem::size_of::<Header>() as u64 + cmds_bytes_count as u64;
     cmds[cmd_text_idx].as_segment_load_mut().unwrap().sections[0].section_file_offset =
         std::mem::size_of::<Header>() as u32 + cmds_bytes_count;
     let header = Header {
@@ -420,16 +423,6 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
 
     let mut written = std::mem::size_of::<Header>();
     for cmd in &mut cmds {
-        if let Some(seg) = cmd.as_segment_load_mut() {
-            // These fields are used in the loader so:
-            // `mmap(seg.file_offset, ..., seg.file_size)`
-            // Thus the  size should be a multiple of `page_size`.
-            // TODO: Should `file_offset` be page-aligned?
-            seg.file_offset = written as u64;
-            seg.file_size = file_size as u64 - written as u64;
-
-            assert_eq!(seg.file_size as usize % page_size, 0);
-        }
         cmd.write(w)?;
         written += cmd.size() as usize;
     }
