@@ -35,15 +35,45 @@ struct Header {
 }
 
 enum LoadCommand {
-    SegmentLoad(SegmentLoad),
-    UnixThread(UnixThread),
+    SegmentLoad(SegmentLoadCommand),
+    UnixThread(UnixThreadCommand),
 }
 
-struct UnixThread {
-    // TODO
+struct UnixThreadStateX64 {
+    rax: u64,
+    rbx: u64,
+    rcx: u64,
+    rdx: u64,
+    rdi: u64,
+    rsi: u64,
+    rbp: u64,
+    rsp: u64,
+    r8: u64,
+    r9: u64,
+    r10: u64,
+    r11: u64,
+    r12: u64,
+    r13: u64,
+    r14: u64,
+    r15: u64,
+    rip: u64,
+    rflags: u64,
+    cs: u64,
+    fs: u64,
+    gs: u64,
 }
 
-struct SegmentLoad {
+enum UnixThreadState {
+    X64(UnixThreadStateX64),
+    // TODO: ARM.
+}
+
+struct UnixThreadCommand {
+    unix_thread_state: UnixThreadState,
+    // In theory it's a variable amount of variables here but for our purpose there is only one.
+}
+
+struct SegmentLoadCommand {
     name: [u8; 16],
     vm_addr: u64,
     vm_size: u64,
@@ -109,14 +139,14 @@ impl LoadCommand {
         }
     }
 
-    fn as_segment_load(&self) -> Option<&SegmentLoad> {
+    fn as_segment_load(&self) -> Option<&SegmentLoadCommand> {
         match self {
             LoadCommand::SegmentLoad(x) => Some(x),
             _ => None,
         }
     }
 
-    fn as_segment_load_mut(&mut self) -> Option<&mut SegmentLoad> {
+    fn as_segment_load_mut(&mut self) -> Option<&mut SegmentLoadCommand> {
         match self {
             LoadCommand::SegmentLoad(x) => Some(x),
             _ => None,
@@ -134,9 +164,67 @@ impl LoadCommand {
     }
 }
 
-impl UnixThread {
+impl UnixThreadStateX64 {
+    fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+        w.write(&self.rax.to_le_bytes())?;
+        w.write(&self.rbx.to_le_bytes())?;
+        w.write(&self.rcx.to_le_bytes())?;
+        w.write(&self.rdx.to_le_bytes())?;
+        w.write(&self.rdi.to_le_bytes())?;
+        w.write(&self.rsi.to_le_bytes())?;
+        w.write(&self.rbp.to_le_bytes())?;
+        w.write(&self.rsp.to_le_bytes())?;
+        w.write(&self.r8.to_le_bytes())?;
+        w.write(&self.r9.to_le_bytes())?;
+        w.write(&self.r10.to_le_bytes())?;
+        w.write(&self.r11.to_le_bytes())?;
+        w.write(&self.r12.to_le_bytes())?;
+        w.write(&self.r13.to_le_bytes())?;
+        w.write(&self.r14.to_le_bytes())?;
+        w.write(&self.r15.to_le_bytes())?;
+        w.write(&self.rip.to_le_bytes())?;
+        w.write(&self.rflags.to_le_bytes())?;
+        w.write(&self.cs.to_le_bytes())?;
+        w.write(&self.fs.to_le_bytes())?;
+        w.write(&self.gs.to_le_bytes())?;
+
+        Ok(())
+    }
+}
+
+impl UnixThreadState {
+    fn flavor(&self) -> u32 {
+        match self {
+            UnixThreadState::X64(_) => 4,
+        }
+    }
+
+    fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
+        match self {
+            UnixThreadState::X64(x) => x.write(w),
+        }
+    }
+
     fn size(&self) -> usize {
-        todo!()
+        let res = match self {
+            UnixThreadState::X64(_) => 168,
+        };
+
+        // Must be a multiple of size(u32).
+        assert_eq!(res % 4, 0);
+
+        res
+    }
+}
+
+impl UnixThreadCommand {
+    fn size(&self) -> usize {
+        let res = 8 + 4 /* flavor */ + 4 /* count */ + self.unix_thread_state.size();
+
+        // Must be a multiple of size(u32).
+        assert_eq!(res % 4, 0);
+
+        res
     }
 
     fn kind(&self) -> u32 {
@@ -144,11 +232,19 @@ impl UnixThread {
     }
 
     fn write<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
-        todo!()
+        let flavor: u32 = self.unix_thread_state.flavor();
+        w.write_all(&flavor.to_le_bytes())?;
+
+        let count = 1u32;
+        w.write_all(&count.to_le_bytes())?;
+
+        self.unix_thread_state.write(w)?;
+
+        Ok(())
     }
 }
 
-impl SegmentLoad {
+impl SegmentLoadCommand {
     fn kind(&self) -> u32 {
         0x19
     }
@@ -172,12 +268,17 @@ impl SegmentLoad {
     }
 
     fn size(&self) -> usize {
-        72usize
+        let res = 72usize
             + self
                 .sections
                 .iter()
                 .map(|x: &Section| x.size())
-                .sum::<usize>()
+                .sum::<usize>();
+
+        // Must be a multiple of size(u32).
+        assert_eq!(res % 4, 0);
+
+        res
     }
 }
 
@@ -202,7 +303,12 @@ impl Section {
     }
 
     fn size(&self) -> usize {
-        80
+        let res = 80;
+
+        // Must be a multiple of size(u32).
+        assert_eq!(res % 4, 0);
+
+        res
     }
 }
 
@@ -212,7 +318,7 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
     let page_size = 4 * 1024; // TODO: On ARM: 16KiB.
     let text_start = 1u64 << 32;
     let mut cmds = [
-        LoadCommand::SegmentLoad(SegmentLoad {
+        LoadCommand::SegmentLoad(SegmentLoadCommand {
             name: *b"__PAGEZERO\0\0\0\0\0\0",
             vm_addr: 0,
             vm_size: text_start,
@@ -223,8 +329,32 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
             flags: 0,
             sections: Vec::new(),
         }),
-        LoadCommand::UnixThread(UnixThread {}),
-        LoadCommand::SegmentLoad(SegmentLoad {
+        LoadCommand::UnixThread(UnixThreadCommand {
+            unix_thread_state: UnixThreadState::X64(UnixThreadStateX64 {
+                rax: 0,
+                rbx: 0,
+                rcx: 0,
+                rdx: 0,
+                rdi: 0,
+                rsi: 0,
+                rbp: 0,
+                rsp: 0,
+                r8: 0,
+                r9: 0,
+                r10: 0,
+                r11: 0,
+                r12: 0,
+                r13: 0,
+                r14: 0,
+                r15: 0,
+                rip: encoding.entrypoint as u64,
+                rflags: 0,
+                cs: 0,
+                fs: 0,
+                gs: 0,
+            }),
+        }),
+        LoadCommand::SegmentLoad(SegmentLoadCommand {
             name: *b"__TEXT\0\0\0\0\0\0\0\0\0\0",
             vm_addr: text_start,
             vm_size: utils::round_up(encoding.instructions.len(), page_size) as u64,
@@ -249,16 +379,24 @@ pub fn write<W: Write>(w: &mut W, encoding: &Encoding) -> std::io::Result<()> {
             flags: 0,
         }),
     ];
+    let cmd_text_idx = 2;
+    assert_eq!(
+        cmds[cmd_text_idx].as_segment_load().unwrap().name,
+        *b"__TEXT\0\0\0\0\0\0\0\0\0\0"
+    );
+
     let cmds_bytes_count = cmds.iter().map(|x| x.size()).sum::<usize>() as u32;
     let file_size = utils::round_up(
         cmds_bytes_count as usize + encoding.instructions.len(),
         page_size,
     );
     // Machine instructions follow the header and load commands.
-    cmds[1].as_segment_load_mut().unwrap().sections[0].section_file_offset =
+    cmds[cmd_text_idx].as_segment_load_mut().unwrap().sections[0].section_file_offset =
         std::mem::size_of::<Header>() as u32 + cmds_bytes_count;
-    cmds[1].as_segment_load_mut().unwrap().file_size =
-        utils::round_up(cmds[1].size() + encoding.instructions.len(), page_size) as u64;
+    cmds[cmd_text_idx].as_segment_load_mut().unwrap().file_size = utils::round_up(
+        cmds[cmd_text_idx].size() + encoding.instructions.len(),
+        page_size,
+    ) as u64;
 
     let header = Header {
         magic: 0xfe_ed_fa_cf,                       // 64 bits.
