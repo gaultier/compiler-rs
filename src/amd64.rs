@@ -2469,9 +2469,18 @@ impl Instruction {
                     Err(std::io::Error::from(io::ErrorKind::InvalidData))
                 }
             }
-            InstructionKind::Cwd | InstructionKind::Cdq => w.write_all(&[0x99]),
-            InstructionKind::Cqo => {
-                Instruction::encode_rex_from_operands(w, true, None, None, None)?;
+            InstructionKind::Cwd | InstructionKind::Cdq | InstructionKind::Cqo => {
+                if !self.operands.is_empty() {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
+
+                if self.kind == InstructionKind::Cwd {
+                    w.write_all(&[0x66])?; // 16 bits prefix.
+                }
+
+                if self.kind == InstructionKind::Cqo {
+                    Instruction::encode_rex_from_operands(w, true, None, None, None)?;
+                }
                 w.write_all(&[0x99])
             }
             InstructionKind::Jmp => {
