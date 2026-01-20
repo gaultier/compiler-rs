@@ -337,7 +337,39 @@ impl Emitter {
                 });
             }
             crate::ast::NodeKind::Multiply => {
-                todo!()
+                assert_eq!(node.children.len(), 2);
+
+                let ast_lhs = &node.children[0];
+                let ast_rhs = &node.children[1];
+
+                assert_eq!(*ast_lhs.typ.kind, TypeKind::Number);
+                assert_eq!(*ast_lhs.typ.kind, TypeKind::Number);
+                assert_eq!(*node.typ.kind, TypeKind::Number);
+
+                self.emit_node(fn_def, ast_lhs);
+                let (ir_lhs_vreg, ir_lhs_typ) = (
+                    fn_def.instructions.last().unwrap().res_vreg.unwrap(),
+                    fn_def.instructions.last().unwrap().typ.clone(),
+                );
+
+                self.emit_node(fn_def, ast_rhs);
+                let (ir_rhs_vreg, ir_rhs_typ) = (
+                    fn_def.instructions.last().unwrap().res_vreg.unwrap(),
+                    fn_def.instructions.last().unwrap().typ.clone(),
+                );
+
+                let res_vreg = fn_def.make_vreg(&node.typ);
+
+                fn_def.instructions.push(Instruction {
+                    kind: InstructionKind::IMultiply,
+                    operands: vec![
+                        Operand::new_vreg(ir_lhs_vreg, &ir_lhs_typ),
+                        Operand::new_vreg(ir_rhs_vreg, &ir_rhs_typ),
+                    ],
+                    origin: node.origin,
+                    res_vreg: Some(res_vreg),
+                    typ: node.typ.clone(),
+                });
             }
             crate::ast::NodeKind::Divide => {
                 todo!()
