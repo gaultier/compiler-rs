@@ -761,3 +761,45 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
 
     res
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use crate::{ast::Parser, lex::Lexer, type_checker};
+
+    use super::*;
+
+    #[test]
+    fn eval_expr() {
+        let input = "package main
+            func main() {
+              println(123 + 456)
+            }
+            ";
+
+        let file_id = 1;
+        let mut file_id_to_name = HashMap::new();
+        file_id_to_name.insert(1, String::from("test.go"));
+
+        let mut lexer = Lexer::new(file_id);
+        lexer.lex(input);
+        assert!(lexer.errors.is_empty());
+
+        let mut parser = Parser::new(input, &lexer, &file_id_to_name);
+        let mut ast_nodes = parser.parse();
+        assert!(parser.errors.is_empty());
+
+        let mut type_checker = type_checker::Checker::new();
+
+        assert!(type_checker.check_nodes(&mut ast_nodes).is_empty());
+
+        let mut ir_emitter = super::Emitter::new();
+        ir_emitter.emit(&ast_nodes);
+
+        let builtins = Parser::builtins(16);
+        assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
+
+        let ir_eval = super::eval(&ir_emitter.fn_defs[0].instructions);
+    }
+}
