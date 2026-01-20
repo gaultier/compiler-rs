@@ -282,25 +282,3 @@ pub fn compile(
         asm_encoded: encoding,
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    #[cfg(false)]
-    fn test_api() {
-        let input = "2 + 3 * 4 / 7";
-
-        let compiled = compile(&input, 1, Architecture::Amd64);
-        assert_eq!(compiled.errors.len(), 0);
-        assert_eq!(compiled.lex_tokens.len(), 8 /* including EOF */);
-
-        let (builtins, _) = Parser::builtins(16);
-        assert_eq!(compiled.ast_nodes.len(), builtins.len() + 7);
-
-        assert_eq!(compiled.ir_instructions.len(), 7);
-        // Due to spills.
-        assert!(compiled.asm_instructions.len() >= compiled.ir_instructions.len());
-    }
-}
