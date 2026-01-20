@@ -42,6 +42,7 @@ pub enum OperandKind {
     Num(i64),
     Bool(bool),
     Fn(String),
+    Label(String),
     VirtualRegister(VirtualRegister),
 }
 
@@ -60,9 +61,7 @@ pub struct LiveRange {
 pub type LiveRanges = BTreeMap<VirtualRegister, LiveRange>;
 
 #[derive(Debug)]
-struct Label {
-    name: String,
-}
+struct Label(String);
 
 #[derive(Debug)]
 pub struct Emitter {
@@ -353,6 +352,7 @@ impl Emitter {
             }
             NodeKind::If(cond) => {
                 assert_eq!(*cond.typ.kind, TypeKind::Bool);
+                assert!(node.children.len() <= 2); // then-body, else-body.
 
                 self.emit_node(fn_def, cond);
 
@@ -361,26 +361,30 @@ impl Emitter {
                 }
                 // TODO: Clear condition flags?
 
-                let if_body = &node.children[0];
-                assert_eq!(if_body.kind, NodeKind::Block);
+                let then_body = &node.children[0];
+                assert_eq!(then_body.kind, NodeKind::Block);
 
-                //let ins_jmp_to_else_body = Instruction {
-                //    kind: InstructionKind::JumpIfFalse,
-                //    origin: node.origin,
-                //    operands: vec![/* TODO */],
-                //    res_vreg: None,
-                //    typ: Type::new_void(),
-                //};
-                todo!();
+                let else_label = self.new_synth_label("else");
+                fn_def.instructions.push(Instruction {
+                    kind: InstructionKind::JumpIfFalse,
+                    origin: node.origin,
+                    operands: vec![Operand {
+                        kind: OperandKind::Label(else_label),
+                        typ: Type::new_void(),
+                    }],
+                    res_vreg: None,
+                    typ: Type::new_void(),
+                });
+                let jmp_to_else_idx = fn_def.instructions.len() - 1;
+
+                todo!()
             }
         }
     }
 
-    fn new_synth_label(&mut self, context: &str) -> Label {
+    fn new_synth_label(&mut self, context: &str) -> String {
         self.label_current += 1;
-        Label {
-            name: format!(".{}_{}", self.label_current, context),
-        }
+        format!(".{}_{}", self.label_current, context)
     }
 
     fn emit_def(&mut self, node: &Node) -> Option<FnDef> {
