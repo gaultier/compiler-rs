@@ -372,7 +372,39 @@ impl Emitter {
                 });
             }
             crate::ast::NodeKind::Divide => {
-                todo!()
+                assert_eq!(node.children.len(), 2);
+
+                let ast_lhs = &node.children[0];
+                let ast_rhs = &node.children[1];
+
+                assert_eq!(*ast_lhs.typ.kind, TypeKind::Number);
+                assert_eq!(*ast_lhs.typ.kind, TypeKind::Number);
+                assert_eq!(*node.typ.kind, TypeKind::Number);
+
+                self.emit_node(fn_def, ast_lhs);
+                let (ir_lhs_vreg, ir_lhs_typ) = (
+                    fn_def.instructions.last().unwrap().res_vreg.unwrap(),
+                    fn_def.instructions.last().unwrap().typ.clone(),
+                );
+
+                self.emit_node(fn_def, ast_rhs);
+                let (ir_rhs_vreg, ir_rhs_typ) = (
+                    fn_def.instructions.last().unwrap().res_vreg.unwrap(),
+                    fn_def.instructions.last().unwrap().typ.clone(),
+                );
+
+                let res_vreg = fn_def.make_vreg(&node.typ);
+
+                fn_def.instructions.push(Instruction {
+                    kind: InstructionKind::IDivide,
+                    operands: vec![
+                        Operand::new_vreg(ir_lhs_vreg, &ir_lhs_typ),
+                        Operand::new_vreg(ir_rhs_vreg, &ir_rhs_typ),
+                    ],
+                    origin: node.origin,
+                    res_vreg: Some(res_vreg),
+                    typ: node.typ.clone(),
+                });
             }
             NodeKind::Block => {
                 for node in &node.children {
@@ -811,7 +843,7 @@ mod tests {
     use crate::{ast::Parser, lex::Lexer, type_checker};
 
     #[test]
-    fn eval_print_add() {
+    fn eval_print_iadd() {
         let input = "package main
             func main() {
               println(123 + 456)
@@ -843,7 +875,7 @@ mod tests {
     }
 
     #[test]
-    fn eval_print_mul() {
+    fn eval_print_imul() {
         let input = "package main
             func main() {
               println(123 * 456 + 3)
@@ -872,5 +904,37 @@ mod tests {
 
         let ir_eval = super::eval(&ir_emitter.fn_defs[1].instructions);
         assert_eq!(ir_eval.stdout, b"56091\n");
+    }
+
+    #[test]
+    fn eval_print_idiv() {
+        let input = "package main
+            func main() {
+              println(123 * 456 / 3)
+            }
+            ";
+
+        let file_id = 1;
+        let mut file_id_to_name = HashMap::new();
+        file_id_to_name.insert(1, String::from("test.go"));
+
+        let mut lexer = Lexer::new(file_id);
+        lexer.lex(input);
+        assert!(lexer.errors.is_empty());
+
+        let mut parser = Parser::new(input, &lexer, &file_id_to_name);
+        let mut ast_nodes = parser.parse();
+        assert!(parser.errors.is_empty());
+
+        assert!(type_checker::check_nodes(&mut ast_nodes).is_empty());
+
+        let mut ir_emitter = super::Emitter::new();
+        ir_emitter.emit(&ast_nodes);
+
+        let builtins = Parser::builtins(16);
+        assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
+
+        let ir_eval = super::eval(&ir_emitter.fn_defs[1].instructions);
+        assert_eq!(ir_eval.stdout, b"18696\n");
     }
 }
