@@ -341,9 +341,29 @@ impl<'a> Parser<'a> {
         };
 
         let mut args = Vec::new();
-        if self.peek_token().is_some_and(|t| t.kind != TokenKind::RightParen) {
-            loop {
-                let arg = self.parse_expr().or_else(|| {
+
+        for _ in 0..self.remaining_tokens_count() {
+            match self.peek_token() {
+                Some(Token {
+                    kind: TokenKind::RightParen,
+                    ..
+                }) => {
+                    break;
+                }
+                Some(_) => {
+                    let arg = self.parse_expr().or_else(|| {
+                        self.errors.push(Error {
+                            kind: ErrorKind::ParseCallMissingArgument,
+                            origin: lparen.origin,
+                            explanation: String::from(
+                                "missing argument in function call, expected expression",
+                            ),
+                        });
+                        return None;
+                    })?;
+                    args.push(arg);
+                }
+                None => {
                     self.errors.push(Error {
                         kind: ErrorKind::ParseCallMissingArgument,
                         origin: lparen.origin,
@@ -351,12 +371,30 @@ impl<'a> Parser<'a> {
                             "missing argument in function call, expected expression",
                         ),
                     });
-                    None
-                })?;
-                args.push(arg);
+                    return None;
+                }
+            }
 
-                if self.match_kind(TokenKind::Comma).is_none() {
+            match self.peek_token() {
+                Some(Token {
+                    kind: TokenKind::Comma,
+                    ..
+                }) => {}
+                Some(Token {
+                    kind: TokenKind::RightParen,
+                    ..
+                }) => {
                     break;
+                }
+                _ => {
+                    self.errors.push(Error {
+                        kind: ErrorKind::MissingExpected(TokenKind::Comma),
+                        origin: lparen.origin,
+                        explanation: String::from(
+                            "missing argument in function call, expected expression",
+                        ),
+                    });
+                    return None;
                 }
             }
         }
@@ -414,7 +452,8 @@ impl<'a> Parser<'a> {
             let mut stmts = Vec::new();
             for _ in 0..self.remaining_tokens_count() {
                 match self.peek_token() {
-                    None | Some(Token {
+                    None
+                    | Some(Token {
                         kind: TokenKind::RightCurly,
                         ..
                     }) => break,
@@ -642,9 +681,7 @@ impl<'a> Parser<'a> {
             }
 
             // Recurse.
-            NodeKind::Add(lhs, rhs)
-            | NodeKind::Multiply(lhs, rhs)
-            | NodeKind::Divide(lhs, rhs) => {
+            NodeKind::Add(lhs, rhs) | NodeKind::Multiply(lhs, rhs) | NodeKind::Divide(lhs, rhs) => {
                 self.resolve_node(lhs);
                 self.resolve_node(rhs);
                 if *node.typ.kind == TypeKind::Unknown {
