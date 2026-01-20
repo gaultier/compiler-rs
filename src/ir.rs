@@ -159,11 +159,12 @@ impl FnDef {
                         res.insert(res_vreg, live_range);
                     }
                 }
-                InstructionKind::LabelDef => todo!(),
-                InstructionKind::Jump => todo!(),
-                InstructionKind::JumpIfFalse => {
-                    todo!()
-                }
+
+                // Nothing to do.
+                InstructionKind::LabelDef
+                | InstructionKind::Jump
+                | InstructionKind::JumpIfFalse => {}
+
                 InstructionKind::IAdd
                 | InstructionKind::IMultiply
                 | InstructionKind::IDivide
@@ -365,8 +366,9 @@ impl Emitter {
                 let then_body = &node.children[0];
                 assert_eq!(then_body.kind, NodeKind::Block);
 
-                let else_label = self.new_synth_label("if_else");
-                let end_label = self.new_synth_label("if_end");
+                let else_label = format!(".{}_if_else", self.label_current);
+                let end_label = format!(".{}_if_end", self.label_current);
+                self.label_current += 1;
 
                 fn_def.instructions.push(Instruction {
                     kind: InstructionKind::JumpIfFalse,
@@ -384,20 +386,23 @@ impl Emitter {
                     for node in &then_body.children {
                         self.emit_node(fn_def, node);
                     }
+                }
+
+                // Else body.
+                if let Some(else_body) = node.children.get(1) {
+                    assert_eq!(else_body.kind, NodeKind::Block);
+
                     fn_def.instructions.push(Instruction {
                         kind: InstructionKind::Jump,
                         origin: node.origin,
                         operands: vec![Operand {
-                            kind: OperandKind::Label(end_label),
+                            kind: OperandKind::Label(end_label.clone()),
                             typ: Type::new_void(),
                         }],
                         res_vreg: None,
                         typ: Type::new_void(),
                     });
-                }
 
-                // Else body.
-                {
                     fn_def.instructions.push(Instruction {
                         kind: InstructionKind::LabelDef,
                         origin: node.origin,
@@ -408,19 +413,27 @@ impl Emitter {
                         res_vreg: None,
                         typ: Type::new_void(),
                     });
+
+                    for node in &else_body.children {
+                        self.emit_node(fn_def, node);
+                    }
                 }
 
-                todo!()
+                // End.
+                {
+                    fn_def.instructions.push(Instruction {
+                        kind: InstructionKind::LabelDef,
+                        origin: node.origin,
+                        operands: vec![Operand {
+                            kind: OperandKind::Label(end_label),
+                            typ: Type::new_void(),
+                        }],
+                        res_vreg: None,
+                        typ: Type::new_void(),
+                    });
+                }
             }
         }
-    }
-
-    fn new_synth_label(&mut self, context: &str) -> String {
-        self.label_current += 1;
-        let label = format!(".{}_{}", self.label_current, context);
-        self.labels.push(label.clone());
-
-        label
     }
 
     fn emit_def(&mut self, node: &Node) -> Option<FnDef> {
