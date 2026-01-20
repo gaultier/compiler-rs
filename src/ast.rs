@@ -341,7 +341,7 @@ impl<'a> Parser<'a> {
         };
 
         let mut args = Vec::new();
-        if self.peek_token().map_or(false, |t| t.kind != TokenKind::RightParen) {
+        if self.peek_token().is_some_and(|t| t.kind != TokenKind::RightParen) {
             loop {
                 let arg = self.parse_expr().or_else(|| {
                     self.errors.push(Error {
