@@ -227,6 +227,11 @@ impl Checker {
                     self.check_node(node, errs);
                 }
             }
+            crate::ast::NodeKind::Block => {
+                for node in &mut node.children {
+                    self.check_node(node, errs);
+                }
+            }
         }
     }
 
