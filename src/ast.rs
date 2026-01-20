@@ -23,6 +23,7 @@ pub enum NodeKind {
     FnDef(String),
     Package(String),
     If(Box<Node>),
+    Block,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
@@ -596,6 +597,13 @@ impl<'a> Parser<'a> {
                 if *node.typ.kind == TypeKind::Unknown {
                     node.typ = node.children.first().map(|x| x.typ.clone()).unwrap();
                     assert_ne!(*node.typ.kind, TypeKind::Unknown);
+                }
+            }
+            NodeKind::Block => {
+                assert_eq!(*node.typ.kind, TypeKind::Unknown);
+
+                for op in &mut node.children {
+                    self.resolve_node(op)
                 }
             }
             NodeKind::FnDef(name) => {

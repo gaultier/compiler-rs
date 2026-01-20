@@ -209,7 +209,7 @@ impl Emitter {
         }
     }
 
-    fn emit_node(&mut self, fn_def: &mut FnDef, node: &Node) -> Vec<Instruction> {
+    fn emit_node(&mut self, fn_def: &mut FnDef, node: &Node) {
         match &node.kind {
             crate::ast::NodeKind::Package(_) | crate::ast::NodeKind::FnDef(_) => {
                 panic!(
@@ -221,25 +221,25 @@ impl Emitter {
                 assert_eq!(*node.typ.kind, TypeKind::Number);
 
                 let res_vreg = fn_def.make_vreg(&node.typ);
-                vec![Instruction {
+                fn_def.instructions.push(Instruction {
                     kind: InstructionKind::Set,
                     operands: vec![Operand::new_int(*num as i64)],
                     origin: node.origin,
                     res_vreg: Some(res_vreg),
                     typ: node.typ.clone(),
-                }]
+                });
             }
             crate::ast::NodeKind::Bool(b) => {
                 assert_eq!(*node.typ.kind, TypeKind::Bool);
 
                 let res_vreg = fn_def.make_vreg(&node.typ);
-                vec![Instruction {
+                fn_def.instructions.push(Instruction {
                     kind: InstructionKind::Set,
                     operands: vec![Operand::new_bool(*b)],
                     origin: node.origin,
                     res_vreg: Some(res_vreg),
                     typ: node.typ.clone(),
-                }]
+                });
             }
             crate::ast::NodeKind::Identifier(_) => {
                 todo!()
@@ -283,13 +283,13 @@ impl Emitter {
                 let mut operands = Vec::with_capacity(args.len() + 1);
                 operands.push(fn_name);
                 for arg in args {
-                    let ir_arg = self.emit_node(fn_def, arg);
-                    let (vreg, typ) = ir_arg
-                        .first()
+                    self.emit_node(fn_def, arg);
+                    let (vreg, typ) = fn_def
+                        .instructions
+                        .last()
                         .map(|x| (x.res_vreg.unwrap(), &x.typ))
                         .unwrap();
                     operands.push(Operand::new_vreg(vreg, typ));
-                    fn_def.instructions.extend(ir_arg);
                 }
 
                 trace!(
@@ -297,13 +297,13 @@ impl Emitter {
                     ast_fn_name, real_fn_name, arg_type,
                 );
 
-                vec![Instruction {
+                fn_def.instructions.push(Instruction {
                     kind: InstructionKind::FnCall,
                     operands,
                     origin: node.origin,
                     res_vreg,
                     typ: ret_type,
-                }]
+                });
             }
             crate::ast::NodeKind::Add => {
                 assert_eq!(node.children.len(), 2);
@@ -315,21 +315,21 @@ impl Emitter {
                 assert_eq!(*ast_lhs.typ.kind, TypeKind::Number);
                 assert_eq!(*node.typ.kind, TypeKind::Number);
 
-                let ir_lhs = self.emit_node(fn_def, ast_lhs);
-                assert_eq!(ir_lhs.len(), 1);
-                let (ir_lhs_vreg, ir_lhs_typ) =
-                    (ir_lhs[0].res_vreg.unwrap(), ir_lhs[0].typ.clone());
-                fn_def.instructions.extend(ir_lhs);
+                self.emit_node(fn_def, ast_lhs);
+                let (ir_lhs_vreg, ir_lhs_typ) = (
+                    fn_def.instructions.last().unwrap().res_vreg.unwrap(),
+                    fn_def.instructions.last().unwrap().typ.clone(),
+                );
 
-                let ir_rhs = self.emit_node(fn_def, ast_rhs);
-                assert_eq!(ir_rhs.len(), 1);
-                let (ir_rhs_vreg, ir_rhs_typ) =
-                    (ir_rhs[0].res_vreg.unwrap(), ir_rhs[0].typ.clone());
-                fn_def.instructions.extend(ir_rhs);
+                self.emit_node(fn_def, ast_rhs);
+                let (ir_rhs_vreg, ir_rhs_typ) = (
+                    fn_def.instructions.last().unwrap().res_vreg.unwrap(),
+                    fn_def.instructions.last().unwrap().typ.clone(),
+                );
 
                 let res_vreg = fn_def.make_vreg(&node.typ);
 
-                vec![Instruction {
+                fn_def.instructions.push(Instruction {
                     kind: InstructionKind::IAdd,
                     operands: vec![
                         Operand::new_vreg(ir_lhs_vreg, &ir_lhs_typ),
@@ -338,7 +338,7 @@ impl Emitter {
                     origin: node.origin,
                     res_vreg: Some(res_vreg),
                     typ: node.typ.clone(),
-                }]
+                });
             }
             crate::ast::NodeKind::Multiply => {
                 todo!()
@@ -346,26 +346,31 @@ impl Emitter {
             crate::ast::NodeKind::Divide => {
                 todo!()
             }
+            NodeKind::Block => {
+                for node in &node.children {
+                    self.emit_node(fn_def, &node);
+                }
+            }
             NodeKind::If(cond) => {
                 assert_eq!(*cond.typ.kind, TypeKind::Bool);
 
-                let ir_cond = self.emit_node(fn_def, cond);
-                fn_def.instructions.extend(ir_cond);
+                self.emit_node(fn_def, cond);
 
                 if node.children.is_empty() {
-                    return Vec::new();
+                    return;
                 }
                 // TODO: Clear condition flags?
 
-                let if_body = node.children[0];
+                let if_body = &node.children[0];
+                assert_eq!(if_body.kind, NodeKind::Block);
 
-                let ins_jmp_to_else_body = Instruction {
-                    kind: InstructionKind::JumpIfFalse,
-                    origin: node.origin,
-                    operands: vec![/* TODO */],
-                    res_vreg: None,
-                    typ: Type::new_void(),
-                };
+                //let ins_jmp_to_else_body = Instruction {
+                //    kind: InstructionKind::JumpIfFalse,
+                //    origin: node.origin,
+                //    operands: vec![/* TODO */],
+                //    res_vreg: None,
+                //    typ: Type::new_void(),
+                //};
                 todo!();
             }
         }
@@ -391,8 +396,7 @@ impl Emitter {
                     stack_size,
                 );
                 for node in &node.children {
-                    let ins = self.emit_node(&mut fn_def, node);
-                    fn_def.instructions.extend(ins);
+                    self.emit_node(&mut fn_def, node);
                 }
 
                 fn_def.live_ranges = fn_def.compute_live_ranges();
