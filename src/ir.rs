@@ -26,6 +26,8 @@ pub enum InstructionKind {
     Set, // Set virtual register.
     FnCall,
     JumpIfFalse,
+    Jump,
+    LabelDef,
 }
 
 #[derive(Serialize, Debug)]
@@ -61,12 +63,9 @@ pub struct LiveRange {
 pub type LiveRanges = BTreeMap<VirtualRegister, LiveRange>;
 
 #[derive(Debug)]
-struct Label(String);
-
-#[derive(Debug)]
 pub struct Emitter {
     pub fn_defs: Vec<FnDef>,
-    pub labels: Vec<Label>,
+    pub labels: Vec<String>,
     label_current: usize,
 }
 
@@ -160,6 +159,8 @@ impl FnDef {
                         res.insert(res_vreg, live_range);
                     }
                 }
+                InstructionKind::LabelDef => todo!(),
+                InstructionKind::Jump => todo!(),
                 InstructionKind::JumpIfFalse => {
                     todo!()
                 }
@@ -364,18 +365,50 @@ impl Emitter {
                 let then_body = &node.children[0];
                 assert_eq!(then_body.kind, NodeKind::Block);
 
-                let else_label = self.new_synth_label("else");
+                let else_label = self.new_synth_label("if_else");
+                let end_label = self.new_synth_label("if_end");
+
                 fn_def.instructions.push(Instruction {
                     kind: InstructionKind::JumpIfFalse,
                     origin: node.origin,
                     operands: vec![Operand {
-                        kind: OperandKind::Label(else_label),
+                        kind: OperandKind::Label(else_label.clone()),
                         typ: Type::new_void(),
                     }],
                     res_vreg: None,
                     typ: Type::new_void(),
                 });
-                let jmp_to_else_idx = fn_def.instructions.len() - 1;
+
+                // Then-body.
+                {
+                    for node in &then_body.children {
+                        self.emit_node(fn_def, node);
+                    }
+                    fn_def.instructions.push(Instruction {
+                        kind: InstructionKind::Jump,
+                        origin: node.origin,
+                        operands: vec![Operand {
+                            kind: OperandKind::Label(end_label),
+                            typ: Type::new_void(),
+                        }],
+                        res_vreg: None,
+                        typ: Type::new_void(),
+                    });
+                }
+
+                // Else body.
+                {
+                    fn_def.instructions.push(Instruction {
+                        kind: InstructionKind::LabelDef,
+                        origin: node.origin,
+                        operands: vec![Operand {
+                            kind: OperandKind::Label(else_label),
+                            typ: Type::new_void(),
+                        }],
+                        res_vreg: None,
+                        typ: Type::new_void(),
+                    });
+                }
 
                 todo!()
             }
@@ -384,7 +417,10 @@ impl Emitter {
 
     fn new_synth_label(&mut self, context: &str) -> String {
         self.label_current += 1;
-        format!(".{}_{}", self.label_current, context)
+        let label = format!(".{}_{}", self.label_current, context);
+        self.labels.push(label.clone());
+
+        label
     }
 
     fn emit_def(&mut self, node: &Node) -> Option<FnDef> {
@@ -428,6 +464,7 @@ impl Display for Operand {
             OperandKind::Bool(b) => {
                 write!(f, "{}", b)
             }
+            OperandKind::Label(l) => f.write_str(l),
             OperandKind::VirtualRegister(r) => write!(f, "v{}", r.0),
             OperandKind::Fn(name) => f.write_str(name),
         }?;
@@ -485,6 +522,12 @@ impl Display for Instruction {
             }
             InstructionKind::JumpIfFalse => {
                 write!(f, "jmp_if_false")?;
+            }
+            InstructionKind::Jump => {
+                write!(f, "jmp")?;
+            }
+            InstructionKind::LabelDef => {
+                write!(f, "label")?;
             }
         };
         write!(f, " ")?;
@@ -554,6 +597,12 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
     for ir in irs {
         match ir.kind {
             InstructionKind::JumpIfFalse => {
+                todo!();
+            }
+            InstructionKind::Jump => {
+                todo!();
+            }
+            InstructionKind::LabelDef => {
                 todo!();
             }
             InstructionKind::FnCall => {
@@ -683,6 +732,7 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                 let value = match &value.kind {
                     OperandKind::Num(num) => EvalValue::new_int(*num),
                     OperandKind::Bool(b) => EvalValue::new_bool(*b),
+                    OperandKind::Label(_l) => todo!(),
                     OperandKind::VirtualRegister(vreg) => res.get(vreg).unwrap().clone(),
                     OperandKind::Fn(name) => EvalValue {
                         kind: EvalValueKind::Fn(name.to_owned()),
