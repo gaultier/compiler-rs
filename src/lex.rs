@@ -26,10 +26,12 @@ pub enum TokenKind {
     RightParen,
     LeftCurly,
     RightCurly,
+    Comma,
     Eof,
     KeywordPackage,
     KeywordFunc,
     KeywordIf,
+    KeywordElse,
     Unknown,
 }
 
@@ -89,6 +91,7 @@ impl Lexer {
             "package" => TokenKind::KeywordPackage,
             "func" => TokenKind::KeywordFunc,
             "if" => TokenKind::KeywordIf,
+            "else" => TokenKind::KeywordElse,
             _ => TokenKind::Identifier,
         };
 
@@ -236,6 +239,19 @@ impl Lexer {
                     };
                     self.tokens.push(Token {
                         kind: TokenKind::RightParen,
+                        origin,
+                    });
+                    self.origin.offset += 1;
+                    self.origin.column += 1;
+                    it.next();
+                }
+                ',' => {
+                    let origin = Origin {
+                        len: 1,
+                        ..self.origin
+                    };
+                    self.tokens.push(Token {
+                        kind: TokenKind::Comma,
                         origin,
                     });
                     self.origin.offset += 1;

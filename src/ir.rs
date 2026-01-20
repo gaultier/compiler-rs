@@ -207,7 +207,7 @@ impl Emitter {
 
     fn emit_node(&mut self, fn_def: &mut FnDef, node: &Node) {
         match &node.kind {
-            crate::ast::NodeKind::Package(_) | crate::ast::NodeKind::FnDef(_) => {
+            crate::ast::NodeKind::Package(_) | crate::ast::NodeKind::FnDef { .. } => {
                 panic!(
                     "unexpected AST node inside function definition: {:#?}",
                     &node
@@ -240,25 +240,19 @@ impl Emitter {
             crate::ast::NodeKind::Identifier(_) => {
                 todo!()
             }
-            crate::ast::NodeKind::FnCall => {
-                let (fn_name, args) = node.children.split_first().unwrap();
+            crate::ast::NodeKind::FnCall { callee, args } => {
                 // TODO: Support function pointers.
                 let ast_fn_name = if let Node {
                     kind: NodeKind::Identifier(name),
                     ..
-                } = fn_name
+                } = &**callee
                 {
                     name
                 } else {
                     panic!("invalid fn call function name: {:#?}", node)
                 };
 
-                let arg_type = node
-                    .children
-                    .first()
-                    .as_ref()
-                    .map(|x| x.typ.to_string())
-                    .unwrap_or_default();
+                let arg_type = callee.typ.to_string();
                 let arg0_typ = args.first().map(|x| x.typ.to_string()).unwrap_or_default();
                 let real_fn_name = fn_name_ast_to_ir(ast_fn_name, &arg_type, &arg0_typ);
                 dbg!(&real_fn_name, &arg_type, &arg0_typ);
@@ -268,8 +262,7 @@ impl Emitter {
                 };
 
                 // Check type.
-                let (res_vreg, ret_type) = match &*node.children.first().as_ref().unwrap().typ.kind
-                {
+                let (res_vreg, ret_type) = match &*callee.typ.kind {
                     TypeKind::Function(ret_type, _) if *ret_type.kind == TypeKind::Void => {
                         (None, ret_type.clone())
                     }
@@ -293,7 +286,9 @@ impl Emitter {
 
                 trace!(
                     "ir: emit fn call: ast_name={} real_name={} arg_type={:?}",
-                    ast_fn_name, real_fn_name, arg_type,
+                    ast_fn_name,
+                    real_fn_name,
+                    arg_type,
                 );
 
                 fn_def.instructions.push(Instruction {
@@ -304,12 +299,7 @@ impl Emitter {
                     typ: ret_type,
                 });
             }
-            crate::ast::NodeKind::Add => {
-                assert_eq!(node.children.len(), 2);
-
-                let ast_lhs = &node.children[0];
-                let ast_rhs = &node.children[1];
-
+            crate::ast::NodeKind::Add(ast_lhs, ast_rhs) => {
                 assert_eq!(*ast_lhs.typ.kind, TypeKind::Number);
                 assert_eq!(*ast_lhs.typ.kind, TypeKind::Number);
                 assert_eq!(*node.typ.kind, TypeKind::Number);
@@ -339,12 +329,7 @@ impl Emitter {
                     typ: node.typ.clone(),
                 });
             }
-            crate::ast::NodeKind::Multiply => {
-                assert_eq!(node.children.len(), 2);
-
-                let ast_lhs = &node.children[0];
-                let ast_rhs = &node.children[1];
-
+            crate::ast::NodeKind::Multiply(ast_lhs, ast_rhs) => {
                 assert_eq!(*ast_lhs.typ.kind, TypeKind::Number);
                 assert_eq!(*ast_lhs.typ.kind, TypeKind::Number);
                 assert_eq!(*node.typ.kind, TypeKind::Number);
@@ -374,12 +359,7 @@ impl Emitter {
                     typ: node.typ.clone(),
                 });
             }
-            crate::ast::NodeKind::Divide => {
-                assert_eq!(node.children.len(), 2);
-
-                let ast_lhs = &node.children[0];
-                let ast_rhs = &node.children[1];
-
+            crate::ast::NodeKind::Divide(ast_lhs, ast_rhs) => {
                 assert_eq!(*ast_lhs.typ.kind, TypeKind::Number);
                 assert_eq!(*ast_lhs.typ.kind, TypeKind::Number);
                 assert_eq!(*node.typ.kind, TypeKind::Number);
@@ -409,24 +389,27 @@ impl Emitter {
                     typ: node.typ.clone(),
                 });
             }
-            NodeKind::Block => {
-                for node in &node.children {
+            NodeKind::Block(stmts) => {
+                for node in stmts {
                     self.emit_node(fn_def, node);
                 }
             }
-            NodeKind::If(cond) => {
+            NodeKind::If {
+                cond,
+                then_block,
+                else_block,
+            } => {
                 assert_eq!(*cond.typ.kind, TypeKind::Bool);
-                assert!(node.children.len() <= 2); // then-body, else-body.
 
                 self.emit_node(fn_def, cond);
 
-                if node.children.is_empty() {
+                if then_block.is_none() {
                     return;
                 }
+                let then_body = then_block.as_ref().unwrap();
                 // TODO: Clear condition flags?
 
-                let then_body = &node.children[0];
-                assert_eq!(then_body.kind, NodeKind::Block);
+                assert!(matches!(then_body.kind, NodeKind::Block(_)));
 
                 let else_label = format!(".{}_if_else", self.label_current);
                 let end_label = format!(".{}_if_end", self.label_current);
@@ -444,15 +427,15 @@ impl Emitter {
                 });
 
                 // Then-body.
-                {
-                    for node in &then_body.children {
+                if let NodeKind::Block(stmts) = &then_body.kind {
+                    for node in stmts {
                         self.emit_node(fn_def, node);
                     }
                 }
 
                 // Else body.
-                if let Some(else_body) = node.children.get(1) {
-                    assert_eq!(else_body.kind, NodeKind::Block);
+                if let Some(else_body) = else_block {
+                    assert!(matches!(else_body.kind, NodeKind::Block(_)));
 
                     fn_def.instructions.push(Instruction {
                         kind: InstructionKind::Jump,
@@ -476,8 +459,10 @@ impl Emitter {
                         typ: Type::new_void(),
                     });
 
-                    for node in &else_body.children {
-                        self.emit_node(fn_def, node);
+                    if let NodeKind::Block(stmts) = &else_body.kind {
+                        for node in stmts {
+                            self.emit_node(fn_def, node);
+                        }
                     }
                 }
 
@@ -502,10 +487,10 @@ impl Emitter {
         match &node.kind {
             crate::ast::NodeKind::Package(_) => None,
             // Start of a new function.
-            crate::ast::NodeKind::FnDef(fn_name) => {
+            crate::ast::NodeKind::FnDef { name, body } => {
                 let stack_size = 0; // TODO
-                let mut fn_def = FnDef::new(fn_name.to_owned(), &node.typ, node.origin, stack_size);
-                for node in &node.children {
+                let mut fn_def = FnDef::new(name.to_owned(), &node.typ, node.origin, stack_size);
+                for node in body {
                     self.emit_node(&mut fn_def, node);
                 }
 

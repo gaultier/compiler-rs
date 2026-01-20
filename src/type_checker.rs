@@ -135,7 +135,7 @@ impl Type {
 pub fn check_node(node: &mut Node, errs: &mut Vec<Error>) {
     match &mut node.kind {
         crate::ast::NodeKind::Package(_) => {}
-        crate::ast::NodeKind::FnDef(_) => match &*node.typ.kind {
+        crate::ast::NodeKind::FnDef { name: _, body } => match &*node.typ.kind {
             TypeKind::Function(ret_type, args) => {
                 assert_ne!(*ret_type.kind, TypeKind::Unknown);
 
@@ -150,7 +150,7 @@ pub fn check_node(node: &mut Node, errs: &mut Vec<Error>) {
                     }
                 }
 
-                for node in &mut node.children {
+                for node in body {
                     check_node(node, errs);
                 }
             }
@@ -167,21 +167,20 @@ pub fn check_node(node: &mut Node, errs: &mut Vec<Error>) {
         crate::ast::NodeKind::Identifier(_) => {
             assert_ne!(&*node.typ.kind, &TypeKind::Unknown);
         }
-        crate::ast::NodeKind::FnCall => {
-            let (f, args) = node.children.split_first_mut().unwrap();
-            let (ret_type, args_type) = match &*f.typ.kind {
+        crate::ast::NodeKind::FnCall { callee, args } => {
+            let (ret_type, args_type) = match &*callee.typ.kind {
                 TypeKind::Function(ret_type, args_type) => {
                     assert_eq!(args_type.len(), 1);
                     (ret_type, args_type)
                 }
-                _ => panic!("unexpected function type: {:#?}", node.typ),
+                _ => panic!("unexpected function type: {:#?}", callee.typ),
             };
 
             if args.len() != args_type.len() {
                 errs.push(Error::new_incompatible_arguments_count(
                     &node.origin,
                     args_type.len(),
-                    node.children.len(),
+                    args.len(),
                 ));
 
                 return;
@@ -205,13 +204,10 @@ pub fn check_node(node: &mut Node, errs: &mut Vec<Error>) {
                 todo!();
             }
         }
-        crate::ast::NodeKind::Add
-        | crate::ast::NodeKind::Multiply
-        | crate::ast::NodeKind::Divide => {
-            let rhs = &node.children[0].typ;
-            let lhs = &node.children[1].typ;
-
-            let typ = lhs.merge(rhs);
+        crate::ast::NodeKind::Add(lhs, rhs)
+        | crate::ast::NodeKind::Multiply(lhs, rhs)
+        | crate::ast::NodeKind::Divide(lhs, rhs) => {
+            let typ = lhs.typ.merge(&rhs.typ);
             match typ {
                 Ok(typ) => node.typ = typ,
                 Err(err) => {
@@ -221,14 +217,21 @@ pub fn check_node(node: &mut Node, errs: &mut Vec<Error>) {
                 }
             }
         }
-        crate::ast::NodeKind::If(cond) => {
+        crate::ast::NodeKind::If {
+            cond,
+            then_block,
+            else_block,
+        } => {
             check_node(cond, errs);
-            for node in &mut node.children {
-                check_node(node, errs);
+            if let Some(then_block) = then_block {
+                check_node(then_block, errs);
+            }
+            if let Some(else_block) = else_block {
+                check_node(else_block, errs);
             }
         }
-        crate::ast::NodeKind::Block => {
-            for node in &mut node.children {
+        crate::ast::NodeKind::Block(stmts) => {
+            for node in stmts {
                 check_node(node, errs);
             }
         }

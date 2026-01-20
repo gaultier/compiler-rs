@@ -15,15 +15,25 @@ use serde::Serialize;
 pub enum NodeKind {
     Number(u64),
     Bool(bool),
-    Add,
-    Multiply,
-    Divide,
+    Add(Box<Node>, Box<Node>),
+    Multiply(Box<Node>, Box<Node>),
+    Divide(Box<Node>, Box<Node>),
     Identifier(String),
-    FnCall,
-    FnDef(String),
+    FnCall {
+        callee: Box<Node>,
+        args: Vec<Node>,
+    },
+    FnDef {
+        name: String,
+        body: Vec<Node>,
+    },
     Package(String),
-    If(Box<Node>),
-    Block,
+    If {
+        cond: Box<Node>,
+        then_block: Option<Box<Node>>,
+        else_block: Option<Box<Node>>,
+    },
+    Block(Vec<Node>),
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
@@ -31,7 +41,6 @@ pub struct Node {
     pub kind: NodeKind,
     pub origin: Origin,
     pub typ: Type,
-    pub children: Vec<Node>,
 }
 
 #[derive(Serialize, Clone, Copy, Debug)]
@@ -86,10 +95,12 @@ impl<'a> Parser<'a> {
         );
 
         nodes.push(Node {
-            kind: NodeKind::FnDef(String::from("println")),
+            kind: NodeKind::FnDef {
+                name: String::from("println"),
+                body: Vec::new(),
+            },
             origin,
             typ,
-            children: Vec::new(), // FIXME?
         });
 
         nodes
@@ -178,7 +189,6 @@ impl<'a> Parser<'a> {
                 kind: NodeKind::Number(num),
                 origin: token.origin,
                 typ: Type::new_int(),
-                children: Vec::new(),
             });
         }
         if let Some(token) = self.match_kind(TokenKind::LiteralBool) {
@@ -190,7 +200,6 @@ impl<'a> Parser<'a> {
                 kind: NodeKind::Bool(src == "true"),
                 origin: token.origin,
                 typ: Type::new_bool(),
-                children: Vec::new(),
             });
         }
 
@@ -201,7 +210,6 @@ impl<'a> Parser<'a> {
                 ),
                 origin: token.origin,
                 typ: Type::default(), // Will be resolved.
-                children: Vec::new(),
             });
         }
 
@@ -274,10 +282,9 @@ impl<'a> Parser<'a> {
             })?;
 
         Some(Node {
-            kind: NodeKind::Add,
+            kind: NodeKind::Add(Box::new(lhs), Box::new(rhs)),
             origin: token.origin,
             typ: Type::default(),
-            children: vec![lhs, rhs],
         })
     }
 
@@ -304,13 +311,12 @@ impl<'a> Parser<'a> {
 
         Some(Node {
             kind: if token.kind == TokenKind::Star {
-                NodeKind::Multiply
+                NodeKind::Multiply(Box::new(lhs), Box::new(rhs))
             } else {
-                NodeKind::Divide
+                NodeKind::Divide(Box::new(lhs), Box::new(rhs))
             },
             origin: token.origin,
             typ: Type::default(),
-            children: vec![lhs, rhs],
         })
     }
 
@@ -334,23 +340,36 @@ impl<'a> Parser<'a> {
             return Some(f);
         };
 
-        // TODO: 0-N args.
-        let arg = self.parse_expr().or_else(|| {
-            self.errors.push(Error {
-                kind: ErrorKind::ParseCallMissingArgument,
-                origin: lparen.origin,
-                explanation: String::from("missing argument in function call, expected expression"),
-            });
-            None
-        })?;
+        let mut args = Vec::new();
+        if self.peek_token().map_or(false, |t| t.kind != TokenKind::RightParen) {
+            loop {
+                let arg = self.parse_expr().or_else(|| {
+                    self.errors.push(Error {
+                        kind: ErrorKind::ParseCallMissingArgument,
+                        origin: lparen.origin,
+                        explanation: String::from(
+                            "missing argument in function call, expected expression",
+                        ),
+                    });
+                    None
+                })?;
+                args.push(arg);
+
+                if self.match_kind(TokenKind::Comma).is_none() {
+                    break;
+                }
+            }
+        }
 
         self.expect_token_exactly_one(TokenKind::RightParen, "function call")?;
 
         Some(Node {
-            kind: NodeKind::FnCall,
+            kind: NodeKind::FnCall {
+                callee: Box::new(f),
+                args,
+            },
             origin: lparen.origin,
             typ: Type::default(),
-            children: vec![f, arg],
         })
     }
 
@@ -380,24 +399,53 @@ impl<'a> Parser<'a> {
             stmts.push(stmt);
         }
 
-        self.expect_token_exactly_one(TokenKind::RightCurly, "if body")?;
+        let then_block = if stmts.is_empty() {
+            None
+        } else {
+            Some(Box::new(Node {
+                kind: NodeKind::Block(stmts),
+                origin: left_curly.origin,
+                typ: Type::new_void(),
+            }))
+        };
 
-        // TODO: Optional 'else'.
+        let else_block = if self.match_kind(TokenKind::KeywordElse).is_some() {
+            let left_curly = self.expect_token_exactly_one(TokenKind::LeftCurly, "else body")?;
+            let mut stmts = Vec::new();
+            for _ in 0..self.remaining_tokens_count() {
+                match self.peek_token() {
+                    None | Some(Token {
+                        kind: TokenKind::RightCurly,
+                        ..
+                    }) => break,
+                    _ => {}
+                }
 
-        Some(Node {
-            kind: NodeKind::If(Box::new(cond)),
-            origin: keyword_if.origin,
-            typ: Type::new_void(),
-            children: if stmts.is_empty() {
-                Vec::new()
+                let stmt = self.parse_statement()?;
+                stmts.push(stmt);
+            }
+            self.expect_token_exactly_one(TokenKind::RightCurly, "else body")?;
+            if stmts.is_empty() {
+                None
             } else {
-                vec![Node {
-                    kind: NodeKind::Block,
+                Some(Box::new(Node {
+                    kind: NodeKind::Block(stmts),
                     origin: left_curly.origin,
                     typ: Type::new_void(),
-                    children: stmts,
-                }]
+                }))
+            }
+        } else {
+            None
+        };
+
+        Some(Node {
+            kind: NodeKind::If {
+                cond: Box::new(cond),
+                then_block,
+                else_block,
             },
+            origin: keyword_if.origin,
+            typ: Type::new_void(),
         })
     }
 
@@ -449,7 +497,6 @@ impl<'a> Parser<'a> {
             kind: NodeKind::Package(Self::str_from_source(self.input, &package.origin).to_owned()),
             origin: package.origin,
             typ: Type::new_void(),
-            children: Vec::new(),
         })
     }
 
@@ -517,10 +564,12 @@ impl<'a> Parser<'a> {
         self.expect_token_exactly_one(TokenKind::RightCurly, "function declaration")?;
 
         Some(Node {
-            kind: NodeKind::FnDef(Self::str_from_source(self.input, &name.origin).to_owned()),
+            kind: NodeKind::FnDef {
+                name: Self::str_from_source(self.input, &name.origin).to_owned(),
+                body: stmts,
+            },
             origin: func.origin,
             typ: Type::new_function(&Type::new_void(), &[], &func.origin), // TODO
-            children: stmts,
         })
     }
 
@@ -593,23 +642,34 @@ impl<'a> Parser<'a> {
             }
 
             // Recurse.
-            NodeKind::Add | NodeKind::Multiply | NodeKind::Divide | NodeKind::FnCall => {
-                for op in &mut node.children {
-                    self.resolve_node(op)
-                }
+            NodeKind::Add(lhs, rhs)
+            | NodeKind::Multiply(lhs, rhs)
+            | NodeKind::Divide(lhs, rhs) => {
+                self.resolve_node(lhs);
+                self.resolve_node(rhs);
                 if *node.typ.kind == TypeKind::Unknown {
-                    node.typ = node.children.first().map(|x| x.typ.clone()).unwrap();
+                    node.typ = lhs.typ.clone();
                     assert_ne!(*node.typ.kind, TypeKind::Unknown);
                 }
             }
-            NodeKind::Block => {
+            NodeKind::FnCall { callee, args } => {
+                self.resolve_node(callee);
+                for op in args {
+                    self.resolve_node(op)
+                }
+                if *node.typ.kind == TypeKind::Unknown {
+                    node.typ = callee.typ.clone();
+                    assert_ne!(*node.typ.kind, TypeKind::Unknown);
+                }
+            }
+            NodeKind::Block(stmts) => {
                 assert_eq!(*node.typ.kind, TypeKind::Void);
 
-                for op in &mut node.children {
+                for op in stmts {
                     self.resolve_node(op)
                 }
             }
-            NodeKind::FnDef(name) => {
+            NodeKind::FnDef { name, body } => {
                 assert!(matches!(&*node.typ.kind, TypeKind::Function(_, _)));
                 if let Some((old_typ, old_origin)) = self.name_to_type.get(name) {
                     self.errors.push(Error::new_name_already_defined(
@@ -625,15 +685,22 @@ impl<'a> Parser<'a> {
                         .insert(name.to_owned(), (node.typ.clone(), node.origin));
                 }
 
-                for op in &mut node.children {
+                for op in body {
                     self.resolve_node(op)
                 }
             }
-            NodeKind::If(cond) => {
+            NodeKind::If {
+                cond,
+                then_block,
+                else_block,
+            } => {
                 self.resolve_node(&mut *cond);
 
-                for op in &mut node.children {
-                    self.resolve_node(op)
+                if let Some(then_block) = then_block {
+                    self.resolve_node(then_block)
+                }
+                if let Some(else_block) = else_block {
+                    self.resolve_node(else_block)
                 }
             }
         }
@@ -686,27 +753,19 @@ mod tests {
         let root = parser.parse_expr().unwrap();
 
         assert!(parser.errors.is_empty());
-        assert_eq!(root.kind, NodeKind::Add);
-        assert_eq!(root.children.len(), 2);
 
-        {
-            let lhs = &root.children[0];
-            assert!(matches!(lhs.kind, NodeKind::Number(123)));
-        }
-        {
-            let node = &root.children[1];
-            assert_eq!(node.kind, NodeKind::Add);
-            assert_eq!(node.children.len(), 2);
-        }
-        {
-            let mhs = &root.children[1].children[0];
-            assert!(mhs.children.is_empty());
-            assert!(matches!(mhs.kind, NodeKind::Number(45)));
-        }
-        {
-            let rhs = &root.children[1].children[1];
-            assert!(rhs.children.is_empty());
-            assert!(matches!(rhs.kind, NodeKind::Number(0)));
+        match root.kind {
+            NodeKind::Add(lhs, rhs) => {
+                assert!(matches!(lhs.kind, NodeKind::Number(123)));
+                match rhs.kind {
+                    NodeKind::Add(mhs, rhs) => {
+                        assert!(matches!(mhs.kind, NodeKind::Number(45)));
+                        assert!(matches!(rhs.kind, NodeKind::Number(0)));
+                    }
+                    _ => panic!("Expected Add"),
+                }
+            }
+            _ => panic!("Expected Add"),
         }
     }
 }
