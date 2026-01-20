@@ -60,8 +60,15 @@ pub struct LiveRange {
 pub type LiveRanges = BTreeMap<VirtualRegister, LiveRange>;
 
 #[derive(Debug)]
+struct Label {
+    name: String,
+}
+
+#[derive(Debug)]
 pub struct Emitter {
     pub fn_defs: Vec<FnDef>,
+    pub labels: Vec<Label>,
+    label_current: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -197,10 +204,12 @@ impl Emitter {
     pub(crate) fn new() -> Self {
         Self {
             fn_defs: Vec::new(),
+            labels: Vec::new(),
+            label_current: 0,
         }
     }
 
-    fn emit_node(fn_def: &mut FnDef, node: &Node) -> Vec<Instruction> {
+    fn emit_node(&mut self, fn_def: &mut FnDef, node: &Node) -> Vec<Instruction> {
         match &node.kind {
             crate::ast::NodeKind::Package(_) | crate::ast::NodeKind::FnDef(_) => {
                 panic!(
@@ -274,7 +283,7 @@ impl Emitter {
                 let mut operands = Vec::with_capacity(args.len() + 1);
                 operands.push(fn_name);
                 for arg in args {
-                    let ir_arg = Self::emit_node(fn_def, arg);
+                    let ir_arg = self.emit_node(fn_def, arg);
                     let (vreg, typ) = ir_arg
                         .first()
                         .map(|x| (x.res_vreg.unwrap(), &x.typ))
@@ -306,13 +315,13 @@ impl Emitter {
                 assert_eq!(*ast_lhs.typ.kind, TypeKind::Number);
                 assert_eq!(*node.typ.kind, TypeKind::Number);
 
-                let ir_lhs = Self::emit_node(fn_def, ast_lhs);
+                let ir_lhs = self.emit_node(fn_def, ast_lhs);
                 assert_eq!(ir_lhs.len(), 1);
                 let (ir_lhs_vreg, ir_lhs_typ) =
                     (ir_lhs[0].res_vreg.unwrap(), ir_lhs[0].typ.clone());
                 fn_def.instructions.extend(ir_lhs);
 
-                let ir_rhs = Self::emit_node(fn_def, ast_rhs);
+                let ir_rhs = self.emit_node(fn_def, ast_rhs);
                 assert_eq!(ir_rhs.len(), 1);
                 let (ir_rhs_vreg, ir_rhs_typ) =
                     (ir_rhs[0].res_vreg.unwrap(), ir_rhs[0].typ.clone());
@@ -338,8 +347,34 @@ impl Emitter {
                 todo!()
             }
             NodeKind::If(cond) => {
-                todo!()
+                assert_eq!(*cond.typ.kind, TypeKind::Bool);
+
+                let ir_cond = self.emit_node(fn_def, cond);
+                fn_def.instructions.extend(ir_cond);
+
+                if node.children.is_empty() {
+                    return Vec::new();
+                }
+                // TODO: Clear condition flags?
+
+                let if_body = node.children[0];
+
+                let ins_jmp_to_else_body = Instruction {
+                    kind: InstructionKind::JumpIfFalse,
+                    origin: node.origin,
+                    operands: vec![/* TODO */],
+                    res_vreg: None,
+                    typ: Type::new_void(),
+                };
+                todo!();
             }
+        }
+    }
+
+    fn new_synth_label(&mut self, context: &str) -> Label {
+        self.label_current += 1;
+        Label {
+            name: format!(".{}_{}", self.label_current, context),
         }
     }
 
@@ -356,7 +391,7 @@ impl Emitter {
                     stack_size,
                 );
                 for node in &node.children {
-                    let ins = Self::emit_node(&mut fn_def, node);
+                    let ins = self.emit_node(&mut fn_def, node);
                     fn_def.instructions.extend(ins);
                 }
 
