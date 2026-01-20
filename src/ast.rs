@@ -366,7 +366,7 @@ impl<'a> Parser<'a> {
         let keyword_if = self.match_kind(TokenKind::KeywordIf)?;
         let cond = self.parse_expr()?;
 
-        self.expect_token_exactly_one(TokenKind::LeftCurly, "if body")?;
+        let left_curly = self.expect_token_exactly_one(TokenKind::LeftCurly, "if body")?;
 
         let mut stmts = Vec::new();
 
@@ -392,7 +392,16 @@ impl<'a> Parser<'a> {
             kind: NodeKind::If(Box::new(cond)),
             origin: keyword_if.origin,
             typ: Type::new_void(),
-            children: stmts,
+            children: if stmts.is_empty() {
+                Vec::new()
+            } else {
+                vec![Node {
+                    kind: NodeKind::Block,
+                    origin: left_curly.origin,
+                    typ: Type::new_void(),
+                    children: stmts,
+                }]
+            },
         })
     }
 
@@ -596,7 +605,7 @@ impl<'a> Parser<'a> {
                 }
             }
             NodeKind::Block => {
-                assert_eq!(*node.typ.kind, TypeKind::Unknown);
+                assert_eq!(*node.typ.kind, TypeKind::Void);
 
                 for op in &mut node.children {
                     self.resolve_node(op)
