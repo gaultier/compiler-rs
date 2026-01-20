@@ -103,7 +103,7 @@ impl Default for Emitter {
 fn fn_name_ast_to_ir(ast_name: &str, typ_str: &str, arg0_typ: &str) -> String {
     match (ast_name, typ_str, arg0_typ) {
         ("println", "(any)", "bool") => "builtin.println_bool",
-        ("println", "(int)", "int") => "builtin.println_int",
+        ("println", "(any)", "int") => "builtin.println_int",
         _ => ast_name,
     }
     .to_owned()
