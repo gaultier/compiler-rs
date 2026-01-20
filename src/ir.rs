@@ -774,6 +774,7 @@ pub fn eval(irs: &[Instruction]) -> Eval {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::fmt::Write;
 
     use crate::{ast::Parser, lex::Lexer, type_checker};
 
@@ -797,9 +798,7 @@ mod tests {
         let mut ast_nodes = parser.parse();
         assert!(parser.errors.is_empty());
 
-        let mut type_checker = type_checker::Checker::new();
-
-        assert!(type_checker.check_nodes(&mut ast_nodes).is_empty());
+        assert!(type_checker::check_nodes(&mut ast_nodes).is_empty());
 
         let mut ir_emitter = super::Emitter::new();
         ir_emitter.emit(&ast_nodes);
@@ -807,6 +806,19 @@ mod tests {
         let builtins = Parser::builtins(16);
         assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
 
+        {
+            let mut ir_text = String::with_capacity(input.len() * 3);
+            for fn_def in &ir_emitter.fn_defs {
+                writeln!(&mut ir_text, "\n{} {{", fn_def).unwrap();
+
+                for ins in &fn_def.instructions {
+                    writeln!(&mut ir_text, "  {}", ins).unwrap();
+                }
+
+                writeln!(&mut ir_text, "\n}}").unwrap();
+            }
+            println!("ir_text: {}", &ir_text);
+        }
         let ir_eval = super::eval(&ir_emitter.fn_defs[0].instructions);
         assert_eq!(ir_eval.stdout, b"579\n");
     }
