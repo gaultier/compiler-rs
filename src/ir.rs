@@ -261,14 +261,15 @@ impl Emitter {
                     .unwrap_or_default();
                 let arg0_typ = args.first().map(|x| x.typ.to_string()).unwrap_or_default();
                 let real_fn_name = fn_name_ast_to_ir(ast_fn_name, &arg_type, &arg0_typ);
-                dbg!(&real_fn_name, &arg_type);
+                dbg!(&real_fn_name, &arg_type, &arg0_typ);
                 let fn_name = Operand {
                     kind: OperandKind::Fn(real_fn_name.to_owned()),
                     typ: node.typ.clone(),
                 };
 
                 // Check type.
-                let (res_vreg, ret_type) = match &*node.typ.kind {
+                let (res_vreg, ret_type) = match &*node.children.first().as_ref().unwrap().typ.kind
+                {
                     TypeKind::Function(ret_type, _) if *ret_type.kind == TypeKind::Void => {
                         (None, ret_type.clone())
                     }
