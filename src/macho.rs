@@ -9,7 +9,7 @@ use crate::{asm::Encoding, utils};
 #[repr(u32)]
 enum CpuKind {
     X86 = 0x7,
-    Arm = 0xc,
+    // Arm = 0xc,
 }
 
 #[repr(u32)]
@@ -108,7 +108,7 @@ struct Section {
 #[repr(u32)]
 enum Permissions {
     Read = 0b01,
-    Write = 0b10,
+    // Write = 0b10,
     Exec = 0b100,
 }
 

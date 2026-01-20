@@ -82,9 +82,9 @@ struct Symtab {
 #[derive(Copy, Clone)]
 #[repr(u8)]
 enum SymbolKind {
-    None = 0,
+    // None = 0,
     Func = 2,
-    File = 4,
+    // File = 4,
 }
 
 #[derive(Copy, Clone)]

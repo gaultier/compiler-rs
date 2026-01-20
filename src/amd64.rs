@@ -150,9 +150,9 @@ pub enum Register {
 
 enum ModRmEncoding {
     Slash0,
-    Slash1,
-    Slash2,
-    Slash3,
+    //Slash1,
+    //Slash2,
+    //Slash3,
     Slash4,
     Slash5,
     Slash6,
@@ -777,11 +777,11 @@ impl Emitter {
             (
                 ir::InstructionKind::ICmp,
                 Some(ir::Operand {
-                    kind: ir::OperandKind::VirtualRegister(lhs),
+                    kind: ir::OperandKind::VirtualRegister(_lhs),
                     ..
                 }),
                 Some(ir::Operand {
-                    kind: ir::OperandKind::VirtualRegister(rhs),
+                    kind: ir::OperandKind::VirtualRegister(_rhs),
                     ..
                 }),
             ) => {
@@ -790,11 +790,11 @@ impl Emitter {
             (
                 ir::InstructionKind::ICmp,
                 Some(ir::Operand {
-                    kind: ir::OperandKind::VirtualRegister(lhs),
+                    kind: ir::OperandKind::VirtualRegister(_lhs),
                     ..
                 }),
                 Some(ir::Operand {
-                    kind: ir::OperandKind::Num(num),
+                    kind: ir::OperandKind::Num(_num),
                     ..
                 }),
             ) => {
@@ -1123,14 +1123,6 @@ impl Register {
         }
     }
 
-    // TODO: Use.
-    fn is_high_byte(&self) -> bool {
-        matches!(
-            self,
-            Register::Ah | Register::Ch | Register::Dh | Register::Bh
-        )
-    }
-
     fn to_3_bits(self) -> u8 {
         let res = match self {
             Register::Al | Register::Ax | Register::Eax | Register::Rax => 0b000,
@@ -1451,9 +1443,9 @@ impl Instruction {
     fn encode_modrm(encoding: ModRmEncoding, op_rm: &Operand, op_reg: Option<Register>) -> u8 {
         let reg: u8 = match encoding {
             ModRmEncoding::Slash0 => 0,
-            ModRmEncoding::Slash1 => 1,
-            ModRmEncoding::Slash2 => 2,
-            ModRmEncoding::Slash3 => 3,
+            //ModRmEncoding::Slash1 => 1,
+            //ModRmEncoding::Slash2 => 2,
+            //ModRmEncoding::Slash3 => 3,
             ModRmEncoding::Slash4 => 4,
             ModRmEncoding::Slash5 => 5,
             ModRmEncoding::Slash6 => 6,
