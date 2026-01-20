@@ -1,9 +1,4 @@
-use std::{
-    collections::BTreeMap,
-    fmt::Display,
-    io::{Write, stdout},
-    panic,
-};
+use std::{collections::BTreeMap, fmt::Display, io::Write, panic};
 
 use log::trace;
 use serde::Serialize;
@@ -567,7 +562,20 @@ pub struct EvalValue {
     pub typ: Type,
 }
 
-pub type EvalResult = BTreeMap<VirtualRegister, EvalValue>;
+#[derive(Debug, Default)]
+pub struct Eval {
+    pub(crate) vregs: BTreeMap<VirtualRegister, EvalValue>,
+    pub(crate) stdout: Vec<u8>,
+}
+
+impl Eval {
+    fn new() -> Self {
+        Self {
+            vregs: BTreeMap::new(),
+            stdout: Vec::new(),
+        }
+    }
+}
 
 impl EvalValue {
     pub(crate) fn as_num(&self) -> i64 {
@@ -604,8 +612,8 @@ impl EvalValue {
     }
 }
 
-pub fn eval(irs: &[Instruction]) -> EvalResult {
-    let mut res = EvalResult::new();
+pub fn eval(irs: &[Instruction]) -> Eval {
+    let mut eval = Eval::new();
 
     for ir in irs {
         match ir.kind {
@@ -627,11 +635,12 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                     "builtin.println_u64" => {
                         for op in &ir.operands[1..] {
                             let val = match op.kind {
-                                OperandKind::VirtualRegister(vreg) => res.get(&vreg).unwrap(),
+                                OperandKind::VirtualRegister(vreg) => {
+                                    eval.vregs.get(&vreg).unwrap()
+                                }
                                 _ => panic!("unexpected fn call operand: {:#?}", op),
                             };
-                            val.write(&mut stdout()).unwrap();
-                            writeln!(&mut stdout()).unwrap();
+                            writeln!(&mut eval.stdout, "{}", val.as_num()).unwrap();
                         }
                     }
                     _ => unimplemented!(),
@@ -643,14 +652,14 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                 let lhs = ir.operands.first().unwrap();
                 let lhs = match lhs.kind {
                     OperandKind::Num(num) => EvalValue::new_int(num),
-                    OperandKind::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
+                    OperandKind::VirtualRegister(vreg) => eval.vregs.get(&vreg).unwrap().clone(),
                     _ => panic!("incompatible operands"),
                 };
 
                 let rhs = ir.operands.get(1).unwrap();
                 let rhs = match rhs.kind {
                     OperandKind::Num(num) => EvalValue::new_int(num),
-                    OperandKind::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
+                    OperandKind::VirtualRegister(vreg) => eval.vregs.get(&vreg).unwrap().clone(),
                     _ => panic!("incompatible operands"),
                 };
                 assert_eq!(lhs.size(), rhs.size());
@@ -659,7 +668,7 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                     kind: EvalValueKind::Num(lhs.as_num() + rhs.as_num()),
                     typ: lhs.typ.clone(),
                 };
-                res.insert(ir.res_vreg.unwrap(), sum);
+                eval.vregs.insert(ir.res_vreg.unwrap(), sum);
             }
             InstructionKind::IMultiply => {
                 assert_eq!(ir.operands.len(), 2);
@@ -667,14 +676,14 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                 let lhs = ir.operands.first().unwrap();
                 let lhs = match lhs.kind {
                     OperandKind::Num(num) => EvalValue::new_int(num),
-                    OperandKind::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
+                    OperandKind::VirtualRegister(vreg) => eval.vregs.get(&vreg).unwrap().clone(),
                     _ => panic!("incompatible operands"),
                 };
 
                 let rhs = ir.operands.get(1).unwrap();
                 let rhs = match rhs.kind {
                     OperandKind::Num(num) => EvalValue::new_int(num),
-                    OperandKind::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
+                    OperandKind::VirtualRegister(vreg) => eval.vregs.get(&vreg).unwrap().clone(),
                     _ => panic!("incompatible operands"),
                 };
                 assert_eq!(lhs.size(), rhs.size());
@@ -683,7 +692,7 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                     kind: EvalValueKind::Num(lhs.as_num() * rhs.as_num()),
                     typ: lhs.typ.clone(),
                 };
-                res.insert(ir.res_vreg.unwrap(), mul);
+                eval.vregs.insert(ir.res_vreg.unwrap(), mul);
             }
             InstructionKind::IDivide => {
                 assert_eq!(ir.operands.len(), 2);
@@ -691,14 +700,14 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                 let lhs = ir.operands.first().unwrap();
                 let lhs = match lhs.kind {
                     OperandKind::Num(num) => EvalValue::new_int(num),
-                    OperandKind::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
+                    OperandKind::VirtualRegister(vreg) => eval.vregs.get(&vreg).unwrap().clone(),
                     _ => panic!("incompatible operands"),
                 };
 
                 let rhs = ir.operands.get(1).unwrap();
                 let rhs = match rhs.kind {
                     OperandKind::Num(num) => EvalValue::new_int(num),
-                    OperandKind::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
+                    OperandKind::VirtualRegister(vreg) => eval.vregs.get(&vreg).unwrap().clone(),
                     _ => panic!("incompatible operands"),
                 };
                 assert_eq!(lhs.size(), rhs.size());
@@ -707,7 +716,7 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                     kind: EvalValueKind::Num(lhs.as_num() / rhs.as_num()),
                     typ: lhs.typ.clone(),
                 };
-                res.insert(ir.res_vreg.unwrap(), div);
+                eval.vregs.insert(ir.res_vreg.unwrap(), div);
             }
             InstructionKind::ICmp => {
                 assert_eq!(ir.operands.len(), 2);
@@ -715,14 +724,14 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                 let lhs = ir.operands.first().unwrap();
                 let lhs = match lhs.kind {
                     OperandKind::Num(num) => EvalValue::new_int(num),
-                    OperandKind::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
+                    OperandKind::VirtualRegister(vreg) => eval.vregs.get(&vreg).unwrap().clone(),
                     _ => panic!("incompatible operands"),
                 };
 
                 let rhs = ir.operands.get(1).unwrap();
                 let rhs = match rhs.kind {
                     OperandKind::Num(num) => EvalValue::new_int(num),
-                    OperandKind::VirtualRegister(vreg) => res.get(&vreg).unwrap().clone(),
+                    OperandKind::VirtualRegister(vreg) => eval.vregs.get(&vreg).unwrap().clone(),
                     _ => panic!("incompatible operands"),
                 };
                 assert_eq!(lhs.size(), rhs.size());
@@ -738,7 +747,7 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                     kind: EvalValueKind::Num(cmp_num),
                     typ: lhs.typ.clone(),
                 };
-                res.insert(ir.res_vreg.unwrap(), cmp_res);
+                eval.vregs.insert(ir.res_vreg.unwrap(), cmp_res);
             }
             InstructionKind::Set => {
                 let value = ir.operands.first().unwrap();
@@ -746,7 +755,7 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                     OperandKind::Num(num) => EvalValue::new_int(*num),
                     OperandKind::Bool(b) => EvalValue::new_bool(*b),
                     OperandKind::Label(_l) => todo!(),
-                    OperandKind::VirtualRegister(vreg) => res.get(vreg).unwrap().clone(),
+                    OperandKind::VirtualRegister(vreg) => eval.vregs.get(vreg).unwrap().clone(),
                     OperandKind::Fn(name) => EvalValue {
                         kind: EvalValueKind::Fn(name.to_owned()),
                         typ: value.typ.clone(),
@@ -754,12 +763,12 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
                 };
                 assert!(ir.operands.get(1).is_none());
 
-                res.insert(ir.res_vreg.unwrap(), value);
+                eval.vregs.insert(ir.res_vreg.unwrap(), value);
             }
         }
     }
 
-    res
+    eval
 }
 
 #[cfg(test)]
@@ -767,8 +776,6 @@ mod tests {
     use std::collections::HashMap;
 
     use crate::{ast::Parser, lex::Lexer, type_checker};
-
-    use super::*;
 
     #[test]
     fn eval_expr() {
@@ -801,5 +808,6 @@ mod tests {
         assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
 
         let ir_eval = super::eval(&ir_emitter.fn_defs[0].instructions);
+        assert_eq!(ir_eval.stdout, b"579\n");
     }
 }
