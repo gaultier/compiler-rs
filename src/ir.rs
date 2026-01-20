@@ -25,6 +25,7 @@ pub enum InstructionKind {
     ICmp,
     Set, // Set virtual register.
     FnCall,
+    JumpIfFalse,
 }
 
 #[derive(Serialize, Debug)]
@@ -152,6 +153,9 @@ impl FnDef {
                         };
                         res.insert(res_vreg, live_range);
                     }
+                }
+                InstructionKind::JumpIfFalse => {
+                    todo!()
                 }
                 InstructionKind::IAdd
                 | InstructionKind::IMultiply
@@ -436,6 +440,9 @@ impl Display for Instruction {
             InstructionKind::FnCall => {
                 write!(f, "call")?;
             }
+            InstructionKind::JumpIfFalse => {
+                write!(f, "jmp_if_false")?;
+            }
         };
         write!(f, " ")?;
 
@@ -503,6 +510,9 @@ pub fn eval(irs: &[Instruction]) -> EvalResult {
 
     for ir in irs {
         match ir.kind {
+            InstructionKind::JumpIfFalse => {
+                todo!();
+            }
             InstructionKind::FnCall => {
                 let fn_name = match &ir.operands.first().unwrap().kind {
                     OperandKind::Fn(name) => name,
