@@ -245,7 +245,7 @@ pub(crate) fn encode(instructions: &[asm::Instruction], target: &Target) -> Enco
     let mut symbols = BTreeMap::new();
 
     symbols.insert(
-        String::from("builtin.println_u64"),
+        String::from("builtin.println_int"),
         Symbol {
             location: w.len(),
             visibility: asm::Visibility::Local,
@@ -264,7 +264,7 @@ pub(crate) fn encode(instructions: &[asm::Instruction], target: &Target) -> Enco
     ]);
 
     symbols.insert(
-        String::from("builtin.println_u64.loop"),
+        String::from("builtin.println_int.loop"),
         Symbol {
             location: w.len(),
             visibility: asm::Visibility::Local,
@@ -286,7 +286,7 @@ pub(crate) fn encode(instructions: &[asm::Instruction], target: &Target) -> Enco
     ]);
 
     symbols.insert(
-        String::from("builtin.println_u64.end"),
+        String::from("builtin.println_int.end"),
         Symbol {
             location: w.len(),
             visibility: asm::Visibility::Local,
@@ -748,7 +748,7 @@ impl Emitter {
                     kind: ir::OperandKind::VirtualRegister(vreg),
                     ..
                 }),
-            ) if fn_name == "builtin.println_u64" => {
+            ) if fn_name == "builtin.println_int" => {
                 let arg: Operand = vreg_to_memory_location.get(vreg).unwrap().into();
 
                 let spill_slot = self.find_free_spill_slot(&Size::_64);
@@ -2773,7 +2773,7 @@ mod tests {
             let mut symbols = BTreeMap::new();
 
             symbols.insert(
-                String::from("builtin.println_u64"),
+                String::from("builtin.println_int"),
                 Symbol {
                     location: w.len(),
                     visibility: asm::Visibility::Local,
@@ -2799,7 +2799,7 @@ mod tests {
             {
                 let ins_call = Instruction {
                     kind: InstructionKind::Call,
-                    operands: vec![Operand::FnName(String::from("builtin.println_u64"))],
+                    operands: vec![Operand::FnName(String::from("builtin.println_int"))],
                     origin: Origin::new_unknown(),
                 };
                 ins_call.encode(&mut w, &symbols).unwrap();
@@ -2810,7 +2810,7 @@ mod tests {
                 &[
                     0xba, 0x01, 0x00, 0x00, 0x00, // mov edx, 1
                     0xc3, // ret
-                    0xe8, 0xf5, 0xff, 0xff, 0xff // call println_u64
+                    0xe8, 0xf5, 0xff, 0xff, 0xff // call println_int
                 ]
             );
         }

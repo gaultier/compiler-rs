@@ -103,7 +103,7 @@ impl Default for Emitter {
 fn fn_name_ast_to_ir(ast_name: &str, typ_str: &str, arg0_typ: &str) -> String {
     match (ast_name, typ_str, arg0_typ) {
         ("println", "(any)", "bool") => "builtin.println_bool",
-        ("println", "(int)", "int") => "builtin.println_u64",
+        ("println", "(int)", "int") => "builtin.println_int",
         _ => ast_name,
     }
     .to_owned()
@@ -701,7 +701,7 @@ pub fn eval(irs: &[Instruction]) -> Eval {
                     _ => panic!("invalid FnCall IR: {:#?}", ir.operands.first()),
                 };
                 match fn_name.as_str() {
-                    "builtin.println_u64" => {
+                    "builtin.println_int" => {
                         for op in &ir.operands[1..] {
                             let val = match op.kind {
                                 OperandKind::VirtualRegister(vreg) => {
