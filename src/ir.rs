@@ -779,7 +779,7 @@ mod tests {
     use crate::{ast::Parser, lex::Lexer, type_checker};
 
     #[test]
-    fn eval_expr() {
+    fn eval_print_add() {
         let input = "package main
             func main() {
               println(123 + 456)
@@ -806,20 +806,39 @@ mod tests {
         let builtins = Parser::builtins(16);
         assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
 
-        {
-            let mut ir_text = String::with_capacity(input.len() * 3);
-            for fn_def in &ir_emitter.fn_defs {
-                writeln!(&mut ir_text, "\n{} {{", fn_def).unwrap();
-
-                for ins in &fn_def.instructions {
-                    writeln!(&mut ir_text, "  {}", ins).unwrap();
-                }
-
-                writeln!(&mut ir_text, "\n}}").unwrap();
-            }
-            println!("ir_text: {}", &ir_text);
-        }
-        let ir_eval = super::eval(&ir_emitter.fn_defs[0].instructions);
+        let ir_eval = super::eval(&ir_emitter.fn_defs[1].instructions);
         assert_eq!(ir_eval.stdout, b"579\n");
+    }
+
+    #[test]
+    fn eval_print_mul() {
+        let input = "package main
+            func main() {
+              println(123 * 456 + 3)
+            }
+            ";
+
+        let file_id = 1;
+        let mut file_id_to_name = HashMap::new();
+        file_id_to_name.insert(1, String::from("test.go"));
+
+        let mut lexer = Lexer::new(file_id);
+        lexer.lex(input);
+        assert!(lexer.errors.is_empty());
+
+        let mut parser = Parser::new(input, &lexer, &file_id_to_name);
+        let mut ast_nodes = parser.parse();
+        assert!(parser.errors.is_empty());
+
+        assert!(type_checker::check_nodes(&mut ast_nodes).is_empty());
+
+        let mut ir_emitter = super::Emitter::new();
+        ir_emitter.emit(&ast_nodes);
+
+        let builtins = Parser::builtins(16);
+        assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
+
+        let ir_eval = super::eval(&ir_emitter.fn_defs[1].instructions);
+        assert_eq!(ir_eval.stdout, b"56091\n");
     }
 }
