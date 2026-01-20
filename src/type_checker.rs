@@ -13,6 +13,7 @@ pub enum TypeKind {
     Void,
     Number,
     Bool,
+    Any,
     Function(Type, Vec<Type>),
 }
 
@@ -49,6 +50,7 @@ impl Display for Type {
             TypeKind::Void => f.write_str("void"),
             TypeKind::Number => write!(f, "int"),
             TypeKind::Bool => f.write_str("bool"),
+            TypeKind::Any => f.write_str("any"),
             TypeKind::Function(ret, args) => {
                 f.write_str("(")?;
                 for arg in args {
@@ -89,8 +91,8 @@ impl Type {
                     Err(Error::new_incompatible_types(&self.origin, self, other))
                 }
             }
-            (TypeKind::Unknown, _) => Ok(self.clone()),
-            (_, TypeKind::Unknown) => Ok(other.clone()),
+            (TypeKind::Any, x) if x != &TypeKind::Any => Ok(other.clone()),
+            (x, TypeKind::Any) if x != &TypeKind::Any => Ok(self.clone()),
             (TypeKind::Void, TypeKind::Void) => Ok(self.clone()),
             (TypeKind::Bool, TypeKind::Bool) => Ok(self.clone()),
             (TypeKind::Number, TypeKind::Number) => {
@@ -107,6 +109,10 @@ impl Type {
 
     pub(crate) fn new_int() -> Self {
         Type::new(&TypeKind::Number, &Some(Size::_64), &Origin::new_builtin())
+    }
+
+    pub(crate) fn new_any() -> Self {
+        Type::new(&TypeKind::Any, &Some(Size::_64), &Origin::new_builtin())
     }
 
     pub(crate) fn new_bool() -> Self {
@@ -143,6 +149,10 @@ pub fn check_node(node: &mut Node, errs: &mut Vec<Error>) {
                         unimplemented!();
                     }
                 }
+
+                for node in &mut node.children {
+                    check_node(node, errs);
+                }
             }
             _ => panic!("invalid type for function definition"),
         },
@@ -158,7 +168,8 @@ pub fn check_node(node: &mut Node, errs: &mut Vec<Error>) {
             assert_ne!(&*node.typ.kind, &TypeKind::Unknown);
         }
         crate::ast::NodeKind::FnCall => {
-            let (ret_type, args_type) = match &*node.children[0].typ.kind {
+            let (f, args) = node.children.split_first_mut().unwrap();
+            let (ret_type, args_type) = match &*f.typ.kind {
                 TypeKind::Function(ret_type, args_type) => {
                     assert_eq!(args_type.len(), 1);
                     (ret_type, args_type)
@@ -166,7 +177,7 @@ pub fn check_node(node: &mut Node, errs: &mut Vec<Error>) {
                 _ => panic!("unexpected function type: {:#?}", node.typ),
             };
 
-            if node.children.len() != args_type.len() {
+            if args.len() != args_type.len() {
                 errs.push(Error::new_incompatible_arguments_count(
                     &node.origin,
                     args_type.len(),
@@ -176,7 +187,9 @@ pub fn check_node(node: &mut Node, errs: &mut Vec<Error>) {
                 return;
             }
 
-            for (i, arg) in node.children.iter().enumerate() {
+            for (i, arg) in args.iter_mut().enumerate() {
+                check_node(arg, errs);
+
                 let _typ = match arg.typ.merge(&args_type[i]) {
                     Err(err) => {
                         errs.push(err);

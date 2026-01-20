@@ -100,10 +100,10 @@ impl Default for Emitter {
     }
 }
 
-fn fn_name_ast_to_ir(ast_name: &str, typ_str: &str) -> String {
-    match (ast_name, typ_str) {
-        ("println", "(bool)") => "builtin.println_bool",
-        ("println", "(int)") => "builtin.println_u64",
+fn fn_name_ast_to_ir(ast_name: &str, typ_str: &str, arg0_typ: &str) -> String {
+    match (ast_name, typ_str, arg0_typ) {
+        ("println", "(any)", "bool") => "builtin.println_bool",
+        ("println", "(int)", "int") => "builtin.println_u64",
         _ => ast_name,
     }
     .to_owned()
@@ -259,7 +259,9 @@ impl Emitter {
                     .as_ref()
                     .map(|x| x.typ.to_string())
                     .unwrap_or_default();
-                let real_fn_name = fn_name_ast_to_ir(ast_fn_name, &arg_type);
+                let arg0_typ = args.first().map(|x| x.typ.to_string()).unwrap_or_default();
+                let real_fn_name = fn_name_ast_to_ir(ast_fn_name, &arg_type, &arg0_typ);
+                dbg!(&real_fn_name, &arg_type);
                 let fn_name = Operand {
                     kind: OperandKind::Fn(real_fn_name.to_owned()),
                     typ: node.typ.clone(),
@@ -501,12 +503,7 @@ impl Emitter {
             // Start of a new function.
             crate::ast::NodeKind::FnDef(fn_name) => {
                 let stack_size = 0; // TODO
-                let mut fn_def = FnDef::new(
-                    fn_name_ast_to_ir(fn_name, &node.typ.to_string()),
-                    &node.typ,
-                    node.origin,
-                    stack_size,
-                );
+                let mut fn_def = FnDef::new(fn_name.to_owned(), &node.typ, node.origin, stack_size);
                 for node in &node.children {
                     self.emit_node(&mut fn_def, node);
                 }
@@ -649,6 +646,13 @@ impl EvalValue {
         }
     }
 
+    pub(crate) fn as_bool(&self) -> bool {
+        match self.kind {
+            EvalValueKind::Bool(b) => b,
+            _ => panic!("not a number"),
+        }
+    }
+
     pub(crate) fn size(&self) -> Size {
         self.typ.size.unwrap()
     }
@@ -707,7 +711,18 @@ pub fn eval(irs: &[Instruction]) -> Eval {
                             writeln!(&mut eval.stdout, "{}", val.as_num()).unwrap();
                         }
                     }
-                    _ => unimplemented!(),
+                    "builtin.println_bool" => {
+                        for op in &ir.operands[1..] {
+                            let val = match op.kind {
+                                OperandKind::VirtualRegister(vreg) => {
+                                    eval.vregs.get(&vreg).unwrap()
+                                }
+                                _ => panic!("unexpected fn call operand: {:#?}", op),
+                            };
+                            writeln!(&mut eval.stdout, "{}", val.as_bool()).unwrap();
+                        }
+                    }
+                    _ => unimplemented!("{}", fn_name),
                 }
             }
             InstructionKind::IAdd => {
@@ -838,7 +853,6 @@ pub fn eval(irs: &[Instruction]) -> Eval {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use std::fmt::Write;
 
     use crate::{ast::Parser, lex::Lexer, type_checker};
 
@@ -936,5 +950,39 @@ mod tests {
 
         let ir_eval = super::eval(&ir_emitter.fn_defs[1].instructions);
         assert_eq!(ir_eval.stdout, b"18696\n");
+    }
+
+    #[test]
+    fn eval_print_bool() {
+        let input = "package main
+            func main() {
+              println(true)
+              println(false)
+            }
+            ";
+
+        let file_id = 1;
+        let mut file_id_to_name = HashMap::new();
+        file_id_to_name.insert(1, String::from("test.go"));
+
+        let mut lexer = Lexer::new(file_id);
+        lexer.lex(input);
+        assert!(lexer.errors.is_empty());
+
+        let mut parser = Parser::new(input, &lexer, &file_id_to_name);
+        let mut ast_nodes = parser.parse();
+        assert!(parser.errors.is_empty());
+
+        let type_errors = type_checker::check_nodes(&mut ast_nodes);
+        assert!(type_errors.is_empty(), "{:#?}", type_errors);
+
+        let mut ir_emitter = super::Emitter::new();
+        ir_emitter.emit(&ast_nodes);
+
+        let builtins = Parser::builtins(16);
+        assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
+
+        let ir_eval = super::eval(&ir_emitter.fn_defs[1].instructions);
+        assert_eq!(ir_eval.stdout, b"true\nfalse\n");
     }
 }

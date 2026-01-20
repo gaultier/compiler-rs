@@ -81,14 +81,14 @@ impl<'a> Parser<'a> {
         let origin = Origin::new_builtin();
         let typ = Type::new_function(
             &Type::new_void(),
-            &[Type::new_int()],
+            &[Type::new_any()],
             &Origin::new_builtin(),
         );
 
         nodes.push(Node {
             kind: NodeKind::FnDef(String::from("println")),
             origin,
-            typ: typ.clone(),
+            typ,
             children: Vec::new(), // FIXME?
         });
 
@@ -200,11 +200,7 @@ impl<'a> Parser<'a> {
                     Self::str_from_source(self.input, &token.origin).to_owned(),
                 ),
                 origin: token.origin,
-                typ: Type::new_function(
-                    &Type::new_void(),
-                    &[Type::new_int()],
-                    &Origin::new_builtin(),
-                ),
+                typ: Type::default(), // Will be resolved.
                 children: Vec::new(),
             });
         }
@@ -590,8 +586,10 @@ impl<'a> Parser<'a> {
             // Nothing to do.
             NodeKind::Package(_) | NodeKind::Number(_) | NodeKind::Bool(_) => {}
 
-            NodeKind::Identifier(_name) => {
-                // todo?
+            NodeKind::Identifier(name) => {
+                if let Some((t, _)) = self.name_to_type.get(name) {
+                    node.typ = t.clone();
+                }
             }
 
             // Recurse.
