@@ -211,7 +211,7 @@ impl Checker {
                 let rhs = &node.children[0].typ;
                 let lhs = &node.children[1].typ;
 
-                let typ = lhs.merge(&rhs);
+                let typ = lhs.merge(rhs);
                 match typ {
                     Ok(typ) => node.typ = typ,
                     Err(err) => {

@@ -348,7 +348,7 @@ impl Emitter {
             }
             NodeKind::Block => {
                 for node in &node.children {
-                    self.emit_node(fn_def, &node);
+                    self.emit_node(fn_def, node);
                 }
             }
             NodeKind::If(cond) => {

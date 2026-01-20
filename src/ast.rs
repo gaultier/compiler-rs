@@ -363,11 +363,7 @@ impl<'a> Parser<'a> {
             return None;
         }
 
-        let keyword_if = if let Some(k) = self.match_kind(TokenKind::KeywordIf) {
-            k
-        } else {
-            return None;
-        };
+        let keyword_if = self.match_kind(TokenKind::KeywordIf)?;
         let cond = self.parse_expr()?;
 
         self.expect_token_exactly_one(TokenKind::LeftCurly, "if body")?;
