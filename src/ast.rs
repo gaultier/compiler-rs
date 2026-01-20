@@ -359,7 +359,7 @@ impl<'a> Parser<'a> {
                                 "missing argument in function call, expected expression",
                             ),
                         });
-                        return None;
+                        None
                     })?;
                     args.push(arg);
                 }
