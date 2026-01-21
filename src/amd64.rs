@@ -246,6 +246,7 @@ impl Display for Operand {
 pub(crate) fn encode(instructions: &[asm::Instruction], target: &Target) -> Encoding {
     let mut w = Vec::with_capacity(instructions.len() * 5);
     let mut symbols = BTreeMap::new();
+    let mut jump_target_locations = BTreeMap::new();
 
     symbols.insert(
         String::from("builtin.println_int"),
@@ -348,7 +349,8 @@ pub(crate) fn encode(instructions: &[asm::Instruction], target: &Target) -> Enco
     );
     for ins in instructions {
         let asm::Instruction::Amd64(ins) = ins;
-        ins.encode(&mut w, &symbols).unwrap();
+        ins.encode(&mut w, &symbols, &mut jump_target_locations)
+            .unwrap();
     }
 
     // Entrypoint.
@@ -1794,8 +1796,29 @@ impl Instruction {
         &self,
         w: &mut Vec<u8>,
         symbols: &BTreeMap<String, Symbol>,
+        jump_target_locations: &mut BTreeMap<String, usize>,
     ) -> std::io::Result<()> {
         trace!("amd64: action=encode ins={}", self);
+
+        match self.kind {
+            InstructionKind::LabelDef => {
+                assert_eq!(self.operands.len(), 1);
+
+                let label = self.operands[0].as_location().unwrap().to_owned();
+                jump_target_locations.insert(label, w.len());
+            }
+            InstructionKind::Jmp => {
+                assert_eq!(self.operands.len(), 1);
+
+                let label = self.operands[0].as_location().unwrap().to_owned();
+                let bin_loc = jump_target_locations.get(&label).unwrap_or_else(|| 
+                    // TODO: Record patch work.
+                    &0);
+
+            }
+            InstructionKind::Je => todo!(),
+            _ => {}
+        }
 
         // Need Address Size Override Prefix?
         if self.operands.iter().any(|op| {
@@ -2647,9 +2670,18 @@ impl Operand {
         }
     }
 
+    pub(crate) fn as_location(&self) -> Option<&str> {
+        match self {
+            Operand::Location(name) => Some(name),
+            _ => None,
+        }
+    }
+
     fn size(&self) -> Size {
         match self {
-            Operand::Location(_) => unreachable!(),
+            // Assume near jump.
+            // TODO: Technically we could just 1 byte for short jumps.
+            Operand::Location(_) => Size::_32,
             Operand::Register(reg) => reg.size(),
             Operand::Immediate(_) => Size::_64,
             Operand::EffectiveAddress(effective_address) => {
