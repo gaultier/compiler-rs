@@ -571,6 +571,7 @@ impl Emitter {
                     origin: ins.origin,
                 });
             }
+            ir::InstructionKind::IAdd(_, _) => unimplemented!(),
             ir::InstructionKind::IMultiply(
                 ir::Operand {
                     kind: ir::OperandKind::VirtualRegister(lhs),
@@ -598,6 +599,7 @@ impl Emitter {
                     origin: ins.origin,
                 });
             }
+            ir::InstructionKind::IMultiply(_, _) => unimplemented!(),
             ir::InstructionKind::IDivide(
                 ir::Operand {
                     kind: ir::OperandKind::VirtualRegister(lhs),
@@ -693,6 +695,8 @@ impl Emitter {
                     );
                 }
             }
+            ir::InstructionKind::IDivide(_, _) => unimplemented!(),
+
             ir::InstructionKind::Set(ir::Operand {
                 kind: ir::OperandKind::VirtualRegister(lhs),
                 ..
@@ -723,6 +727,7 @@ impl Emitter {
                     &ins.origin,
                 );
             }
+            ir::InstructionKind::Set(_) => unimplemented!(),
             ir::InstructionKind::FnCall(fn_name, args) if fn_name == "builtin.println_int" => {
                 let vreg: ir::VirtualRegister = args[0].as_vreg().unwrap();
                 let arg: Operand = vreg_to_memory_location.get(&vreg).unwrap().into();
@@ -750,6 +755,7 @@ impl Emitter {
                     &Origin::new_synth_codegen(),
                 );
             }
+            ir::InstructionKind::FnCall(_, _) => todo!(),
             ir::InstructionKind::ICmp(
                 ir::Operand {
                     kind: ir::OperandKind::VirtualRegister(_lhs),
@@ -774,7 +780,10 @@ impl Emitter {
             ) => {
                 todo!();
             }
-            x => panic!("invalid IR operands: {:#?}", x),
+            ir::InstructionKind::ICmp(_, _) => unimplemented!(),
+            ir::InstructionKind::JumpIfFalse(_, _operand) => todo!(),
+            ir::InstructionKind::Jump(_) => todo!(),
+            ir::InstructionKind::LabelDef(_) => todo!(),
         }
     }
 
