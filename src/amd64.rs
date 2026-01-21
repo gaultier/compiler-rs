@@ -517,17 +517,16 @@ impl Emitter {
         ins: &ir::Instruction,
         vreg_to_memory_location: &RegisterMapping,
     ) {
-        match (&ins.kind, &ins.operands.first(), &ins.operands.get(1)) {
-            (
-                ir::InstructionKind::IAdd,
-                Some(ir::Operand {
+        match &ins.kind {
+            ir::InstructionKind::IAdd(
+                ir::Operand {
                     kind: ir::OperandKind::VirtualRegister(lhs),
                     ..
-                }),
-                Some(ir::Operand {
+                },
+                ir::Operand {
                     kind: ir::OperandKind::VirtualRegister(rhs),
                     ..
-                }),
+                },
             ) => {
                 let dst_loc = vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap();
                 let rhs_loc = vreg_to_memory_location.get(rhs).unwrap();
@@ -572,16 +571,15 @@ impl Emitter {
                     origin: ins.origin,
                 });
             }
-            (
-                ir::InstructionKind::IMultiply,
-                Some(ir::Operand {
+            ir::InstructionKind::IMultiply(
+                ir::Operand {
                     kind: ir::OperandKind::VirtualRegister(lhs),
                     ..
-                }),
-                Some(ir::Operand {
+                },
+                ir::Operand {
                     kind: ir::OperandKind::VirtualRegister(rhs),
                     ..
-                }),
+                },
             ) => {
                 self.emit_store(
                     vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
@@ -600,16 +598,15 @@ impl Emitter {
                     origin: ins.origin,
                 });
             }
-            (
-                ir::InstructionKind::IDivide,
-                Some(ir::Operand {
+            ir::InstructionKind::IDivide(
+                ir::Operand {
                     kind: ir::OperandKind::VirtualRegister(lhs),
                     ..
-                }),
-                Some(ir::Operand {
+                },
+                ir::Operand {
                     kind: ir::OperandKind::VirtualRegister(rhs),
                     ..
-                }),
+                },
             ) => {
                 // `dst = lhs / rhs`
                 // =>
@@ -696,60 +693,39 @@ impl Emitter {
                     );
                 }
             }
-            (
-                ir::InstructionKind::Set,
-                Some(ir::Operand {
-                    kind: ir::OperandKind::VirtualRegister(lhs),
-                    ..
-                }),
-                None,
-            ) => {
+            ir::InstructionKind::Set(ir::Operand {
+                kind: ir::OperandKind::VirtualRegister(lhs),
+                ..
+            }) => {
                 self.emit_store(
                     vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                     &vreg_to_memory_location.get(lhs).unwrap().into(),
                     &ins.origin,
                 );
             }
-            (
-                ir::InstructionKind::Set,
-                Some(ir::Operand {
-                    kind: ir::OperandKind::Num(num),
-                    ..
-                }),
-                None,
-            ) => {
+            ir::InstructionKind::Set(ir::Operand {
+                kind: ir::OperandKind::Num(num),
+                ..
+            }) => {
                 self.emit_store(
                     vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                     &Operand::Immediate(*num),
                     &ins.origin,
                 );
             }
-            (
-                ir::InstructionKind::Set,
-                Some(ir::Operand {
-                    kind: ir::OperandKind::Bool(b),
-                    ..
-                }),
-                None,
-            ) => {
+            ir::InstructionKind::Set(ir::Operand {
+                kind: ir::OperandKind::Bool(b),
+                ..
+            }) => {
                 self.emit_store(
                     vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
                     &Operand::Immediate(if *b { 1 } else { 0 }),
                     &ins.origin,
                 );
             }
-            (
-                ir::InstructionKind::FnCall,
-                Some(ir::Operand {
-                    kind: ir::OperandKind::Fn(fn_name),
-                    ..
-                }),
-                Some(ir::Operand {
-                    kind: ir::OperandKind::VirtualRegister(vreg),
-                    ..
-                }),
-            ) if fn_name == "builtin.println_int" => {
-                let arg: Operand = vreg_to_memory_location.get(vreg).unwrap().into();
+            ir::InstructionKind::FnCall(fn_name, args) if fn_name == "builtin.println_int" => {
+                let vreg: ir::VirtualRegister = args[0].as_vreg().unwrap();
+                let arg: Operand = vreg_to_memory_location.get(&vreg).unwrap().into();
 
                 let spill_slot = self.find_free_spill_slot(&Size::_64);
                 self.emit_store(
@@ -774,29 +750,27 @@ impl Emitter {
                     &Origin::new_synth_codegen(),
                 );
             }
-            (
-                ir::InstructionKind::ICmp,
-                Some(ir::Operand {
+            ir::InstructionKind::ICmp(
+                ir::Operand {
                     kind: ir::OperandKind::VirtualRegister(_lhs),
                     ..
-                }),
-                Some(ir::Operand {
+                },
+                ir::Operand {
                     kind: ir::OperandKind::VirtualRegister(_rhs),
                     ..
-                }),
+                },
             ) => {
                 todo!();
             }
-            (
-                ir::InstructionKind::ICmp,
-                Some(ir::Operand {
+            ir::InstructionKind::ICmp(
+                ir::Operand {
                     kind: ir::OperandKind::VirtualRegister(_lhs),
                     ..
-                }),
-                Some(ir::Operand {
+                },
+                ir::Operand {
                     kind: ir::OperandKind::Num(_num),
                     ..
-                }),
+                },
             ) => {
                 todo!();
             }
