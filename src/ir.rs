@@ -411,11 +411,14 @@ impl Emitter {
                     return;
                 }
                 let then_body = then_block.as_ref().unwrap();
-                // TODO: Clear condition flags?
 
                 assert!(matches!(then_body.kind, NodeKind::Block(_)));
 
-                let else_label = format!(".{}_if_else", self.label_current);
+                let else_label = if else_block.is_some() {
+                    Some(format!(".{}_if_else", self.label_current))
+                } else {
+                    None
+                };
                 let end_label = format!(".{}_if_end", self.label_current);
                 self.label_current += 1;
 
@@ -428,7 +431,10 @@ impl Emitter {
                     typ,
                 };
                 fn_def.instructions.push(Instruction {
-                    kind: InstructionKind::JumpIfFalse(else_label.clone(), op),
+                    kind: InstructionKind::JumpIfFalse(
+                        else_label.clone().unwrap_or_else(|| end_label.clone()),
+                        op,
+                    ),
                     origin: node.origin,
                     res_vreg: None,
                     typ: Type::new_void(),
@@ -453,7 +459,7 @@ impl Emitter {
                     });
 
                     fn_def.instructions.push(Instruction {
-                        kind: InstructionKind::LabelDef(else_label),
+                        kind: InstructionKind::LabelDef(else_label.clone().unwrap()),
                         origin: node.origin,
                         res_vreg: None,
                         typ: Type::new_void(),
@@ -668,17 +674,38 @@ impl EvalValue {
 pub fn eval(irs: &[Instruction]) -> Eval {
     let mut eval = Eval::new();
 
-    for ir in irs {
+    let jump_locations: BTreeMap<String, usize> = irs
+        .iter()
+        .enumerate()
+        .filter_map(|(i, ins)| match &ins.kind {
+            InstructionKind::LabelDef(label) => Some((label.clone(), i)),
+            _ => None,
+        })
+        .collect();
+
+    let mut pc: usize = 0;
+    loop {
+        if pc >= irs.len() {
+            break;
+        }
+
+        let ir = &irs[pc];
+
         match &ir.kind {
-            InstructionKind::JumpIfFalse(_, _) => {
-                todo!();
+            InstructionKind::JumpIfFalse(label, cond) => {
+                let vreg = cond.as_vreg().unwrap();
+                let val = eval.vregs.get(&vreg).unwrap();
+                if !val.as_bool() {
+                    // FIXME
+                    pc = *jump_locations.get(label).unwrap();
+                    continue;
+                }
             }
-            InstructionKind::Jump(_) => {
-                todo!();
+            InstructionKind::Jump(label) => {
+                pc = *jump_locations.get(label).unwrap();
+                continue;
             }
-            InstructionKind::LabelDef(_) => {
-                todo!();
-            }
+            InstructionKind::LabelDef(_) => {}
             InstructionKind::FnCall(fn_name, operands) => match fn_name.as_str() {
                 "builtin.println_int" => {
                     for op in operands {
@@ -791,7 +818,7 @@ pub fn eval(irs: &[Instruction]) -> Eval {
                 let value = match &value.kind {
                     OperandKind::Num(num) => EvalValue::new_int(*num),
                     OperandKind::Bool(b) => EvalValue::new_bool(*b),
-                    OperandKind::Label(_l) => todo!(),
+                    OperandKind::Label(_l) => unimplemented!(),
                     OperandKind::VirtualRegister(vreg) => eval.vregs.get(vreg).unwrap().clone(),
                     OperandKind::Fn(name) => EvalValue {
                         kind: EvalValueKind::Fn(name.to_owned()),
@@ -802,6 +829,7 @@ pub fn eval(irs: &[Instruction]) -> Eval {
                 eval.vregs.insert(ir.res_vreg.unwrap(), value);
             }
         }
+        pc += 1;
     }
 
     eval
@@ -941,5 +969,39 @@ mod tests {
 
         let ir_eval = super::eval(&ir_emitter.fn_defs[1].instructions);
         assert_eq!(ir_eval.stdout, b"true\nfalse\n");
+    }
+
+    #[test]
+    fn eval_if_false_then_print() {
+        let input = "package main
+            func main() {
+              if false {
+                  println(123)
+              }
+            }
+            ";
+
+        let file_id = 1;
+        let mut file_id_to_name = HashMap::new();
+        file_id_to_name.insert(1, String::from("test.go"));
+
+        let mut lexer = Lexer::new(file_id);
+        lexer.lex(input);
+        assert!(lexer.errors.is_empty());
+
+        let mut parser = Parser::new(input, &lexer, &file_id_to_name);
+        let mut ast_nodes = parser.parse();
+        assert!(parser.errors.is_empty());
+
+        assert!(type_checker::check_nodes(&mut ast_nodes).is_empty());
+
+        let mut ir_emitter = super::Emitter::new();
+        ir_emitter.emit(&ast_nodes);
+
+        let builtins = Parser::builtins(16);
+        assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
+
+        let ir_eval = super::eval(&ir_emitter.fn_defs[1].instructions);
+        assert!(ir_eval.stdout.is_empty());
     }
 }

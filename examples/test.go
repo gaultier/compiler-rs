@@ -1,5 +1,7 @@
 package main
 
 func main() {
-	printlnx(2*3 + 1)
+	if false {
+		println(2)
+	}
 }

@@ -436,6 +436,7 @@ impl<'a> Parser<'a> {
             let stmt = self.parse_statement()?;
             stmts.push(stmt);
         }
+        self.expect_token_exactly_one(TokenKind::RightCurly, "then body")?;
 
         let then_block = if stmts.is_empty() {
             None
