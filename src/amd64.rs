@@ -50,6 +50,8 @@ pub enum Operand {
     // For now.
     #[cfg_attr(test, proptest(skip))]
     FnName(String),
+    #[cfg_attr(test, proptest(skip))]
+    Location(String),
 }
 
 #[derive(Serialize, Debug)]
@@ -202,6 +204,7 @@ impl Display for Operand {
             Operand::Register(reg) => reg.fmt(f),
             Operand::Immediate(n) => write!(f, "{}", n),
             Operand::FnName(name) => f.write_str(name),
+            Operand::Location(label) => f.write_str(label),
             Operand::EffectiveAddress(EffectiveAddress {
                 base,
                 index_scale,
@@ -490,6 +493,8 @@ pub enum InstructionKind {
     Jmp,
     Je,
     Cmp,
+
+    LabelDef, // Not encoded.
 }
 
 pub struct Emitter {
@@ -781,9 +786,35 @@ impl Emitter {
                 todo!();
             }
             ir::InstructionKind::ICmp(_, _) => unimplemented!(),
-            ir::InstructionKind::JumpIfFalse(_, _operand) => todo!(),
-            ir::InstructionKind::Jump(_) => todo!(),
-            ir::InstructionKind::LabelDef(_) => todo!(),
+            ir::InstructionKind::JumpIfFalse(target, op) => {
+                let vreg = op.as_vreg().unwrap();
+                let preg: Operand = vreg_to_memory_location.get(&vreg).unwrap().into();
+
+                self.asm.push(Instruction {
+                    kind: InstructionKind::Cmp,
+                    operands: vec![preg, Operand::Immediate(0)],
+                    origin: ins.origin,
+                });
+                self.asm.push(Instruction {
+                    kind: InstructionKind::Je,
+                    operands: vec![Operand::Location(target.clone())],
+                    origin: ins.origin,
+                });
+            }
+            ir::InstructionKind::Jump(target) => {
+                self.asm.push(Instruction {
+                    kind: InstructionKind::Jmp,
+                    operands: vec![Operand::Location(target.clone())],
+                    origin: ins.origin,
+                });
+            }
+            ir::InstructionKind::LabelDef(label) => {
+                self.asm.push(Instruction {
+                    kind: InstructionKind::LabelDef,
+                    operands: vec![Operand::Location(label.clone())],
+                    origin: ins.origin,
+                });
+            }
         }
     }
 
@@ -933,6 +964,7 @@ impl Emitter {
                 // noop.
             }
             (MemoryLocation::Stack(_), Operand::EffectiveAddress(_)) => todo!(),
+            (_, Operand::Location(_)) => unimplemented!(),
         }
     }
 }
@@ -1258,27 +1290,28 @@ impl Display for Register {
     }
 }
 
-impl InstructionKind {
-    pub(crate) fn to_str(self) -> &'static str {
+impl Display for InstructionKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            InstructionKind::Mov => "mov",
-            InstructionKind::Add => "add",
-            InstructionKind::IMul => "imul",
-            InstructionKind::IDiv => "idiv",
-            InstructionKind::Lea => "lea",
-            InstructionKind::Push => "push",
-            InstructionKind::Pop => "pop",
+            InstructionKind::Mov => f.write_str("mov"),
+            InstructionKind::Add => f.write_str("add"),
+            InstructionKind::IMul => f.write_str("imul"),
+            InstructionKind::IDiv => f.write_str("idiv"),
+            InstructionKind::Lea => f.write_str("lea"),
+            InstructionKind::Push => f.write_str("push"),
+            InstructionKind::Pop => f.write_str("pop"),
 
             // Size independent.
-            InstructionKind::Call => "call",
-            InstructionKind::Ret => "ret",
-            InstructionKind::Syscall => "syscall",
-            InstructionKind::Cwd => "cwd",
-            InstructionKind::Cdq => "cdq",
-            InstructionKind::Cqo => "cqo",
-            InstructionKind::Jmp => "jmp",
-            InstructionKind::Je => "je",
-            InstructionKind::Cmp => "cmp",
+            InstructionKind::Call => f.write_str("call"),
+            InstructionKind::Ret => f.write_str("ret"),
+            InstructionKind::Syscall => f.write_str("syscall"),
+            InstructionKind::Cwd => f.write_str("cwd"),
+            InstructionKind::Cdq => f.write_str("cdq"),
+            InstructionKind::Cqo => f.write_str("cqo"),
+            InstructionKind::Jmp => f.write_str("jmp"),
+            InstructionKind::Je => f.write_str("je"),
+            InstructionKind::Cmp => f.write_str("cmp"),
+            InstructionKind::LabelDef => f.write_str(""),
         }
     }
 }
@@ -1438,6 +1471,7 @@ impl Instruction {
         assert!(reg <= 0b111); // Fits in 3 bits.
 
         let (mod_, rm): (u8, u8) = match op_rm {
+            Operand::Location(_) => unreachable!(),
             Operand::Register(reg) => (0b11, reg.to_3_bits()),
             Operand::Immediate(_) => (0b00, 0b101),
             Operand::EffectiveAddress(EffectiveAddress {
@@ -2557,6 +2591,7 @@ impl Instruction {
                     _ => todo!(),
                 }
             }
+            InstructionKind::LabelDef => Ok(()), // noop.
         }
     }
 }
@@ -2614,6 +2649,7 @@ impl Operand {
 
     fn size(&self) -> Size {
         match self {
+            Operand::Location(_) => unreachable!(),
             Operand::Register(reg) => reg.size(),
             Operand::Immediate(_) => Size::_64,
             Operand::EffectiveAddress(effective_address) => {
@@ -2626,16 +2662,25 @@ impl Operand {
 
 impl Display for Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.kind.to_str())?;
+        self.kind.fmt(f)?;
+
         self.operands.iter().enumerate().try_for_each(|(i, o)| {
             if i == 0 {
-                f.write_str(" ")?;
+                if self.kind != InstructionKind::LabelDef {
+                    f.write_str(" ")?;
+                }
             } else {
                 f.write_str(", ")?;
             }
 
             write!(f, "{}", o)
-        })
+        })?;
+
+        if self.kind == InstructionKind::LabelDef {
+            f.write_str(":")?;
+        }
+
+        Ok(())
     }
 }
 
@@ -2668,6 +2713,7 @@ impl From<Operand> for MemoryLocation {
 impl From<&Operand> for MemoryLocation {
     fn from(value: &Operand) -> Self {
         match value {
+            Operand::Location(_) => unreachable!(),
             Operand::Register(register) => {
                 MemoryLocation::Register(asm::Register::Amd64(*register))
             }
