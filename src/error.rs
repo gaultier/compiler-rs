@@ -24,6 +24,7 @@ pub enum ErrorKind {
     IncompatibleTypes,
     IncompatibleArgumentsCount,
     UnknownIdentifier,
+    CallingANonFunction,
     MissingExpected(TokenKind),
     NameAlreadyDefined,
 }

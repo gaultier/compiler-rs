@@ -1,5 +1,5 @@
 package main
 
 func main() {
-	println(false)
+	printlnx(2*3 + 1)
 }

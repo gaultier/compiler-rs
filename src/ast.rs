@@ -691,12 +691,23 @@ impl<'a> Parser<'a> {
             }
             NodeKind::FnCall { callee, args } => {
                 self.resolve_node(callee);
+                dbg!(&callee.typ);
+                match &*callee.typ.kind {
+                    TypeKind::Function(_, _) => {}
+                    _ => {
+                        self.errors.push(Error {
+                            kind: ErrorKind::CallingANonFunction,
+                            origin: node.origin,
+                            explanation: format!("calling a non-function: {}", &callee.typ),
+                        });
+                    }
+                }
+
                 for op in args {
                     self.resolve_node(op)
                 }
                 if *node.typ.kind == TypeKind::Unknown {
                     node.typ = callee.typ.clone();
-                    assert_ne!(*node.typ.kind, TypeKind::Unknown);
                 }
             }
             NodeKind::Block(stmts) => {

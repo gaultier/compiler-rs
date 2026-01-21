@@ -170,10 +170,16 @@ pub fn check_node(node: &mut Node, errs: &mut Vec<Error>) {
         crate::ast::NodeKind::FnCall { callee, args } => {
             let (ret_type, args_type) = match &*callee.typ.kind {
                 TypeKind::Function(ret_type, args_type) => {
-                    assert_eq!(args_type.len(), 1);
+                    if args_type.len() != 1 {
+                        todo!()
+                    }
                     (ret_type, args_type)
                 }
-                _ => panic!("unexpected function type: {:#?}", callee.typ),
+                _ => {
+                    // Trying to call a non-function.
+                    // Cannot do more type checking here, so bail.
+                    return;
+                }
             };
 
             if args.len() != args_type.len() {

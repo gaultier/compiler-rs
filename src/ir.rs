@@ -19,8 +19,6 @@ pub enum InstructionKind {
     IDivide(Operand, Operand),
     ICmp(Operand, Operand),
     Set(Operand), // Set virtual register.
-    // TODO: Replace `String` with `Operand` for the function name
-    // to support function pointers.
     FnCall(String, Vec<Operand>),
     JumpIfFalse(String, Operand),
     Jump(String),
