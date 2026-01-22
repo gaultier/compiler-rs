@@ -366,7 +366,10 @@ pub(crate) fn encode(instructions: &[asm::Instruction], target: &Target) -> Enco
 
         for jmp_pos in to_patch {
             assert!(*jmp_pos < w.len());
-            let delta: i32 = i32::try_from(*target_pos as isize - *jmp_pos as isize).unwrap();
+            let delta: i32 = i32::try_from(
+                *target_pos as isize - 4 /* Size of patch value */ - *jmp_pos as isize,
+            )
+            .unwrap();
             assert!((delta as isize) < w.len() as isize);
 
             w[*jmp_pos..*jmp_pos + 4].copy_from_slice(&delta.to_le_bytes());
