@@ -530,6 +530,7 @@ pub enum InstructionKind {
     Cqo,
     Jmp,
     Je,
+    Jne,
     Cmp,
 
     LabelDef, // Not encoded.
@@ -557,9 +558,12 @@ impl Emitter {
 
     fn instruction_selection(
         &mut self,
-        ins: &ir::Instruction,
+        ins_idx: usize,
+        all_ins: &[ir::Instruction],
         vreg_to_memory_location: &RegisterMapping,
     ) {
+        let ins = &all_ins[ins_idx];
+
         match &ins.kind {
             ir::InstructionKind::IAdd(
                 ir::Operand {
@@ -841,18 +845,34 @@ impl Emitter {
             ir::InstructionKind::ICmp(_, _) => unimplemented!(),
             ir::InstructionKind::JumpIfFalse(target, op) => {
                 let vreg = op.as_vreg().unwrap();
-                let preg: Operand = vreg_to_memory_location.get(&vreg).unwrap().into();
 
-                self.asm.push(Instruction {
-                    kind: InstructionKind::Cmp,
-                    operands: vec![preg, Operand::Immediate(0)],
-                    origin: ins.origin,
-                });
-                self.asm.push(Instruction {
-                    kind: InstructionKind::Je,
-                    operands: vec![Operand::Location(target.clone())],
-                    origin: ins.origin,
-                });
+                if let Some(ir::Instruction {
+                    kind: ir::InstructionKind::ICmp(_, _),
+                    res_vreg: Some(res_vreg),
+                    ..
+                }) = all_ins.get(ins_idx - 1)
+                    && *res_vreg == vreg
+                {
+                    // Do not generate a second 'cmp' instruction.
+                    self.asm.push(Instruction {
+                        kind: InstructionKind::Jne,
+                        operands: vec![Operand::Location(target.clone())],
+                        origin: ins.origin,
+                    });
+                } else {
+                    let preg: Operand = vreg_to_memory_location.get(&vreg).unwrap().into();
+
+                    self.asm.push(Instruction {
+                        kind: InstructionKind::Cmp,
+                        operands: vec![preg, Operand::Immediate(0)],
+                        origin: ins.origin,
+                    });
+                    self.asm.push(Instruction {
+                        kind: InstructionKind::Je,
+                        operands: vec![Operand::Location(target.clone())],
+                        origin: ins.origin,
+                    });
+                }
             }
             ir::InstructionKind::Jump(target) => {
                 self.asm.push(Instruction {
@@ -909,8 +929,8 @@ impl Emitter {
             });
         }
 
-        for ir in &fn_def.instructions {
-            self.instruction_selection(ir, vreg_to_memory_location);
+        for i in 0..fn_def.instructions.len() {
+            self.instruction_selection(i, &fn_def.instructions, vreg_to_memory_location);
         }
 
         // Restore stack.
@@ -1363,6 +1383,7 @@ impl Display for InstructionKind {
             InstructionKind::Cqo => f.write_str("cqo"),
             InstructionKind::Jmp => f.write_str("jmp"),
             InstructionKind::Je => f.write_str("je"),
+            InstructionKind::Jne => f.write_str("jne"),
             InstructionKind::Cmp => f.write_str("cmp"),
             InstructionKind::LabelDef => f.write_str(""),
         }
@@ -1884,6 +1905,36 @@ impl Instruction {
                     w.write_all(&[0xeb, n as u8])?;
                 } else if let Ok(n) = i32::try_from(delta) {
                     w.write_all(&[0xe9])?;
+                    w.write_all(&n.to_le_bytes())?;
+                } else {
+                    // TODO: In theory we could make it: `mov reg, delta; jmp reg`.
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
+
+                return Ok(());
+            }
+            InstructionKind::Jne => {
+                assert_eq!(self.operands.len(), 1);
+
+                let label = self.operands[0].as_location().unwrap().to_owned();
+                let bin_loc = if let Some(loc) = jump_target_locations.get(&label) {
+                    loc
+                } else {
+                    // Pessimistic: 4 bytes.
+                    w.write_all(&[0x0f, 0x85])?;
+                    trace!(
+                        "amd64: action=record_patch label={} jmp_pos={}",
+                        label,
+                        w.len()
+                    );
+                    jumps_to_patch.entry(label).or_default().push(w.len());
+                    w.write_all(&0u32.to_le_bytes())?;
+                    return Ok(());
+                };
+                let delta = w.len() as isize - *bin_loc as isize;
+
+                if let Ok(n) = i32::try_from(delta) {
+                    w.write_all(&[0x0f, 0x85])?;
                     w.write_all(&n.to_le_bytes())?;
                 } else {
                     // TODO: In theory we could make it: `mov reg, delta; jmp reg`.
@@ -2698,6 +2749,27 @@ impl Instruction {
                 };
 
                 w.write_all(&[0x0F, 0x84])?;
+                w.write_all(&rel32.to_le_bytes())
+            }
+            InstructionKind::Jne => {
+                if self.operands.len() != 1 {
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
+                let op = &self.operands[0];
+                let rel32: i32 = match op {
+                    Operand::Immediate(imm) => {
+                        if let Ok(imm32) = i32::try_from(*imm) {
+                            imm32
+                        } else {
+                            return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                        }
+                    }
+                    _ => {
+                        return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                    }
+                };
+
+                w.write_all(&[0x0F, 0x85])?;
                 w.write_all(&rel32.to_le_bytes())
             }
             InstructionKind::Cmp => {
