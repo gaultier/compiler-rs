@@ -369,7 +369,7 @@ pub(crate) fn encode(instructions: &[asm::Instruction], target: &Target) -> Enco
             let delta: i32 = i32::try_from(*target_pos as isize - *jmp_pos as isize).unwrap();
             assert!((delta as isize) < w.len() as isize);
 
-            w[*jmp_pos..*jmp_pos + 4].copy_from_slice(&delta.to_be_bytes());
+            w[*jmp_pos..*jmp_pos + 4].copy_from_slice(&delta.to_le_bytes());
             trace!(
                 "amd64: action=patch_jump label={} target_pos={} jmp_pos={} delta={}",
                 label, target_pos, jmp_pos, delta
