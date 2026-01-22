@@ -306,6 +306,35 @@ impl Emitter {
                     typ: ret_type,
                 });
             }
+            crate::ast::NodeKind::Cmp(lhs, rhs) => {
+                // Set by the parser.
+                assert_eq!(*node.typ.kind, TypeKind::Bool);
+                assert_ne!(*lhs.typ.kind, TypeKind::Unknown);
+                assert_ne!(*rhs.typ.kind, TypeKind::Unknown);
+
+                self.emit_node(fn_def, lhs);
+                let lhs_vreg = fn_def.instructions.last().unwrap().res_vreg.unwrap();
+                self.emit_node(fn_def, rhs);
+                let rhs_vreg = fn_def.instructions.last().unwrap().res_vreg.unwrap();
+
+                let res_vreg = fn_def.make_vreg(&node.typ);
+
+                fn_def.instructions.push(Instruction {
+                    kind: InstructionKind::ICmp(
+                        Operand {
+                            kind: OperandKind::VirtualRegister(lhs_vreg),
+                            typ: lhs.typ.clone(),
+                        },
+                        Operand {
+                            kind: OperandKind::VirtualRegister(rhs_vreg),
+                            typ: rhs.typ.clone(),
+                        },
+                    ),
+                    origin: node.origin,
+                    res_vreg: Some(res_vreg),
+                    typ: node.typ.clone(),
+                });
+            }
             crate::ast::NodeKind::Add(ast_lhs, ast_rhs) => {
                 assert_eq!(*ast_lhs.typ.kind, TypeKind::Number);
                 assert_eq!(*ast_lhs.typ.kind, TypeKind::Number);

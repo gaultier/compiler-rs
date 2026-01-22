@@ -221,10 +221,10 @@ pub fn compile(
         writeln!(&mut ir_text, "\n{} {{", fn_def).unwrap();
 
         for ins in &fn_def.instructions {
-            writeln!(&mut ir_text, "  {}", ins).unwrap();
+            write!(&mut ir_text, "  {}", ins).unwrap();
         }
 
-        writeln!(&mut ir_text, "\n}}").unwrap();
+        writeln!(&mut ir_text, "}}").unwrap();
     }
     trace!("ir_text: {}", &ir_text);
 

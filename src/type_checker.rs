@@ -213,6 +213,9 @@ pub fn check_node(node: &mut Node, errs: &mut Vec<Error>) {
         crate::ast::NodeKind::Add(lhs, rhs)
         | crate::ast::NodeKind::Multiply(lhs, rhs)
         | crate::ast::NodeKind::Divide(lhs, rhs) => {
+            check_node(lhs, errs);
+            check_node(rhs, errs);
+
             let typ = lhs.typ.merge(&rhs.typ);
             match typ {
                 Ok(typ) => node.typ = typ,
@@ -221,6 +224,18 @@ pub fn check_node(node: &mut Node, errs: &mut Vec<Error>) {
                     // To avoid cascading errors, pretend the type is fine.
                     node.typ = Type::new_int();
                 }
+            }
+        }
+        crate::ast::NodeKind::Cmp(lhs, rhs) => {
+            // Set by the parser.
+            assert_eq!(*node.typ.kind, TypeKind::Bool);
+
+            check_node(lhs, errs);
+            check_node(rhs, errs);
+
+            let typ = lhs.typ.merge(&rhs.typ);
+            if let Err(err) = typ {
+                errs.push(err);
             }
         }
         crate::ast::NodeKind::If {

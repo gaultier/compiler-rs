@@ -26,6 +26,8 @@ pub enum TokenKind {
     RightParen,
     LeftCurly,
     RightCurly,
+    Eq,
+    EqEq,
     Comma,
     Eof,
     KeywordPackage,
@@ -176,6 +178,32 @@ impl Lexer {
                         origin,
                     });
                     self.advance(c, &mut it);
+                }
+                '=' => {
+                    if let Some(next) = it.peek()
+                        && *next == '='
+                    {
+                        let origin = Origin {
+                            len: 2,
+                            ..self.origin
+                        };
+                        self.tokens.push(Token {
+                            kind: TokenKind::EqEq,
+                            origin,
+                        });
+                        self.advance(c, &mut it);
+                        self.advance(c, &mut it);
+                    } else {
+                        let origin = Origin {
+                            len: 1,
+                            ..self.origin
+                        };
+                        self.tokens.push(Token {
+                            kind: TokenKind::Eq,
+                            origin,
+                        });
+                        self.advance(c, &mut it);
+                    }
                 }
                 '/' => {
                     let origin = Origin {

@@ -18,6 +18,7 @@ pub enum ErrorKind {
     MissingNewline,
     MissingTopLevelPackage,
     ParseTermMissingRhs,
+    ParseCmpMissingRhs,
     ParseFactorMissingRhs,
     ParseCallMissingRightParen,
     ParseCallMissingArgument,

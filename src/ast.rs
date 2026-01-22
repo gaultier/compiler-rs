@@ -18,6 +18,7 @@ pub enum NodeKind {
     Add(Box<Node>, Box<Node>),
     Multiply(Box<Node>, Box<Node>),
     Divide(Box<Node>, Box<Node>),
+    Cmp(Box<Node>, Box<Node>),
     Identifier(String),
     FnCall {
         callee: Box<Node>,
@@ -249,7 +250,27 @@ impl<'a> Parser<'a> {
         if self.error_mode {
             return None;
         }
-        self.parse_comparison()
+
+        let lhs = self.parse_comparison()?;
+        if let Some(eq) = self.match_kind(TokenKind::EqEq) {
+            if let Some(rhs) = self.parse_expr() {
+                Some(Node {
+                    kind: NodeKind::Cmp(Box::new(lhs), Box::new(rhs)),
+                    origin: eq.origin,
+                    typ: Type::new_bool(),
+                })
+            } else {
+                let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
+                self.add_error_with_explanation(
+                    ErrorKind::ParseCmpMissingRhs,
+                    self.current_or_last_token_origin().unwrap_or(eq.origin),
+                    format!("expected expression for the right-hand side of a == or != expression but found: {:?}",found),
+                );
+                None
+            }
+        } else {
+            Some(lhs)
+        }
     }
 
     fn parse_comparison(&mut self) -> Option<Node> {
@@ -682,7 +703,10 @@ impl<'a> Parser<'a> {
             }
 
             // Recurse.
-            NodeKind::Add(lhs, rhs) | NodeKind::Multiply(lhs, rhs) | NodeKind::Divide(lhs, rhs) => {
+            NodeKind::Add(lhs, rhs)
+            | NodeKind::Multiply(lhs, rhs)
+            | NodeKind::Divide(lhs, rhs)
+            | NodeKind::Cmp(lhs, rhs) => {
                 self.resolve_node(lhs);
                 self.resolve_node(rhs);
                 if *node.typ.kind == TypeKind::Unknown {
