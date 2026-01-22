@@ -74,9 +74,7 @@ impl Lexer {
                 break;
             }
 
-            self.origin.column += 1;
-            self.origin.offset += 1;
-            it.next();
+            self.advance(*c, it);
         }
 
         let len = self.origin.offset - start_origin.offset;
@@ -110,9 +108,7 @@ impl Lexer {
                 break;
             }
 
-            self.origin.column += 1;
-            self.origin.offset += 1;
-            it.next();
+            self.advance(*c, it);
         }
 
         let len = self.origin.offset - start_origin.offset;
@@ -132,6 +128,18 @@ impl Lexer {
         });
     }
 
+    fn advance(&mut self, c: char, it: &mut Peekable<Chars>) {
+        self.origin.offset += c.len_utf8() as u32;
+
+        if c == '\n' {
+            self.origin.column = 1;
+            self.origin.line += 1;
+        } else {
+            self.origin.column += 1;
+        }
+        it.next();
+    }
+
     pub fn lex(&mut self, input: &str) {
         let mut it = input.chars().peekable();
 
@@ -145,14 +153,7 @@ impl Lexer {
             }
             match c {
                 '\n' => {
-                    let _origin = Origin {
-                        len: 1,
-                        ..self.origin
-                    };
-                    self.origin.offset += 1;
-                    self.origin.column = 1;
-                    self.origin.line += 1;
-                    it.next();
+                    self.advance(c, &mut it);
                 }
                 '+' => {
                     let origin = Origin {
@@ -163,9 +164,7 @@ impl Lexer {
                         kind: TokenKind::Plus,
                         origin,
                     });
-                    self.origin.offset += 1;
-                    self.origin.column += 1;
-                    it.next();
+                    self.advance(c, &mut it);
                 }
                 '*' => {
                     let origin = Origin {
@@ -176,9 +175,7 @@ impl Lexer {
                         kind: TokenKind::Star,
                         origin,
                     });
-                    self.origin.offset += 1;
-                    self.origin.column += 1;
-                    it.next();
+                    self.advance(c, &mut it);
                 }
                 '/' => {
                     let origin = Origin {
@@ -189,9 +186,7 @@ impl Lexer {
                         kind: TokenKind::Slash,
                         origin,
                     });
-                    self.origin.offset += 1;
-                    self.origin.column += 1;
-                    it.next();
+                    self.advance(c, &mut it);
                 }
                 '{' => {
                     let origin = Origin {
@@ -202,9 +197,7 @@ impl Lexer {
                         kind: TokenKind::LeftCurly,
                         origin,
                     });
-                    self.origin.offset += 1;
-                    self.origin.column += 1;
-                    it.next();
+                    self.advance(c, &mut it);
                 }
                 '}' => {
                     let origin = Origin {
@@ -215,9 +208,7 @@ impl Lexer {
                         kind: TokenKind::RightCurly,
                         origin,
                     });
-                    self.origin.offset += 1;
-                    self.origin.column += 1;
-                    it.next();
+                    self.advance(c, &mut it);
                 }
                 '(' => {
                     let origin = Origin {
@@ -228,9 +219,7 @@ impl Lexer {
                         kind: TokenKind::LeftParen,
                         origin,
                     });
-                    self.origin.offset += 1;
-                    self.origin.column += 1;
-                    it.next();
+                    self.advance(c, &mut it);
                 }
                 ')' => {
                     let origin = Origin {
@@ -241,9 +230,7 @@ impl Lexer {
                         kind: TokenKind::RightParen,
                         origin,
                     });
-                    self.origin.offset += 1;
-                    self.origin.column += 1;
-                    it.next();
+                    self.advance(c, &mut it);
                 }
                 ',' => {
                     let origin = Origin {
@@ -254,15 +241,10 @@ impl Lexer {
                         kind: TokenKind::Comma,
                         origin,
                     });
-                    self.origin.offset += 1;
-                    self.origin.column += 1;
-                    it.next();
+                    self.advance(c, &mut it);
                 }
                 _ if c.is_whitespace() => {
-                    self.origin.offset += 1;
-
-                    self.origin.column += 1;
-                    it.next();
+                    self.advance(c, &mut it);
                 }
                 _ if c.is_ascii_digit() => self.lex_literal_number(&mut it),
                 _ if c.is_ascii_alphabetic() => self.lex_keyword(input, &mut it),
@@ -276,9 +258,7 @@ impl Lexer {
                     });
 
                     self.add_error(ErrorKind::UnknownToken, 1);
-                    self.origin.column += 1;
-                    self.origin.offset += 1;
-                    it.next();
+                    self.advance(c, &mut it);
                 }
             }
         }
