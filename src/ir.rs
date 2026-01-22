@@ -771,10 +771,11 @@ pub fn eval(irs: &[Instruction]) -> Eval {
                 let vreg = cond.as_vreg().unwrap();
                 let val = eval.vregs.get(&vreg).unwrap();
                 if let EvalValue {
-                        kind:
-                            EvalValueKind::Bool(false) | EvalValueKind::Num(-1) | EvalValueKind::Num(1),
-                        ..
-                    } = val {
+                    kind:
+                        EvalValueKind::Bool(false) | EvalValueKind::Num(-1) | EvalValueKind::Num(1),
+                    ..
+                } = val
+                {
                     pc = *jump_locations.get(label).unwrap();
                     continue;
                 }
