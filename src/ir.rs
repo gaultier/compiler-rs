@@ -244,20 +244,21 @@ impl Emitter {
                     typ: Type::new_void(),
                 });
 
-                self.emit_node(fn_def, cond);
-                let vreg = fn_def.instructions.last().unwrap().res_vreg.unwrap();
+                if let Some(cond) = cond {
+                    self.emit_node(fn_def, cond);
+                    let vreg = fn_def.instructions.last().unwrap().res_vreg.unwrap();
 
-                let op = Operand {
-                    kind: OperandKind::VirtualRegister(vreg),
-                    typ: fn_def.instructions.last().unwrap().typ.clone(),
-                };
-                fn_def.instructions.push(Instruction {
-                    kind: InstructionKind::JumpIfFalse(end_label.clone(), op),
-                    origin: node.origin,
-                    res_vreg: None,
-                    typ: Type::new_void(),
-                });
-
+                    let op = Operand {
+                        kind: OperandKind::VirtualRegister(vreg),
+                        typ: fn_def.instructions.last().unwrap().typ.clone(),
+                    };
+                    fn_def.instructions.push(Instruction {
+                        kind: InstructionKind::JumpIfFalse(end_label.clone(), op),
+                        origin: node.origin,
+                        res_vreg: None,
+                        typ: Type::new_void(),
+                    });
+                }
                 for stmt in block {
                     self.emit_node(fn_def, stmt);
                 }

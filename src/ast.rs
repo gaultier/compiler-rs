@@ -35,7 +35,7 @@ pub enum NodeKind {
         else_block: Option<Box<Node>>,
     },
     For {
-        cond: Box<Node>,
+        cond: Option<Box<Node>>,
         block: Vec<Node>,
     },
     Block(Vec<Node>),
@@ -441,10 +441,24 @@ impl<'a> Parser<'a> {
             return None;
         }
 
-        let keyword_for = self.match_kind(TokenKind::KeywordIf)?;
-        let cond = self.parse_expr()?;
+        let keyword_for = self.match_kind(TokenKind::KeywordFor)?;
+        let cond: Option<Box<Node>> = if self.match_kind(TokenKind::LeftCurly).is_some() {
+            None
+        } else {
+            let cond = if let Some(cond) = self.parse_expr() {
+                cond
+            } else {
+                self.add_error_with_explanation(
+                    ErrorKind::MissingExpr,
+                    keyword_for.origin,
+                    String::from("expected expression following for keyword"),
+                );
+                return None;
+            };
 
-        self.expect_token_exactly_one(TokenKind::LeftCurly, "for body")?;
+            self.expect_token_exactly_one(TokenKind::LeftCurly, "for body")?;
+            Some(Box::new(cond))
+        };
 
         let mut stmts = Vec::new();
 
@@ -464,10 +478,7 @@ impl<'a> Parser<'a> {
         self.expect_token_exactly_one(TokenKind::RightCurly, "for body")?;
 
         Some(Node {
-            kind: NodeKind::For {
-                cond: Box::new(cond),
-                block: stmts,
-            },
+            kind: NodeKind::For { cond, block: stmts },
             origin: keyword_for.origin,
             typ: Type::new_void(),
         })
@@ -822,7 +833,9 @@ impl<'a> Parser<'a> {
                 }
             }
             NodeKind::For { cond, block } => {
-                self.resolve_node(&mut *cond);
+                if let Some(cond) = cond {
+                    self.resolve_node(&mut *cond);
+                }
 
                 for stmt in block {
                     self.resolve_node(stmt)

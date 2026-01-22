@@ -372,6 +372,7 @@ pub(crate) fn encode(instructions: &[asm::Instruction], target: &Target) -> Enco
             .unwrap();
             assert!((delta as isize) < w.len() as isize);
 
+            // Long jump: value takes 4 bytes.
             w[*jmp_pos..*jmp_pos + 4].copy_from_slice(&delta.to_le_bytes());
             trace!(
                 "amd64: action=patch_jump label={} target_pos={} jmp_pos={} delta={}",
@@ -1871,7 +1872,7 @@ impl Instruction {
         jump_target_locations: &mut BTreeMap<String, usize>,
         jumps_to_patch: &mut BTreeMap<String, Vec<usize>>,
     ) -> std::io::Result<()> {
-        trace!("amd64: action=encode ins={}", self);
+        trace!("amd64: action=encode pos={:#X} ins={}", w.len(), self);
 
         match self.kind {
             InstructionKind::LabelDef => {
@@ -1899,11 +1900,15 @@ impl Instruction {
                     w.write_all(&0u32.to_le_bytes())?;
                     return Ok(());
                 };
-                let delta = w.len() as isize - *bin_loc as isize;
+                let delta = *bin_loc as isize - w.len() as isize;
+                dbg!(delta, w.len(), *bin_loc);
 
-                if let Ok(n) = i8::try_from(delta) {
+                let short_delta = delta - 2;
+                let near_delta = delta - 5;
+
+                if let Ok(n) = i8::try_from(short_delta) {
                     w.write_all(&[0xeb, n as u8])?;
-                } else if let Ok(n) = i32::try_from(delta) {
+                } else if let Ok(n) = i32::try_from(near_delta) {
                     w.write_all(&[0xe9])?;
                     w.write_all(&n.to_le_bytes())?;
                 } else {
@@ -1931,9 +1936,10 @@ impl Instruction {
                     w.write_all(&0u32.to_le_bytes())?;
                     return Ok(());
                 };
-                let delta = w.len() as isize - *bin_loc as isize;
+                let delta = *bin_loc as isize - w.len() as isize;
+                let near_delta = delta - 6;
 
-                if let Ok(n) = i32::try_from(delta) {
+                if let Ok(n) = i32::try_from(near_delta) {
                     w.write_all(&[0x0f, 0x85])?;
                     w.write_all(&n.to_le_bytes())?;
                 } else {
@@ -1961,9 +1967,10 @@ impl Instruction {
                     w.write_all(&0u32.to_le_bytes())?;
                     return Ok(());
                 };
-                let delta = w.len() as isize - *bin_loc as isize;
+                let delta = *bin_loc as isize - w.len() as isize;
+                let near_delta = delta - 6;
 
-                if let Ok(n) = i32::try_from(delta) {
+                if let Ok(n) = i32::try_from(near_delta) {
                     w.write_all(&[0x0f, 0x84])?;
                     w.write_all(&n.to_le_bytes())?;
                 } else {

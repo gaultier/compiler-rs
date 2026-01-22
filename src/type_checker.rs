@@ -141,7 +141,9 @@ pub fn check_node(node: &mut Node, errs: &mut Vec<Error>) {
         crate::ast::NodeKind::Package(_) => {}
         NodeKind::For { cond, block } => {
             assert_eq!(*node.typ.kind, TypeKind::Void);
-            check_node(cond, errs);
+            if let Some(cond) = cond {
+                check_node(cond, errs);
+            }
 
             for stmt in block {
                 check_node(stmt, errs);

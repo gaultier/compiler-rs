@@ -1,9 +1,7 @@
 package main
 
 func main() {
-	if 1 == 4 {
+	for {
 		println(2)
-	} else {
-		println(3)
 	}
 }

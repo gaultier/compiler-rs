@@ -27,6 +27,7 @@ pub enum ErrorKind {
     UnknownIdentifier,
     CallingANonFunction,
     MissingExpected(TokenKind),
+    MissingExpr,
     NameAlreadyDefined,
 }
 
