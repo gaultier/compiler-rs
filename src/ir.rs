@@ -724,10 +724,16 @@ pub fn eval(irs: &[Instruction]) -> Eval {
             InstructionKind::JumpIfFalse(label, cond) => {
                 let vreg = cond.as_vreg().unwrap();
                 let val = eval.vregs.get(&vreg).unwrap();
-                if !val.as_bool() {
-                    // FIXME
-                    pc = *jump_locations.get(label).unwrap();
-                    continue;
+                match val {
+                    EvalValue {
+                        kind:
+                            EvalValueKind::Bool(false) | EvalValueKind::Num(-1) | EvalValueKind::Num(1),
+                        ..
+                    } => {
+                        pc = *jump_locations.get(label).unwrap();
+                        continue;
+                    }
+                    _ => {}
                 }
             }
             InstructionKind::Jump(label) => {
@@ -1142,5 +1148,81 @@ func main() {
 
         let ir_eval = super::eval(&ir_emitter.fn_defs[1].instructions);
         assert_eq!(ir_eval.stdout, b"3\n");
+    }
+
+    #[test]
+    fn eval_if_cmp_true() {
+        let input = " 
+package main
+
+func main() {
+	if 1 == 1 {
+      println(1)
+  } else {
+      println(2)
+	} 
+}
+            ";
+
+        let file_id = 1;
+        let mut file_id_to_name = HashMap::new();
+        file_id_to_name.insert(1, String::from("test.go"));
+
+        let mut lexer = Lexer::new(file_id);
+        lexer.lex(input);
+        assert!(lexer.errors.is_empty());
+
+        let mut parser = Parser::new(input, &lexer, &file_id_to_name);
+        let mut ast_nodes = parser.parse();
+        assert!(parser.errors.is_empty());
+
+        assert!(type_checker::check_nodes(&mut ast_nodes).is_empty());
+
+        let mut ir_emitter = super::Emitter::new();
+        ir_emitter.emit(&ast_nodes);
+
+        let builtins = Parser::builtins(16);
+        assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
+
+        let ir_eval = super::eval(&ir_emitter.fn_defs[1].instructions);
+        assert_eq!(ir_eval.stdout, b"1\n");
+    }
+
+    #[test]
+    fn eval_if_cmp_false() {
+        let input = " 
+package main
+
+func main() {
+	if 1 == 4 {
+      println(1)
+  } else {
+      println(2)
+	} 
+}
+            ";
+
+        let file_id = 1;
+        let mut file_id_to_name = HashMap::new();
+        file_id_to_name.insert(1, String::from("test.go"));
+
+        let mut lexer = Lexer::new(file_id);
+        lexer.lex(input);
+        assert!(lexer.errors.is_empty());
+
+        let mut parser = Parser::new(input, &lexer, &file_id_to_name);
+        let mut ast_nodes = parser.parse();
+        assert!(parser.errors.is_empty());
+
+        assert!(type_checker::check_nodes(&mut ast_nodes).is_empty());
+
+        let mut ir_emitter = super::Emitter::new();
+        ir_emitter.emit(&ast_nodes);
+
+        let builtins = Parser::builtins(16);
+        assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
+
+        let ir_eval = super::eval(&ir_emitter.fn_defs[1].instructions);
+        assert_eq!(ir_eval.stdout, b"2\n");
     }
 }
