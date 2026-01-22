@@ -801,15 +801,30 @@ impl Emitter {
             ir::InstructionKind::FnCall(_, _) => todo!(),
             ir::InstructionKind::ICmp(
                 ir::Operand {
-                    kind: ir::OperandKind::VirtualRegister(_lhs),
+                    kind: ir::OperandKind::VirtualRegister(lhs),
                     ..
                 },
                 ir::Operand {
-                    kind: ir::OperandKind::VirtualRegister(_rhs),
+                    kind: ir::OperandKind::VirtualRegister(rhs),
                     ..
                 },
             ) => {
-                todo!();
+                self.emit_store(
+                    vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap(),
+                    &vreg_to_memory_location.get(lhs).unwrap().into(),
+                    &ins.origin,
+                );
+                self.asm.push(Instruction {
+                    kind: InstructionKind::Cmp,
+                    operands: vec![
+                        vreg_to_memory_location
+                            .get(&ins.res_vreg.unwrap())
+                            .unwrap()
+                            .into(),
+                        vreg_to_memory_location.get(rhs).unwrap().into(),
+                    ],
+                    origin: ins.origin,
+                });
             }
             ir::InstructionKind::ICmp(
                 ir::Operand {
@@ -2699,6 +2714,35 @@ impl Instruction {
 
                         Instruction::encode_rex_from_operands(w, true, None, None, None)?;
                         w.write_all(&[0x3d])?;
+                        w.write_all(&imm32.to_le_bytes())
+                    }
+                    // CMP r64, r/m64
+                    (Operand::Register(reg), rhs) if reg.is_64_bits() && rhs.is_rm() => {
+                        if rhs.size() != Size::_64 {
+                            return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                        }
+                        Instruction::encode_rex_from_operands(w, true, Some(rhs), Some(op1), None)?;
+                        let modrm =
+                            Instruction::encode_modrm(ModRmEncoding::SlashR, rhs, Some(*reg));
+                        w.write_all(&[0x3B, modrm])?;
+                        if let Operand::EffectiveAddress(addr) = rhs {
+                            Instruction::encode_sib(w, addr, modrm)?;
+                        }
+                        Ok(())
+                    }
+                    // CMP r/m64, imm32
+                    (lhs, Operand::Immediate(imm)) if lhs.is_rm() && lhs.size() == Size::_64 => {
+                        let imm32 = if let Ok(imm32) = i32::try_from(*imm) {
+                            imm32
+                        } else {
+                            return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                        };
+                        Instruction::encode_rex_from_operands(w, true, Some(lhs), None, None)?;
+                        let modrm = Instruction::encode_modrm(ModRmEncoding::Slash7, lhs, None);
+                        w.write_all(&[0x81, modrm])?;
+                        if let Operand::EffectiveAddress(addr) = lhs {
+                            Instruction::encode_sib(w, addr, modrm)?;
+                        }
                         w.write_all(&imm32.to_le_bytes())
                     }
                     _ => todo!(),
