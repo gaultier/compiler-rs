@@ -34,6 +34,10 @@ pub enum NodeKind {
         then_block: Option<Box<Node>>,
         else_block: Option<Box<Node>>,
     },
+    For {
+        cond: Box<Node>,
+        block: Vec<Node>,
+    },
     Block(Vec<Node>),
 }
 
@@ -432,6 +436,43 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn parse_statement_for(&mut self) -> Option<Node> {
+        if self.error_mode {
+            return None;
+        }
+
+        let keyword_for = self.match_kind(TokenKind::KeywordIf)?;
+        let cond = self.parse_expr()?;
+
+        self.expect_token_exactly_one(TokenKind::LeftCurly, "for body")?;
+
+        let mut stmts = Vec::new();
+
+        for _ in 0..self.remaining_tokens_count() {
+            match self.peek_token() {
+                None
+                | Some(Token {
+                    kind: TokenKind::RightCurly,
+                    ..
+                }) => break,
+                _ => {}
+            }
+
+            let stmt = self.parse_statement()?;
+            stmts.push(stmt);
+        }
+        self.expect_token_exactly_one(TokenKind::RightCurly, "for body")?;
+
+        Some(Node {
+            kind: NodeKind::For {
+                cond: Box::new(cond),
+                block: stmts,
+            },
+            origin: keyword_for.origin,
+            typ: Type::new_void(),
+        })
+    }
+
     fn parse_statement_if(&mut self) -> Option<Node> {
         if self.error_mode {
             return None;
@@ -516,6 +557,10 @@ impl<'a> Parser<'a> {
         }
 
         if let Some(stmt) = self.parse_statement_if() {
+            return Some(stmt);
+        };
+
+        if let Some(stmt) = self.parse_statement_for() {
             return Some(stmt);
         };
 
@@ -774,6 +819,13 @@ impl<'a> Parser<'a> {
                 }
                 if let Some(else_block) = else_block {
                     self.resolve_node(else_block)
+                }
+            }
+            NodeKind::For { cond, block } => {
+                self.resolve_node(&mut *cond);
+
+                for stmt in block {
+                    self.resolve_node(stmt)
                 }
             }
         }

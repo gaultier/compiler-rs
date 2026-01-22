@@ -230,6 +230,51 @@ impl Emitter {
                     &node
                 );
             }
+            NodeKind::For { cond, block } => {
+                assert_eq!(*node.typ.kind, TypeKind::Void);
+
+                let loop_label = format!(".{}_for_loop", self.label_current);
+                let end_label = format!(".{}_for_end", self.label_current);
+                self.label_current += 1;
+
+                fn_def.instructions.push(Instruction {
+                    kind: InstructionKind::LabelDef(loop_label.clone()),
+                    origin: node.origin,
+                    res_vreg: None,
+                    typ: Type::new_void(),
+                });
+
+                self.emit_node(fn_def, cond);
+                let vreg = fn_def.instructions.last().unwrap().res_vreg.unwrap();
+
+                let op = Operand {
+                    kind: OperandKind::VirtualRegister(vreg),
+                    typ: fn_def.instructions.last().unwrap().typ.clone(),
+                };
+                fn_def.instructions.push(Instruction {
+                    kind: InstructionKind::JumpIfFalse(end_label.clone(), op),
+                    origin: node.origin,
+                    res_vreg: None,
+                    typ: Type::new_void(),
+                });
+
+                for stmt in block {
+                    self.emit_node(fn_def, stmt);
+                }
+                fn_def.instructions.push(Instruction {
+                    kind: InstructionKind::Jump(loop_label.clone()),
+                    origin: node.origin,
+                    res_vreg: None,
+                    typ: Type::new_void(),
+                });
+
+                fn_def.instructions.push(Instruction {
+                    kind: InstructionKind::LabelDef(end_label),
+                    origin: node.origin,
+                    res_vreg: None,
+                    typ: Type::new_void(),
+                });
+            }
             crate::ast::NodeKind::Number(num) => {
                 assert_eq!(*node.typ.kind, TypeKind::Number);
 

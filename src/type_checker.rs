@@ -5,7 +5,11 @@ use proptest_derive::Arbitrary;
 
 use serde::Serialize;
 
-use crate::{ast::Node, error::Error, origin::Origin};
+use crate::{
+    ast::{Node, NodeKind},
+    error::Error,
+    origin::Origin,
+};
 
 #[derive(Serialize, Clone, PartialEq, Eq, Debug, PartialOrd, Ord)]
 pub enum TypeKind {
@@ -135,6 +139,14 @@ impl Type {
 pub fn check_node(node: &mut Node, errs: &mut Vec<Error>) {
     match &mut node.kind {
         crate::ast::NodeKind::Package(_) => {}
+        NodeKind::For { cond, block } => {
+            assert_eq!(*node.typ.kind, TypeKind::Void);
+            check_node(cond, errs);
+
+            for stmt in block {
+                check_node(stmt, errs);
+            }
+        }
         crate::ast::NodeKind::FnDef { name: _, body } => match &*node.typ.kind {
             TypeKind::Function(ret_type, args) => {
                 assert_ne!(*ret_type.kind, TypeKind::Unknown);
