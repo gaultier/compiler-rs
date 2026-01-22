@@ -1,7 +1,9 @@
 package main
 
 func main() {
-	if true {
+	if false {
 		println(2)
+	} else {
+		println(3)
 	}
 }
