@@ -347,14 +347,39 @@ pub(crate) fn encode(instructions: &[asm::Instruction], target: &Target) -> Enco
             origin: Origin::new_builtin(),
         },
     );
+    let mut jumps_to_patch = BTreeMap::new();
+
     for ins in instructions {
         let asm::Instruction::Amd64(ins) = ins;
-        ins.encode(&mut w, &symbols, &mut jump_target_locations)
-            .unwrap();
+        ins.encode(
+            &mut w,
+            &symbols,
+            &mut jump_target_locations,
+            &mut jumps_to_patch,
+        )
+        .unwrap();
+    }
+
+    for (label, to_patch) in &jumps_to_patch {
+        let target_pos = jump_target_locations.get(label).unwrap();
+        assert!(*target_pos < w.len());
+
+        for jmp_pos in to_patch {
+            assert!(*jmp_pos < w.len());
+            let delta: i32 = i32::try_from(*target_pos as isize - *jmp_pos as isize).unwrap();
+            assert!((delta as isize) < w.len() as isize);
+
+            w[*jmp_pos..*jmp_pos + 4].copy_from_slice(&delta.to_be_bytes());
+            trace!(
+                "amd64: action=patch_jump label={} target_pos={} jmp_pos={} delta={}",
+                label, target_pos, jmp_pos, delta
+            );
+        }
     }
 
     // Entrypoint.
     let entrypoint = w.len();
+    let mut jumps = BTreeMap::new();
     symbols.insert(
         String::from("_start"),
         Symbol {
@@ -369,7 +394,9 @@ pub(crate) fn encode(instructions: &[asm::Instruction], target: &Target) -> Enco
             operands: vec![Operand::FnName(String::from("main"))],
             origin: Origin::new_unknown(),
         };
-        ins_call.encode(&mut w, &symbols).unwrap();
+        ins_call
+            .encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+            .unwrap();
     }
 
     // Exit.
@@ -386,7 +413,9 @@ pub(crate) fn encode(instructions: &[asm::Instruction], target: &Target) -> Enco
             ],
             origin: Origin::new_unknown(),
         };
-        ins_mov.encode(&mut w, &symbols).unwrap();
+        ins_mov
+            .encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+            .unwrap();
     }
     {
         let ins_mov = Instruction {
@@ -394,7 +423,9 @@ pub(crate) fn encode(instructions: &[asm::Instruction], target: &Target) -> Enco
             operands: vec![Operand::Register(Register::Edi), Operand::Immediate(0)],
             origin: Origin::new_unknown(),
         };
-        ins_mov.encode(&mut w, &symbols).unwrap();
+        ins_mov
+            .encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+            .unwrap();
     }
     {
         let ins_syscall = Instruction {
@@ -402,7 +433,9 @@ pub(crate) fn encode(instructions: &[asm::Instruction], target: &Target) -> Enco
             operands: vec![],
             origin: Origin::new_unknown(),
         };
-        ins_syscall.encode(&mut w, &symbols).unwrap();
+        ins_syscall
+            .encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+            .unwrap();
     }
 
     Encoding {
@@ -1797,6 +1830,7 @@ impl Instruction {
         w: &mut Vec<u8>,
         symbols: &BTreeMap<String, Symbol>,
         jump_target_locations: &mut BTreeMap<String, usize>,
+        jumps_to_patch: &mut BTreeMap<String, Vec<usize>>,
     ) -> std::io::Result<()> {
         trace!("amd64: action=encode ins={}", self);
 
@@ -1806,17 +1840,70 @@ impl Instruction {
 
                 let label = self.operands[0].as_location().unwrap().to_owned();
                 jump_target_locations.insert(label, w.len());
+                return Ok(());
             }
             InstructionKind::Jmp => {
                 assert_eq!(self.operands.len(), 1);
 
                 let label = self.operands[0].as_location().unwrap().to_owned();
-                let bin_loc = jump_target_locations.get(&label).unwrap_or_else(|| 
-                    // TODO: Record patch work.
-                    &0);
+                let bin_loc = if let Some(loc) = jump_target_locations.get(&label) {
+                    loc
+                } else {
+                    // Pessimistic: 4 bytes.
+                    w.write_all(&[0xe9])?;
+                    trace!(
+                        "amd64: action=record_patch label={} jmp_pos={}",
+                        label,
+                        w.len()
+                    );
+                    jumps_to_patch.entry(label).or_default().push(w.len());
+                    w.write_all(&0u32.to_le_bytes())?;
+                    return Ok(());
+                };
+                let delta = w.len() as isize - *bin_loc as isize;
 
+                if let Ok(n) = i8::try_from(delta) {
+                    w.write_all(&[0xeb, n as u8])?;
+                } else if let Ok(n) = i32::try_from(delta) {
+                    w.write_all(&[0xe9])?;
+                    w.write_all(&n.to_le_bytes())?;
+                } else {
+                    // TODO: In theory we could make it: `mov reg, delta; jmp reg`.
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
+
+                return Ok(());
             }
-            InstructionKind::Je => todo!(),
+            InstructionKind::Je => {
+                assert_eq!(self.operands.len(), 1);
+
+                let label = self.operands[0].as_location().unwrap().to_owned();
+                let bin_loc = if let Some(loc) = jump_target_locations.get(&label) {
+                    loc
+                } else {
+                    // Pessimistic: 4 bytes.
+                    w.write_all(&[0x0f, 0x84])?;
+                    trace!(
+                        "amd64: action=record_patch label={} jmp_pos={}",
+                        label,
+                        w.len()
+                    );
+                    jumps_to_patch.entry(label).or_default().push(w.len());
+                    w.write_all(&0u32.to_le_bytes())?;
+                    return Ok(());
+                };
+                let delta = w.len() as isize - *bin_loc as isize;
+
+                if let Ok(n) = i32::try_from(delta) {
+                    w.write_all(&[0x0f, 0x84])?;
+                    w.write_all(&n.to_le_bytes())?;
+                } else {
+                    // TODO: In theory we could make it: `mov reg, delta; jmp reg`.
+                    return Err(std::io::Error::from(io::ErrorKind::InvalidData));
+                }
+
+                return Ok(());
+            }
             _ => {}
         }
 
@@ -2681,7 +2768,7 @@ impl Operand {
         match self {
             // Assume near jump.
             // TODO: Technically we could just 1 byte for short jumps.
-            Operand::Location(_) => Size::_32,
+            Operand::Location(_) => unreachable!(),
             Operand::Register(reg) => reg.size(),
             Operand::Immediate(_) => Size::_64,
             Operand::EffectiveAddress(effective_address) => {
@@ -2771,6 +2858,8 @@ mod tests {
 
     #[test]
     fn test_encoding() {
+        let mut jumps = BTreeMap::new();
+        let mut jumps_to_patch = BTreeMap::new();
         {
             let ins = Instruction {
                 kind: InstructionKind::Mov,
@@ -2787,7 +2876,8 @@ mod tests {
             };
             let mut w = Vec::with_capacity(8);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols).unwrap();
+            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+                .unwrap();
             assert_eq!(&w, &[0x48, 0x8b, 0x7c, 0x24, 0xf8]);
         }
         {
@@ -2806,7 +2896,9 @@ mod tests {
             };
             let mut w = Vec::with_capacity(8);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols).unwrap();
+            let mut jumps = BTreeMap::new();
+            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+                .unwrap();
             assert_eq!(&w, &[0x48, 0x89, 0x7c, 0x24, 0xf8]);
         }
         {
@@ -2817,7 +2909,9 @@ mod tests {
             };
             let mut w = Vec::with_capacity(8);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols).unwrap();
+            let mut jumps = BTreeMap::new();
+            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+                .unwrap();
             assert_eq!(&w, &[0x48, 0xc7, 0xc0, 0x01, 0x00, 0x00, 0x00]);
         }
         {
@@ -2839,14 +2933,18 @@ mod tests {
                     operands: vec![Operand::Register(Register::Edx), Operand::Immediate(1)],
                     origin: Origin::new_unknown(),
                 };
-                ins_mov.encode(&mut w, &symbols).unwrap();
+                ins_mov
+                    .encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+                    .unwrap();
 
                 let ins_ret = Instruction {
                     kind: InstructionKind::Ret,
                     operands: vec![],
                     origin: Origin::new_unknown(),
                 };
-                ins_ret.encode(&mut w, &symbols).unwrap();
+                ins_ret
+                    .encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+                    .unwrap();
             }
 
             {
@@ -2855,7 +2953,9 @@ mod tests {
                     operands: vec![Operand::FnName(String::from("builtin.println_int"))],
                     origin: Origin::new_unknown(),
                 };
-                ins_call.encode(&mut w, &symbols).unwrap();
+                ins_call
+                    .encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+                    .unwrap();
             }
 
             assert_eq!(
@@ -2884,7 +2984,10 @@ mod tests {
             let symbols = BTreeMap::new();
             let mut w = Vec::new();
             // Error on overflow.
-            assert!(ins.encode(&mut w, &symbols).is_err());
+            assert!(
+                ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+                    .is_err()
+            );
         }
         {
             let ins = Instruction {
@@ -2894,7 +2997,8 @@ mod tests {
             };
             let mut w = Vec::with_capacity(5);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols).unwrap();
+            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+                .unwrap();
             assert_eq!(&w, &[0x66, 0x83, 0xc3, 0x00]);
         }
         {
@@ -2910,7 +3014,8 @@ mod tests {
             };
             let mut w = Vec::with_capacity(15);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols).unwrap();
+            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+                .unwrap();
             assert_eq!(&w, &[0x67, 0xf6, 0xab, 0x7f, 0xff, 0xff, 0xff]);
         }
         {
@@ -2926,7 +3031,8 @@ mod tests {
             };
             let mut w = Vec::with_capacity(5);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols).unwrap();
+            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+                .unwrap();
             assert_eq!(&w, &[0x67, 0xff, 0x73, 0x01]);
         }
         {
@@ -2942,7 +3048,8 @@ mod tests {
             };
             let mut w = Vec::with_capacity(5);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols).unwrap();
+            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+                .unwrap();
             assert_eq!(&w, &[0x67, 0xff, 0x33]);
         }
         {
@@ -2958,7 +3065,8 @@ mod tests {
             };
             let mut w = Vec::with_capacity(5);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols).unwrap();
+            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+                .unwrap();
             assert_eq!(&w, &[0x67, 0xff, 0x33]);
         }
         {
@@ -2974,7 +3082,8 @@ mod tests {
             };
             let mut w = Vec::with_capacity(5);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols).unwrap();
+            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+                .unwrap();
             assert_eq!(&w, &[0x67, 0x66, 0xff, 0x34, 0x5d, 0, 0, 0, 0]);
         }
         {
@@ -2985,7 +3094,8 @@ mod tests {
             };
             let mut w = Vec::with_capacity(2);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols).unwrap();
+            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+                .unwrap();
             assert_eq!(&w, &[0x41, 0x57]);
         }
 
@@ -2997,7 +3107,8 @@ mod tests {
             };
             let mut w = Vec::with_capacity(2);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols).unwrap();
+            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+                .unwrap();
             assert_eq!(&w, &[0x5b]);
         }
 
@@ -3017,7 +3128,8 @@ mod tests {
             };
             let mut w = Vec::with_capacity(5);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols).unwrap();
+            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+                .unwrap();
             assert_eq!(&w, &[0x4f, 0x8d, 0x44, 0xf5, 0x2a]);
         }
         {
@@ -3033,7 +3145,8 @@ mod tests {
             };
             let mut w = Vec::with_capacity(5);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols).unwrap();
+            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+                .unwrap();
             assert_eq!(&w, &[0x41, 0xff, 0x74, 0x9c, 0x01]);
         }
         {
@@ -3049,7 +3162,8 @@ mod tests {
             };
             let mut w = Vec::with_capacity(5);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols).unwrap();
+            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+                .unwrap();
             assert_eq!(&w, &[0x41, 0x8f, 0x44, 0x9c, 0x01]);
         }
         {
@@ -3066,7 +3180,10 @@ mod tests {
             let mut w = Vec::new();
             let symbols = BTreeMap::new();
             // Error due to ambiguous size.
-            assert!(ins.encode(&mut w, &symbols).is_err());
+            assert!(
+                ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+                    .is_err()
+            );
         }
         {
             let ins = Instruction {
@@ -3081,7 +3198,8 @@ mod tests {
             };
             let mut w = Vec::with_capacity(5);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols).unwrap();
+            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+                .unwrap();
             assert_eq!(&w, &[0x49, 0xf7, 0x7c, 0x9c, 0x01]);
         }
         {
@@ -3095,7 +3213,8 @@ mod tests {
             };
             let mut w = Vec::with_capacity(5);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols).unwrap();
+            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+                .unwrap();
             assert_eq!(&w, &[0x48, 0x89, 0xe5]);
         }
     }
@@ -3179,7 +3298,9 @@ mod tests {
             let mut actual = Vec::with_capacity(15);
 
             let symbols = BTreeMap::new();
-            match (ins.encode(&mut actual, &symbols), oracle_encode(&ins)) {
+            let mut jumps = BTreeMap::new();
+            let mut jumps_to_patch = BTreeMap::new();
+            match (ins.encode(&mut actual, &symbols,&mut jumps,&mut jumps_to_patch), oracle_encode(&ins)) {
                 (Ok(()), Ok(expected)) => assert_eq!(actual, expected, "ins={}, {:#?} actual={:x?} expected={:x?}", ins,ins, &actual, &expected),
                 (Err(_), Err(_)) => {},
                 (Ok(actual),Err((status, stdout, stderr))) => panic!("oracle and implementation disagree: actual={:#?} oracle_status={} oracle_stdout={} oracle_stderr={} ins={} {:#?}",actual,status,stdout, String::from_utf8_lossy(&stderr), ins,ins ),
