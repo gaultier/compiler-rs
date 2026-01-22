@@ -770,16 +770,13 @@ pub fn eval(irs: &[Instruction]) -> Eval {
             InstructionKind::JumpIfFalse(label, cond) => {
                 let vreg = cond.as_vreg().unwrap();
                 let val = eval.vregs.get(&vreg).unwrap();
-                match val {
-                    EvalValue {
+                if let EvalValue {
                         kind:
                             EvalValueKind::Bool(false) | EvalValueKind::Num(-1) | EvalValueKind::Num(1),
                         ..
-                    } => {
-                        pc = *jump_locations.get(label).unwrap();
-                        continue;
-                    }
-                    _ => {}
+                    } = val {
+                    pc = *jump_locations.get(label).unwrap();
+                    continue;
                 }
             }
             InstructionKind::Jump(label) => {

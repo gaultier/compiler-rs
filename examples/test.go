@@ -1,7 +1,7 @@
 package main
 
 func main() {
-	for {
+	for 1 == 1 {
 		println(2)
 	}
 }
