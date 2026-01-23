@@ -803,12 +803,11 @@ impl Emitter {
                 ];
                 // TODO: Track which scratch registers actually are in use.
                 for reg in &scratch_regs {
-                    let spill_slot = self.find_free_spill_slot(&Size::_64);
-                    self.emit_store(
-                        &spill_slot,
-                        &MemoryLocation::Register(asm::Register::Amd64(*reg)).into(),
-                        &Origin::new_synth_codegen(),
-                    );
+                    self.asm.push(Instruction {
+                        kind: InstructionKind::Push,
+                        operands: vec![Operand::Register(*reg)],
+                        origin: ins.origin,
+                    });
                 }
 
                 self.emit_store(
@@ -822,13 +821,13 @@ impl Emitter {
                     operands: vec![Operand::FnName(fn_name.clone())],
                     origin: ins.origin,
                 });
+
                 for reg in &scratch_regs {
-                    let spill_slot = self.find_free_spill_slot(&Size::_64);
-                    self.emit_store(
-                        &MemoryLocation::Register(asm::Register::Amd64(*reg)),
-                        &spill_slot.into(),
-                        &Origin::new_synth_codegen(),
-                    );
+                    self.asm.push(Instruction {
+                        kind: InstructionKind::Pop,
+                        operands: vec![Operand::Register(*reg)],
+                        origin: ins.origin,
+                    });
                 }
             }
             ir::InstructionKind::FnCall(_, _) => todo!(),
