@@ -256,6 +256,8 @@ pub fn compile(
             writeln!(&mut asm_text, "  {}", ins).unwrap();
         }
         writeln!(&mut asm_text, "\n").unwrap();
+        // FIXME: Keep fn_def.instructions structure to be able to record each fn location in order
+        // to be able to call functions.
         asm_instructions.extend(fn_asm_instructions);
     }
 
