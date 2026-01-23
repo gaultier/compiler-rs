@@ -584,7 +584,7 @@ impl Emitter {
                 let op_vreg = fn_def.instructions.last().unwrap().res_vreg.unwrap();
                 let op_typ = fn_def.instructions.last().unwrap().typ.clone();
 
-                assert!(fn_def.name_to_vreg.get(identifier).is_none());
+                assert!(!fn_def.name_to_vreg.contains_key(identifier));
                 fn_def.name_to_vreg.insert(identifier.to_owned(), op_vreg);
 
                 fn_def.instructions.push(Instruction {
@@ -816,7 +816,7 @@ pub fn eval(irs: &[Instruction]) -> Eval {
         match &ir.kind {
             InstructionKind::VarDecl(identifier, op) => {
                 assert!(ir.res_vreg.is_none());
-                assert!(name_to_vreg.get(identifier).is_none());
+                assert!(!name_to_vreg.contains_key(identifier));
                 let vreg = op.as_vreg().unwrap();
 
                 name_to_vreg.insert(identifier.to_owned(), vreg);
