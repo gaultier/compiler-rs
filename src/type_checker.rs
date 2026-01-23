@@ -8,12 +8,11 @@ use serde::Serialize;
 use crate::{
     ast::{NameToType, Node, NodeKind},
     error::Error,
-    origin::Origin,
+    origin::{Origin, OriginKind},
 };
 
 #[derive(Serialize, Clone, PartialEq, Eq, Debug, PartialOrd, Ord)]
 pub enum TypeKind {
-    Unknown,
     Void,
     Number,
     Bool,
@@ -40,7 +39,7 @@ pub struct Type {
 impl Default for Type {
     fn default() -> Self {
         Self {
-            kind: Box::new(TypeKind::Unknown),
+            kind: Box::new(TypeKind::Any),
             size: None,
             origin: Origin::new_unknown(),
         }
@@ -50,7 +49,6 @@ impl Default for Type {
 impl Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &*self.kind {
-            TypeKind::Unknown => f.write_str("any"),
             TypeKind::Void => f.write_str("void"),
             TypeKind::Number => write!(f, "int"),
             TypeKind::Bool => f.write_str("bool"),
@@ -63,7 +61,7 @@ impl Display for Type {
                 f.write_str(")")?;
 
                 match &*ret.kind {
-                    TypeKind::Unknown => panic!("invalid return type: {:#?}", ret),
+                    TypeKind::Any => panic!("invalid return type: {:#?}", ret),
                     TypeKind::Void => {} // Noop
                     _ => {
                         ret.fmt(f)?;
@@ -160,14 +158,16 @@ pub fn check_node(node: &mut Node, errs: &mut Vec<Error>, name_to_type: &mut Nam
         }
         crate::ast::NodeKind::FnDef { name: _, body } => match &*node.typ.kind {
             TypeKind::Function(ret_type, args) => {
-                assert_ne!(*ret_type.kind, TypeKind::Unknown);
+                assert_ne!(*ret_type.kind, TypeKind::Any);
 
                 if matches!(*ret_type.kind, TypeKind::Function(_, _)) {
                     unimplemented!();
                 }
 
                 for arg in args {
-                    assert_ne!(*arg.kind, TypeKind::Unknown);
+                    if node.origin.kind != OriginKind::Builtin {
+                        assert_ne!(*arg.kind, TypeKind::Any);
+                    }
                     if matches!(*arg.kind, TypeKind::Function(_, _)) {
                         unimplemented!();
                     }
@@ -187,8 +187,11 @@ pub fn check_node(node: &mut Node, errs: &mut Vec<Error>, name_to_type: &mut Nam
             assert_eq!(*node.typ.kind, TypeKind::Bool);
             assert_eq!(node.typ.size, Some(Size::_8));
         }
-        crate::ast::NodeKind::Identifier(_) => {
-            assert_ne!(&*node.typ.kind, &TypeKind::Unknown);
+        crate::ast::NodeKind::Identifier(identifier) => {
+            let (typ, _) = name_to_type.get(identifier).unwrap();
+            assert_ne!(*typ.kind, TypeKind::Any);
+
+            node.typ = typ.clone();
         }
         crate::ast::NodeKind::FnCall { callee, args } => {
             let (ret_type, args_type) = match &*callee.typ.kind {

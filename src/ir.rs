@@ -377,8 +377,8 @@ impl Emitter {
             crate::ast::NodeKind::Cmp(lhs, rhs) => {
                 // Set by the parser.
                 assert_eq!(*node.typ.kind, TypeKind::Bool);
-                assert_ne!(*lhs.typ.kind, TypeKind::Unknown);
-                assert_ne!(*rhs.typ.kind, TypeKind::Unknown);
+                assert_ne!(*lhs.typ.kind, TypeKind::Any);
+                assert_ne!(*rhs.typ.kind, TypeKind::Any);
 
                 self.emit_node(fn_def, lhs);
                 let lhs_vreg = fn_def.instructions.last().unwrap().res_vreg.unwrap();
@@ -1333,5 +1333,43 @@ func main() {
 
         let ir_eval = super::eval(&ir_emitter.fn_defs[1].instructions);
         assert_eq!(ir_eval.stdout, b"2\n");
+    }
+
+    #[test]
+    fn eval_var() {
+        let input = " 
+package main
+
+func main() {
+  var a = 3*4
+  var b = 1 + 2 + a
+  println(a)
+  println(b)
+}
+";
+
+        let file_id = 1;
+        let mut file_id_to_name = HashMap::new();
+        file_id_to_name.insert(1, String::from("test.go"));
+
+        let mut lexer = Lexer::new(file_id);
+        lexer.lex(input);
+        assert!(lexer.errors.is_empty());
+
+        let mut parser = Parser::new(input, &lexer, &file_id_to_name);
+        let mut ast_nodes = parser.parse();
+        assert!(parser.errors.is_empty());
+
+        let mut name_to_type = parser.name_to_type;
+        assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
+
+        let mut ir_emitter = super::Emitter::new();
+        ir_emitter.emit(&ast_nodes);
+
+        let builtins = Parser::builtins(16);
+        assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
+
+        let ir_eval = super::eval(&ir_emitter.fn_defs[1].instructions);
+        assert_eq!(ir_eval.stdout, b"12\n15\n");
     }
 }

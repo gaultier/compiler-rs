@@ -813,9 +813,9 @@ impl<'a> Parser<'a> {
             | NodeKind::Cmp(lhs, rhs) => {
                 self.resolve_node(lhs);
                 self.resolve_node(rhs);
-                if *node.typ.kind == TypeKind::Unknown {
+                if *node.typ.kind == TypeKind::Any {
                     node.typ = lhs.typ.clone();
-                    assert_ne!(*node.typ.kind, TypeKind::Unknown);
+                    assert_ne!(*node.typ.kind, TypeKind::Any);
                 }
             }
             NodeKind::VarDecl(_identifier, expr) => {
@@ -837,7 +837,7 @@ impl<'a> Parser<'a> {
                 for op in args {
                     self.resolve_node(op)
                 }
-                if *node.typ.kind == TypeKind::Unknown {
+                if *node.typ.kind == TypeKind::Any {
                     node.typ = callee.typ.clone();
                 }
             }
