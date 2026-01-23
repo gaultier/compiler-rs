@@ -788,12 +788,29 @@ impl Emitter {
                 let vreg: ir::VirtualRegister = args[0].as_vreg().unwrap();
                 let arg: Operand = vreg_to_memory_location.get(&vreg).unwrap().into();
 
-                let spill_slot = self.find_free_spill_slot(&Size::_64);
-                self.emit_store(
-                    &spill_slot,
-                    &MemoryLocation::Register(asm::Register::Amd64(Register::Rdi)).into(),
-                    &Origin::new_synth_codegen(),
-                );
+                // > Functions preserve the registers rbx, rsp, rbp, r12, r13, r14, and r15;
+                // > while rax, rdi, rsi, rdx, rcx, r8, r9, r10, r11 are scratch registers.
+
+                let scratch_regs = [
+                    Register::Rax,
+                    Register::Rdi,
+                    Register::Rsi,
+                    Register::Rdx,
+                    Register::R8,
+                    Register::R9,
+                    Register::R10,
+                    Register::R11,
+                ];
+                // TODO: Track which scratch registers actually are in use.
+                for reg in &scratch_regs {
+                    let spill_slot = self.find_free_spill_slot(&Size::_64);
+                    self.emit_store(
+                        &spill_slot,
+                        &MemoryLocation::Register(asm::Register::Amd64(*reg)).into(),
+                        &Origin::new_synth_codegen(),
+                    );
+                }
+
                 self.emit_store(
                     &MemoryLocation::Register(asm::Register::Amd64(Register::Rdi)),
                     &arg,
@@ -805,11 +822,14 @@ impl Emitter {
                     operands: vec![Operand::FnName(fn_name.clone())],
                     origin: ins.origin,
                 });
-                self.emit_store(
-                    &MemoryLocation::Register(asm::Register::Amd64(Register::Rdi)),
-                    &spill_slot.into(),
-                    &Origin::new_synth_codegen(),
-                );
+                for reg in &scratch_regs {
+                    let spill_slot = self.find_free_spill_slot(&Size::_64);
+                    self.emit_store(
+                        &MemoryLocation::Register(asm::Register::Amd64(*reg)).into(),
+                        &spill_slot.into(),
+                        &Origin::new_synth_codegen(),
+                    );
+                }
             }
             ir::InstructionKind::FnCall(_, _) => todo!(),
             ir::InstructionKind::ICmp(
