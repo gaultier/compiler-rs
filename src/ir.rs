@@ -146,11 +146,7 @@ impl FnDef {
             let i = i as u32;
             match &ins.kind {
                 InstructionKind::VarDecl(_, op) => {
-                    if let Some(res_vreg) = ins.res_vreg {
-                        assert!(res_vreg.0 > 0);
-                        let live_range = LiveRange { start: i, end: i };
-                        res.insert(res_vreg, live_range);
-                    }
+                    assert!(ins.res_vreg.is_none());
 
                     if let Operand {
                         kind: OperandKind::VirtualRegister(vreg),
@@ -158,6 +154,8 @@ impl FnDef {
                     } = op
                     {
                         Self::extend_live_range_on_use(*vreg, i, &mut res);
+                    } else {
+                        panic!("expected vreg operand");
                     }
                 }
                 InstructionKind::FnCall(_, operands) => {
@@ -576,7 +574,6 @@ impl Emitter {
                 self.emit_node(fn_def, expr);
                 let op_vreg = fn_def.instructions.last().unwrap().res_vreg.unwrap();
                 let op_typ = fn_def.instructions.last().unwrap().typ.clone();
-                let res_vreg = fn_def.make_vreg(&node.typ);
 
                 fn_def.instructions.push(Instruction {
                     kind: InstructionKind::VarDecl(
@@ -587,7 +584,7 @@ impl Emitter {
                         },
                     ),
                     origin: node.origin,
-                    res_vreg: Some(res_vreg),
+                    res_vreg: None,
                     typ: node.typ.clone(),
                 });
             }
@@ -794,6 +791,7 @@ pub fn eval(irs: &[Instruction]) -> Eval {
             _ => None,
         })
         .collect();
+    let mut name_to_vreg: BTreeMap<String, VirtualRegister> = BTreeMap::new();
 
     let mut pc: usize = 0;
     loop {
@@ -804,7 +802,13 @@ pub fn eval(irs: &[Instruction]) -> Eval {
         let ir = &irs[pc];
 
         match &ir.kind {
-            InstructionKind::VarDecl(identifier, op) => todo!(),
+            InstructionKind::VarDecl(identifier, op) => {
+                assert!(ir.res_vreg.is_none());
+                assert!(name_to_vreg.get(identifier).is_none());
+                let vreg = op.as_vreg().unwrap();
+
+                name_to_vreg.insert(identifier.to_owned(), vreg);
+            }
             InstructionKind::JumpIfFalse(label, cond) => {
                 let vreg = cond.as_vreg().unwrap();
                 let val = eval.vregs.get(&vreg).unwrap();
