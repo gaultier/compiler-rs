@@ -825,7 +825,7 @@ impl Emitter {
                 for reg in &scratch_regs {
                     let spill_slot = self.find_free_spill_slot(&Size::_64);
                     self.emit_store(
-                        &MemoryLocation::Register(asm::Register::Amd64(*reg)).into(),
+                        &MemoryLocation::Register(asm::Register::Amd64(*reg)),
                         &spill_slot.into(),
                         &Origin::new_synth_codegen(),
                     );
