@@ -822,7 +822,7 @@ impl Emitter {
                     origin: ins.origin,
                 });
 
-                for reg in &scratch_regs {
+                for reg in scratch_regs.iter().rev() {
                     self.asm.push(Instruction {
                         kind: InstructionKind::Pop,
                         operands: vec![Operand::Register(*reg)],
