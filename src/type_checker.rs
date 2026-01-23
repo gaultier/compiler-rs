@@ -195,12 +195,7 @@ pub fn check_node(node: &mut Node, errs: &mut Vec<Error>, name_to_type: &mut Nam
         }
         crate::ast::NodeKind::FnCall { callee, args } => {
             let (ret_type, args_type) = match &*callee.typ.kind {
-                TypeKind::Function(ret_type, args_type) => {
-                    if args_type.len() != 1 {
-                        todo!()
-                    }
-                    (ret_type, args_type)
-                }
+                TypeKind::Function(ret_type, args_type) => (ret_type, args_type),
                 _ => {
                     // Trying to call a non-function.
                     // Cannot do more type checking here, so bail.
