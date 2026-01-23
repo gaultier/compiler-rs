@@ -74,6 +74,7 @@ pub struct FnDef {
     typ: Type,
     pub origin: Origin,
     pub stack_size: usize,
+    name_to_vreg: BTreeMap<String, VirtualRegister>,
 }
 
 impl Display for FnDef {
@@ -120,6 +121,7 @@ impl FnDef {
             typ: typ.clone(),
             origin,
             stack_size,
+            name_to_vreg: BTreeMap::new(),
         }
     }
 
@@ -312,8 +314,15 @@ impl Emitter {
                     typ: node.typ.clone(),
                 });
             }
-            crate::ast::NodeKind::Identifier(_) => {
-                todo!()
+            crate::ast::NodeKind::Identifier(identifier) => {
+                let vreg = *fn_def.name_to_vreg.get(identifier).unwrap();
+                let res_vreg = fn_def.make_vreg(&node.typ);
+                fn_def.instructions.push(Instruction {
+                    kind: InstructionKind::Set(Operand::new_vreg(vreg, &node.typ)),
+                    origin: node.origin,
+                    res_vreg: Some(res_vreg),
+                    typ: node.typ.clone(),
+                });
             }
             crate::ast::NodeKind::FnCall { callee, args } => {
                 // TODO: Support function pointers.
@@ -574,6 +583,9 @@ impl Emitter {
                 self.emit_node(fn_def, expr);
                 let op_vreg = fn_def.instructions.last().unwrap().res_vreg.unwrap();
                 let op_typ = fn_def.instructions.last().unwrap().typ.clone();
+
+                assert!(fn_def.name_to_vreg.get(identifier).is_none());
+                fn_def.name_to_vreg.insert(identifier.to_owned(), op_vreg);
 
                 fn_def.instructions.push(Instruction {
                     kind: InstructionKind::VarDecl(
