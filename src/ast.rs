@@ -39,6 +39,7 @@ pub enum NodeKind {
         block: Vec<Node>,
     },
     Block(Vec<Node>),
+    VarDecl(String, Box<Node>), // TODO: Vec in case of identifier list.
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
@@ -562,6 +563,36 @@ impl<'a> Parser<'a> {
         })
     }
 
+    // TODO: Support shot var decl: `x := 1`.
+    // TODO: Support more forms.
+    fn parse_statement_var_decl(&mut self) -> Option<Node> {
+        let var = self.match_kind(TokenKind::KeywordVar)?;
+        let identifier = self.expect_token_exactly_one(TokenKind::Identifier, "var declaration")?;
+        let eq = self.expect_token_exactly_one(TokenKind::Eq, "var declaration")?;
+        let expr = if let Some(expr) = self.parse_expr() {
+            expr
+        } else {
+            let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
+            self.add_error_with_explanation(
+                ErrorKind::MissingExpr,
+                eq.origin,
+                format!(
+                    "expected expression in variable declaration following '=' but found: {:?}",
+                    found
+                ),
+            );
+            return None;
+        };
+
+        let identifier_str = Self::str_from_source(self.input, &identifier.origin);
+
+        Some(Node {
+            kind: NodeKind::VarDecl(identifier_str.to_owned(), Box::new(expr)),
+            origin: var.origin,
+            typ: Type::new_any(),
+        })
+    }
+
     fn parse_statement(&mut self) -> Option<Node> {
         if self.error_mode {
             return None;
@@ -572,6 +603,10 @@ impl<'a> Parser<'a> {
         };
 
         if let Some(stmt) = self.parse_statement_for() {
+            return Some(stmt);
+        };
+
+        if let Some(stmt) = self.parse_statement_var_decl() {
             return Some(stmt);
         };
 
@@ -769,6 +804,9 @@ impl<'a> Parser<'a> {
                     node.typ = lhs.typ.clone();
                     assert_ne!(*node.typ.kind, TypeKind::Unknown);
                 }
+            }
+            NodeKind::VarDecl(identifier, expr) => {
+                todo!()
             }
             NodeKind::FnCall { callee, args } => {
                 self.resolve_node(callee);

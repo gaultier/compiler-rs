@@ -29,12 +29,15 @@ pub enum TokenKind {
     Eq,
     EqEq,
     Comma,
+    Colon,
+    ColonEq,
     Eof,
     KeywordPackage,
     KeywordFunc,
     KeywordIf,
     KeywordElse,
     KeywordFor,
+    KeywordVar,
     Unknown,
 }
 
@@ -94,6 +97,7 @@ impl Lexer {
             "if" => TokenKind::KeywordIf,
             "else" => TokenKind::KeywordElse,
             "for" => TokenKind::KeywordFor,
+            "var" => TokenKind::KeywordVar,
             _ => TokenKind::Identifier,
         };
 
@@ -180,6 +184,32 @@ impl Lexer {
                         origin,
                     });
                     self.advance(c, &mut it);
+                }
+                ':' => {
+                    if let Some(next) = it.peek()
+                        && *next == '='
+                    {
+                        let origin = Origin {
+                            len: 2,
+                            ..self.origin
+                        };
+                        self.tokens.push(Token {
+                            kind: TokenKind::ColonEq,
+                            origin,
+                        });
+                        self.advance(c, &mut it);
+                        self.advance(c, &mut it);
+                    } else {
+                        let origin = Origin {
+                            len: 1,
+                            ..self.origin
+                        };
+                        self.tokens.push(Token {
+                            kind: TokenKind::Colon,
+                            origin,
+                        });
+                        self.advance(c, &mut it);
+                    }
                 }
                 '=' => {
                     if let Some(next) = it.peek()
