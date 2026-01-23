@@ -197,17 +197,15 @@ pub fn compile(
     trace!("ast_nodes: {:#?}", ast_nodes);
     trace!("parser errors: {:#?}", parser.errors);
 
-    // TODO: ugly.
-    parser
-        .errors
-        .extend(type_checker::check_nodes(&mut ast_nodes));
-    trace!("after type checking: {:#?}", parser);
+    let mut name_to_type = parser.name_to_type;
+    let mut errors = parser.errors;
+    errors.extend(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type));
 
-    if !parser.errors.is_empty() {
+    if !errors.is_empty() {
         return CompileResult {
             lex_tokens: parser.tokens,
             ast_nodes,
-            errors: parser.errors,
+            errors,
             ..Default::default()
         };
     }
@@ -272,7 +270,7 @@ pub fn compile(
     CompileResult {
         lex_tokens: parser.tokens,
         ast_nodes,
-        errors: parser.errors,
+        errors,
         ir_fn_defs: ir_emitter.fn_defs,
         ir_text,
         ir_eval: ir::Eval::default(),

@@ -212,6 +212,7 @@ impl Lexer {
                     }
                 }
                 '=' => {
+                    self.advance(c, &mut it);
                     if let Some(next) = it.peek()
                         && *next == '='
                     {
@@ -224,7 +225,6 @@ impl Lexer {
                             origin,
                         });
                         self.advance(c, &mut it);
-                        self.advance(c, &mut it);
                     } else {
                         let origin = Origin {
                             len: 1,
@@ -234,7 +234,6 @@ impl Lexer {
                             kind: TokenKind::Eq,
                             origin,
                         });
-                        self.advance(c, &mut it);
                     }
                 }
                 '/' => {

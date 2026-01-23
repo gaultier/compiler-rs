@@ -585,11 +585,24 @@ impl<'a> Parser<'a> {
         };
 
         let identifier_str = Self::str_from_source(self.input, &identifier.origin);
+        if let Some((_, prev_origin)) = self.name_to_type.get(identifier_str) {
+            self.add_error_with_explanation(
+                ErrorKind::NameAlreadyDefined,
+                identifier.origin,
+                format!(
+                    "variable redefines existing name, defined here: {}",
+                    prev_origin.display(self.file_id_to_name)
+                ),
+            );
+        }
+        let typ = expr.typ.clone();
+        self.name_to_type
+            .insert(identifier_str.to_owned(), (typ.clone(), identifier.origin));
 
         Some(Node {
             kind: NodeKind::VarDecl(identifier_str.to_owned(), Box::new(expr)),
             origin: var.origin,
-            typ: Type::new_any(),
+            typ,
         })
     }
 
@@ -805,12 +818,11 @@ impl<'a> Parser<'a> {
                     assert_ne!(*node.typ.kind, TypeKind::Unknown);
                 }
             }
-            NodeKind::VarDecl(identifier, expr) => {
-                todo!()
+            NodeKind::VarDecl(_identifier, expr) => {
+                self.resolve_node(expr);
             }
             NodeKind::FnCall { callee, args } => {
                 self.resolve_node(callee);
-                dbg!(&callee.typ);
                 match &*callee.typ.kind {
                     TypeKind::Function(_, _) => {}
                     _ => {

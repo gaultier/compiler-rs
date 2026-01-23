@@ -566,6 +566,7 @@ impl Emitter {
         let ins = &all_ins[ins_idx];
 
         match &ins.kind {
+            ir::InstructionKind::VarDecl(_, _) => todo!(),
             ir::InstructionKind::IAdd(
                 ir::Operand {
                     kind: ir::OperandKind::VirtualRegister(lhs),
@@ -1901,7 +1902,6 @@ impl Instruction {
                     return Ok(());
                 };
                 let delta = *bin_loc as isize - w.len() as isize;
-                dbg!(delta, w.len(), *bin_loc);
 
                 let short_delta = delta - 2;
                 let near_delta = delta - 5;

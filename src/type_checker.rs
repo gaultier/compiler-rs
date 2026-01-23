@@ -6,7 +6,7 @@ use proptest_derive::Arbitrary;
 use serde::Serialize;
 
 use crate::{
-    ast::{Node, NodeKind},
+    ast::{NameToType, Node, NodeKind},
     error::Error,
     origin::Origin,
 };
@@ -136,17 +136,26 @@ impl Type {
     }
 }
 
-pub fn check_node(node: &mut Node, errs: &mut Vec<Error>) {
+pub fn check_node(node: &mut Node, errs: &mut Vec<Error>, name_to_type: &mut NameToType) {
     match &mut node.kind {
         crate::ast::NodeKind::Package(_) => {}
+        NodeKind::VarDecl(identifier, expr) => {
+            check_node(expr, errs, name_to_type);
+
+            if *node.typ.kind == TypeKind::Any {
+                node.typ = expr.typ.clone();
+
+                name_to_type.get_mut(identifier).unwrap().0 = node.typ.clone();
+            }
+        }
         NodeKind::For { cond, block } => {
             assert_eq!(*node.typ.kind, TypeKind::Void);
             if let Some(cond) = cond {
-                check_node(cond, errs);
+                check_node(cond, errs, name_to_type);
             }
 
             for stmt in block {
-                check_node(stmt, errs);
+                check_node(stmt, errs, name_to_type);
             }
         }
         crate::ast::NodeKind::FnDef { name: _, body } => match &*node.typ.kind {
@@ -165,7 +174,7 @@ pub fn check_node(node: &mut Node, errs: &mut Vec<Error>) {
                 }
 
                 for node in body {
-                    check_node(node, errs);
+                    check_node(node, errs, name_to_type);
                 }
             }
             _ => panic!("invalid type for function definition"),
@@ -207,7 +216,7 @@ pub fn check_node(node: &mut Node, errs: &mut Vec<Error>) {
             }
 
             for (i, arg) in args.iter_mut().enumerate() {
-                check_node(arg, errs);
+                check_node(arg, errs, name_to_type);
 
                 let _typ = match arg.typ.merge(&args_type[i]) {
                     Err(err) => {
@@ -227,8 +236,8 @@ pub fn check_node(node: &mut Node, errs: &mut Vec<Error>) {
         crate::ast::NodeKind::Add(lhs, rhs)
         | crate::ast::NodeKind::Multiply(lhs, rhs)
         | crate::ast::NodeKind::Divide(lhs, rhs) => {
-            check_node(lhs, errs);
-            check_node(rhs, errs);
+            check_node(lhs, errs, name_to_type);
+            check_node(rhs, errs, name_to_type);
 
             let typ = lhs.typ.merge(&rhs.typ);
             match typ {
@@ -244,8 +253,8 @@ pub fn check_node(node: &mut Node, errs: &mut Vec<Error>) {
             // Set by the parser.
             assert_eq!(*node.typ.kind, TypeKind::Bool);
 
-            check_node(lhs, errs);
-            check_node(rhs, errs);
+            check_node(lhs, errs, name_to_type);
+            check_node(rhs, errs, name_to_type);
 
             let typ = lhs.typ.merge(&rhs.typ);
             if let Err(err) = typ {
@@ -257,27 +266,27 @@ pub fn check_node(node: &mut Node, errs: &mut Vec<Error>) {
             then_block,
             else_block,
         } => {
-            check_node(cond, errs);
+            check_node(cond, errs, name_to_type);
             if let Some(then_block) = then_block {
-                check_node(then_block, errs);
+                check_node(then_block, errs, name_to_type);
             }
             if let Some(else_block) = else_block {
-                check_node(else_block, errs);
+                check_node(else_block, errs, name_to_type);
             }
         }
         crate::ast::NodeKind::Block(stmts) => {
             for node in stmts {
-                check_node(node, errs);
+                check_node(node, errs, name_to_type);
             }
         }
     }
 }
 
-pub fn check_nodes(nodes: &mut [Node]) -> Vec<Error> {
+pub fn check_nodes(nodes: &mut [Node], name_to_type: &mut NameToType) -> Vec<Error> {
     let mut errs = Vec::new();
 
     for node in nodes {
-        check_node(node, &mut errs);
+        check_node(node, &mut errs, name_to_type);
     }
 
     errs

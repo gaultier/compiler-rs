@@ -23,6 +23,7 @@ pub enum InstructionKind {
     JumpIfFalse(String, Operand),
     Jump(String),
     LabelDef(String),
+    VarDecl(String, Operand),
 }
 
 #[derive(Serialize, Debug)]
@@ -144,6 +145,21 @@ impl FnDef {
         for (i, ins) in self.instructions.iter().enumerate() {
             let i = i as u32;
             match &ins.kind {
+                InstructionKind::VarDecl(_, op) => {
+                    if let Some(res_vreg) = ins.res_vreg {
+                        assert!(res_vreg.0 > 0);
+                        let live_range = LiveRange { start: i, end: i };
+                        res.insert(res_vreg, live_range);
+                    }
+
+                    if let Operand {
+                        kind: OperandKind::VirtualRegister(vreg),
+                        ..
+                    } = op
+                    {
+                        Self::extend_live_range_on_use(*vreg, i, &mut res);
+                    }
+                }
                 InstructionKind::FnCall(_, operands) => {
                     if let Some(res_vreg) = ins.res_vreg {
                         assert!(res_vreg.0 > 0);
@@ -316,7 +332,6 @@ impl Emitter {
                 let arg_type = callee.typ.to_string();
                 let arg0_typ = args.first().map(|x| x.typ.to_string()).unwrap_or_default();
                 let real_fn_name = fn_name_ast_to_ir(ast_fn_name, &arg_type, &arg0_typ);
-                dbg!(&real_fn_name, &arg_type, &arg0_typ);
 
                 // Check type.
                 let (res_vreg, ret_type) = match &*callee.typ.kind {
@@ -557,6 +572,25 @@ impl Emitter {
                     });
                 }
             }
+            NodeKind::VarDecl(identifier, expr) => {
+                self.emit_node(fn_def, expr);
+                let op_vreg = fn_def.instructions.last().unwrap().res_vreg.unwrap();
+                let op_typ = fn_def.instructions.last().unwrap().typ.clone();
+                let res_vreg = fn_def.make_vreg(&node.typ);
+
+                fn_def.instructions.push(Instruction {
+                    kind: InstructionKind::VarDecl(
+                        identifier.clone(),
+                        Operand {
+                            kind: OperandKind::VirtualRegister(op_vreg),
+                            typ: op_typ,
+                        },
+                    ),
+                    origin: node.origin,
+                    res_vreg: Some(res_vreg),
+                    typ: node.typ.clone(),
+                });
+            }
         }
     }
 
@@ -670,6 +704,9 @@ impl Display for Instruction {
             InstructionKind::LabelDef(op) => {
                 write!(f, "label {}", op)?;
             }
+            InstructionKind::VarDecl(identifier, op) => {
+                write!(f, "var_decl {} {}", identifier, op)?;
+            }
         }
 
         writeln!(f)
@@ -767,6 +804,7 @@ pub fn eval(irs: &[Instruction]) -> Eval {
         let ir = &irs[pc];
 
         match &ir.kind {
+            InstructionKind::VarDecl(identifier, op) => todo!(),
             InstructionKind::JumpIfFalse(label, cond) => {
                 let vreg = cond.as_vreg().unwrap();
                 let val = eval.vregs.get(&vreg).unwrap();
@@ -940,7 +978,9 @@ mod tests {
         let mut ast_nodes = parser.parse();
         assert!(parser.errors.is_empty());
 
-        assert!(type_checker::check_nodes(&mut ast_nodes).is_empty());
+        let mut name_to_type = parser.name_to_type;
+
+        assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
 
         let mut ir_emitter = super::Emitter::new();
         ir_emitter.emit(&ast_nodes);
@@ -972,7 +1012,8 @@ mod tests {
         let mut ast_nodes = parser.parse();
         assert!(parser.errors.is_empty());
 
-        assert!(type_checker::check_nodes(&mut ast_nodes).is_empty());
+        let mut name_to_type = parser.name_to_type;
+        assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
 
         let mut ir_emitter = super::Emitter::new();
         ir_emitter.emit(&ast_nodes);
@@ -1004,7 +1045,8 @@ mod tests {
         let mut ast_nodes = parser.parse();
         assert!(parser.errors.is_empty());
 
-        assert!(type_checker::check_nodes(&mut ast_nodes).is_empty());
+        let mut name_to_type = parser.name_to_type;
+        assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
 
         let mut ir_emitter = super::Emitter::new();
         ir_emitter.emit(&ast_nodes);
@@ -1037,7 +1079,8 @@ mod tests {
         let mut ast_nodes = parser.parse();
         assert!(parser.errors.is_empty());
 
-        let type_errors = type_checker::check_nodes(&mut ast_nodes);
+        let mut name_to_type = parser.name_to_type;
+        let type_errors = type_checker::check_nodes(&mut ast_nodes, &mut name_to_type);
         assert!(type_errors.is_empty(), "{:#?}", type_errors);
 
         let mut ir_emitter = super::Emitter::new();
@@ -1072,7 +1115,8 @@ mod tests {
         let mut ast_nodes = parser.parse();
         assert!(parser.errors.is_empty());
 
-        assert!(type_checker::check_nodes(&mut ast_nodes).is_empty());
+        let mut name_to_type = parser.name_to_type;
+        assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
 
         let mut ir_emitter = super::Emitter::new();
         ir_emitter.emit(&ast_nodes);
@@ -1106,7 +1150,8 @@ mod tests {
         let mut ast_nodes = parser.parse();
         assert!(parser.errors.is_empty());
 
-        assert!(type_checker::check_nodes(&mut ast_nodes).is_empty());
+        let mut name_to_type = parser.name_to_type;
+        assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
 
         let mut ir_emitter = super::Emitter::new();
         ir_emitter.emit(&ast_nodes);
@@ -1144,7 +1189,8 @@ func main() {
         let mut ast_nodes = parser.parse();
         assert!(parser.errors.is_empty());
 
-        assert!(type_checker::check_nodes(&mut ast_nodes).is_empty());
+        let mut name_to_type = parser.name_to_type;
+        assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
 
         let mut ir_emitter = super::Emitter::new();
         ir_emitter.emit(&ast_nodes);
@@ -1182,7 +1228,8 @@ func main() {
         let mut ast_nodes = parser.parse();
         assert!(parser.errors.is_empty());
 
-        assert!(type_checker::check_nodes(&mut ast_nodes).is_empty());
+        let mut name_to_type = parser.name_to_type;
+        assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
 
         let mut ir_emitter = super::Emitter::new();
         ir_emitter.emit(&ast_nodes);
@@ -1220,7 +1267,8 @@ func main() {
         let mut ast_nodes = parser.parse();
         assert!(parser.errors.is_empty());
 
-        assert!(type_checker::check_nodes(&mut ast_nodes).is_empty());
+        let mut name_to_type = parser.name_to_type;
+        assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
 
         let mut ir_emitter = super::Emitter::new();
         ir_emitter.emit(&ast_nodes);
@@ -1258,7 +1306,8 @@ func main() {
         let mut ast_nodes = parser.parse();
         assert!(parser.errors.is_empty());
 
-        assert!(type_checker::check_nodes(&mut ast_nodes).is_empty());
+        let mut name_to_type = parser.name_to_type;
+        assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
 
         let mut ir_emitter = super::Emitter::new();
         ir_emitter.emit(&ast_nodes);
