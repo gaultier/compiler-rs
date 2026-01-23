@@ -784,12 +784,25 @@ impl Emitter {
                 );
             }
             ir::InstructionKind::Set(_) => unimplemented!(),
-            ir::InstructionKind::FnCall(fn_name, args) if fn_name == "builtin.println_int" => {
-                let vreg: ir::VirtualRegister = args[0].as_vreg().unwrap();
-                let arg: Operand = vreg_to_memory_location.get(&vreg).unwrap().into();
-
+            ir::InstructionKind::FnCall(fn_name, args) => {
                 // > Functions preserve the registers rbx, rsp, rbp, r12, r13, r14, and r15;
                 // > while rax, rdi, rsi, rdx, rcx, r8, r9, r10, r11 are scratch registers.
+
+                // Sys-V calling convention.
+                // > Parameters to functions are passed in via the registers rdi, rsi, rdx, rcx, r8, and r9.
+                let arg_regs = [
+                    Register::Rdi,
+                    Register::Rsi,
+                    Register::Rdx,
+                    Register::Rcx,
+                    Register::R8,
+                    Register::R9,
+                ];
+
+                if args.len() > arg_regs.len() {
+                    // TODO: Use stack.
+                    todo!()
+                }
 
                 let scratch_regs = [
                     Register::Rax,
@@ -810,11 +823,16 @@ impl Emitter {
                     });
                 }
 
-                self.emit_store(
-                    &MemoryLocation::Register(asm::Register::Amd64(Register::Rdi)),
-                    &arg,
-                    &Origin::new_synth_codegen(),
-                );
+                for (arg, dst_reg) in args.iter().zip(arg_regs) {
+                    let vreg = arg.as_vreg().unwrap();
+                    let src = vreg_to_memory_location.get(&vreg).unwrap().into();
+
+                    self.asm.push(Instruction {
+                        kind: InstructionKind::Mov,
+                        operands: vec![Operand::Register(dst_reg), src],
+                        origin: Origin::new_synth_codegen(),
+                    });
+                }
 
                 self.asm.push(Instruction {
                     kind: InstructionKind::Call,
@@ -830,7 +848,6 @@ impl Emitter {
                     });
                 }
             }
-            ir::InstructionKind::FnCall(_, _) => todo!(),
             ir::InstructionKind::ICmp(
                 ir::Operand {
                     kind: ir::OperandKind::VirtualRegister(lhs),
