@@ -2,3 +2,4 @@ target/
 *.js
 *.ts
 *.wasm
+hello.bin
