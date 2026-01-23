@@ -351,6 +351,7 @@ pub(crate) fn encode(instructions: &[asm::Instruction], target: &Target) -> Enco
 
     for ins in instructions {
         let asm::Instruction::Amd64(ins) = ins;
+
         ins.encode(
             &mut w,
             &symbols,
@@ -809,6 +810,7 @@ impl Emitter {
                     Register::Rdi,
                     Register::Rsi,
                     Register::Rdx,
+                    Register::Rcx,
                     Register::R8,
                     Register::R9,
                     Register::R10,
@@ -834,6 +836,7 @@ impl Emitter {
                     });
                 }
 
+                // FIXME: Stack should be 16 byte aligned at this point.
                 self.asm.push(Instruction {
                     kind: InstructionKind::Call,
                     operands: vec![Operand::FnName(fn_name.clone())],
