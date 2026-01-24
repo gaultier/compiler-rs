@@ -148,6 +148,8 @@ pub fn check_node(
             if *node.typ.kind == TypeKind::Any {
                 node.typ = expr.typ.clone();
 
+                // FIXME: Since the current scope gets popped
+                // when exiting it, we lose information.
                 var_name_to_type
                     .get_mut(identifier)
                     .unwrap()
