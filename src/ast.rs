@@ -52,7 +52,8 @@ pub struct Node {
 #[derive(Serialize, Clone, Copy, Debug)]
 pub struct NodeIndex(usize);
 
-pub type NameToType = BTreeMap<String, (Type, Origin)>;
+pub type FnNameToType = BTreeMap<String, (Type, Origin)>;
+pub type VarNameToType = HashMap<String, Vec<(Type, Origin, usize /* Scope */)>>;
 
 #[derive(Debug)]
 pub struct Parser<'a> {
@@ -61,7 +62,9 @@ pub struct Parser<'a> {
     tokens_consumed: usize,
     pub errors: Vec<Error>,
     input: &'a str,
-    pub name_to_type: NameToType,
+    pub fn_name_to_type: FnNameToType,
+    pub var_name_to_type: VarNameToType,
+    current_scope: usize,
     file_id_to_name: &'a HashMap<FileId, String>,
 }
 
@@ -85,8 +88,10 @@ impl<'a> Parser<'a> {
             tokens_consumed: 0,
             errors: lexer.errors.clone(),
             input,
-            name_to_type: NameToType::new(),
+            fn_name_to_type: FnNameToType::new(),
+            var_name_to_type: VarNameToType::new(),
             file_id_to_name,
+            current_scope: 0,
         }
     }
 
@@ -585,19 +590,7 @@ impl<'a> Parser<'a> {
         };
 
         let identifier_str = Self::str_from_source(self.input, &identifier.origin);
-        if let Some((_, prev_origin)) = self.name_to_type.get(identifier_str) {
-            self.add_error_with_explanation(
-                ErrorKind::NameAlreadyDefined,
-                identifier.origin,
-                format!(
-                    "variable redefines existing name, defined here: {}",
-                    prev_origin.display(self.file_id_to_name)
-                ),
-            );
-        }
         let typ = expr.typ.clone();
-        self.name_to_type
-            .insert(identifier_str.to_owned(), (typ.clone(), identifier.origin));
 
         Some(Node {
             kind: NodeKind::VarDecl(identifier_str.to_owned(), Box::new(expr)),
@@ -751,7 +744,7 @@ impl<'a> Parser<'a> {
         let mut decls = Vec::new();
         let builtins_nodes = Self::builtins(self.tokens.len());
         decls.extend_from_slice(&builtins_nodes);
-        self.name_to_type = NameToType::new();
+        self.fn_name_to_type = FnNameToType::new();
 
         if let Some(p) = self.parse_package_clause() {
             decls.push(p);
@@ -801,7 +794,11 @@ impl<'a> Parser<'a> {
             NodeKind::Package(_) | NodeKind::Number(_) | NodeKind::Bool(_) => {}
 
             NodeKind::Identifier(name) => {
-                if let Some((t, _)) = self.name_to_type.get(name) {
+                if let Some((t, _)) = self.fn_name_to_type.get(name) {
+                    node.typ = t.clone();
+                } else if let Some(scopes) = self.var_name_to_type.get(name)
+                    && let Some((t, _, _)) = scopes.last()
+                {
                     node.typ = t.clone();
                 }
             }
@@ -818,8 +815,30 @@ impl<'a> Parser<'a> {
                     assert_ne!(*node.typ.kind, TypeKind::Any);
                 }
             }
-            NodeKind::VarDecl(_identifier, expr) => {
+            NodeKind::VarDecl(identifier, expr) => {
                 self.resolve_node(expr);
+
+                if let Some(scopes) = self.var_name_to_type.get(identifier)
+                    && scopes
+                        .last()
+                        .map(|(_, _, scope)| *scope)
+                        .unwrap_or_default()
+                        == self.current_scope
+                {
+                    let prev_origin = scopes.last().map(|(_, origin, _)| origin).unwrap();
+                    self.add_error_with_explanation(
+                        ErrorKind::NameAlreadyDefined,
+                        node.origin,
+                        format!(
+                            "variable redefines existing name, defined here: {}",
+                            prev_origin.display(self.file_id_to_name)
+                        ),
+                    );
+                }
+                self.var_name_to_type
+                    .entry(identifier.to_owned())
+                    .or_default()
+                    .push((node.typ.clone(), node.origin, self.current_scope));
             }
             NodeKind::FnCall { callee, args } => {
                 self.resolve_node(callee);
@@ -850,7 +869,7 @@ impl<'a> Parser<'a> {
             }
             NodeKind::FnDef { name, body } => {
                 assert!(matches!(&*node.typ.kind, TypeKind::Function(_, _)));
-                if let Some((old_typ, old_origin)) = self.name_to_type.get(name) {
+                if let Some((old_typ, old_origin)) = self.fn_name_to_type.get(name) {
                     self.errors.push(Error::new_name_already_defined(
                         old_typ,
                         &node.typ,
@@ -860,13 +879,19 @@ impl<'a> Parser<'a> {
                         self.file_id_to_name,
                     ));
                 } else {
-                    self.name_to_type
+                    self.fn_name_to_type
                         .insert(name.to_owned(), (node.typ.clone(), node.origin));
                 }
+
+                // TODO: When supporting global variables and closures, this needs to be smarter
+                // and only remove some entries.
+                self.var_name_to_type.clear();
 
                 for op in body {
                     self.resolve_node(op)
                 }
+
+                self.var_name_to_type.clear();
             }
             NodeKind::If {
                 cond,

@@ -197,9 +197,14 @@ pub fn compile(
     trace!("ast_nodes: {:#?}", ast_nodes);
     trace!("parser errors: {:#?}", parser.errors);
 
-    let mut name_to_type = parser.name_to_type;
+    let mut fn_name_to_type = parser.fn_name_to_type;
+    let mut var_name_to_type = parser.var_name_to_type;
     let mut errors = parser.errors;
-    errors.extend(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type));
+    errors.extend(type_checker::check_nodes(
+        &mut ast_nodes,
+        &mut fn_name_to_type,
+        &mut var_name_to_type,
+    ));
 
     if !errors.is_empty() {
         return CompileResult {
