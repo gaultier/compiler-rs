@@ -11,35 +11,39 @@ use crate::{
 };
 use serde::Serialize;
 
+// TODO: u32?
+#[derive(Serialize, Clone, PartialEq, Eq, Debug)]
+struct NodeId(usize);
+
 #[derive(Serialize, Clone, PartialEq, Eq, Debug)]
 pub enum NodeKind {
     Number(u64),
     Bool(bool),
-    Add(Box<Node>, Box<Node>),
-    Multiply(Box<Node>, Box<Node>),
-    Divide(Box<Node>, Box<Node>),
-    Cmp(Box<Node>, Box<Node>),
+    Add(NodeId, NodeId),
+    Multiply(NodeId, NodeId),
+    Divide(NodeId, NodeId),
+    Cmp(NodeId, NodeId),
     Identifier(String),
     FnCall {
-        callee: Box<Node>,
-        args: Vec<Node>,
+        callee: NodeId,
+        args: Vec<NodeId>,
     },
     FnDef {
         name: String,
-        body: Vec<Node>,
+        body: Vec<NodeId>,
     },
     Package(String),
     If {
-        cond: Box<Node>,
-        then_block: Option<Box<Node>>,
-        else_block: Option<Box<Node>>,
+        cond: NodeId,
+        then_block: NodeId,
+        else_block: NodeId,
     },
     For {
-        cond: Option<Box<Node>>,
-        block: Vec<Node>,
+        cond: Option<NodeId>,
+        block: Vec<NodeId>,
     },
-    Block(Vec<Node>),
-    VarDecl(String, Box<Node>), // TODO: Vec in case of identifier list.
+    Block(Vec<NodeId>),
+    VarDecl(String, NodeId), // TODO: Vec in case of identifier list.
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
@@ -48,9 +52,6 @@ pub struct Node {
     pub origin: Origin,
     pub typ: Type,
 }
-
-#[derive(Serialize, Clone, Copy, Debug)]
-pub struct NodeIndex(usize);
 
 pub type FnNameToType = BTreeMap<String, (Type, Origin)>;
 pub type VarNameToType = HashMap<String, Vec<(Type, Origin, usize /* Scope */)>>;
@@ -66,14 +67,7 @@ pub struct Parser<'a> {
     pub var_name_to_type: VarNameToType,
     current_scope: usize,
     file_id_to_name: &'a HashMap<FileId, String>,
-}
-
-impl std::ops::Index<NodeIndex> for [Node] {
-    type Output = Node;
-
-    fn index(&self, index: NodeIndex) -> &Self::Output {
-        &self[index.0]
-    }
+    nodes: Vec<Node>,
 }
 
 impl<'a> Parser<'a> {
@@ -92,11 +86,17 @@ impl<'a> Parser<'a> {
             var_name_to_type: VarNameToType::new(),
             file_id_to_name,
             current_scope: 0,
+            nodes: Vec::new(),
         }
     }
 
-    pub(crate) fn builtins(cap_hint: usize) -> Vec<Node> {
-        let mut nodes = Vec::with_capacity(cap_hint);
+    fn new_node(&mut self, node: Node) -> NodeId {
+        self.nodes.push(node);
+        NodeId(self.nodes.len() - 1)
+    }
+
+    pub(crate) fn builtins(&mut self, cap_hint: usize) -> Vec<NodeId> {
+        let mut res = Vec::with_capacity(cap_hint);
 
         let origin = Origin::new_builtin();
         let typ = Type::new_function(
@@ -105,16 +105,16 @@ impl<'a> Parser<'a> {
             &Origin::new_builtin(),
         );
 
-        nodes.push(Node {
+        res.push(self.new_node(Node {
             kind: NodeKind::FnDef {
                 name: String::from("println"),
                 body: Vec::new(),
             },
             origin,
             typ,
-        });
+        }));
 
-        nodes
+        res
     }
 
     fn peek_token(&self) -> Option<&Token> {
@@ -178,7 +178,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_primary(&mut self) -> Option<Node> {
+    fn parse_primary(&mut self) -> Option<NodeId> {
         if self.error_mode {
             return None;
         }
@@ -196,38 +196,38 @@ impl<'a> Parser<'a> {
                     return None;
                 }
             };
-            return Some(Node {
+            return Some(self.new_node(Node {
                 kind: NodeKind::Number(num),
                 origin: token.origin,
                 typ: Type::new_int(),
-            });
+            }));
         }
         if let Some(token) = self.match_kind(TokenKind::LiteralBool) {
             let src = &self.input[token.origin.offset as usize..][..token.origin.len as usize];
 
             assert!(src == "true" || src == "false");
 
-            return Some(Node {
+            return Some(self.new_node(Node {
                 kind: NodeKind::Bool(src == "true"),
                 origin: token.origin,
                 typ: Type::new_bool(),
-            });
+            }));
         }
 
         if let Some(token) = self.match_kind(TokenKind::Identifier) {
-            return Some(Node {
+            return Some(self.new_node(Node {
                 kind: NodeKind::Identifier(
                     Self::str_from_source(self.input, &token.origin).to_owned(),
                 ),
                 origin: token.origin,
                 typ: Type::default(), // Will be resolved.
-            });
+            }));
         }
 
         None
     }
 
-    fn parse_expr(&mut self) -> Option<Node> {
+    fn parse_expr(&mut self) -> Option<NodeId> {
         if self.error_mode {
             return None;
         }
@@ -235,28 +235,28 @@ impl<'a> Parser<'a> {
         self.parse_assignment()
     }
 
-    fn parse_assignment(&mut self) -> Option<Node> {
+    fn parse_assignment(&mut self) -> Option<NodeId> {
         if self.error_mode {
             return None;
         }
         self.parse_logic_or()
     }
 
-    fn parse_logic_or(&mut self) -> Option<Node> {
+    fn parse_logic_or(&mut self) -> Option<NodeId> {
         if self.error_mode {
             return None;
         }
         self.parse_logic_and()
     }
 
-    fn parse_logic_and(&mut self) -> Option<Node> {
+    fn parse_logic_and(&mut self) -> Option<NodeId> {
         if self.error_mode {
             return None;
         }
         self.parse_equality()
     }
 
-    fn parse_equality(&mut self) -> Option<Node> {
+    fn parse_equality(&mut self) -> Option<NodeId> {
         if self.error_mode {
             return None;
         }
@@ -264,11 +264,11 @@ impl<'a> Parser<'a> {
         let lhs = self.parse_comparison()?;
         if let Some(eq) = self.match_kind(TokenKind::EqEq) {
             if let Some(rhs) = self.parse_expr() {
-                Some(Node {
-                    kind: NodeKind::Cmp(Box::new(lhs), Box::new(rhs)),
+                Some(self.new_node(Node {
+                    kind: NodeKind::Cmp(lhs, rhs),
                     origin: eq.origin,
                     typ: Type::new_bool(),
-                })
+                }))
             } else {
                 let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
                 self.add_error_with_explanation(
@@ -283,14 +283,14 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_comparison(&mut self) -> Option<Node> {
+    fn parse_comparison(&mut self) -> Option<NodeId> {
         if self.error_mode {
             return None;
         }
         self.parse_term()
     }
 
-    fn parse_term(&mut self) -> Option<Node> {
+    fn parse_term(&mut self) -> Option<NodeId> {
         if self.error_mode {
             return None;
         }
@@ -312,14 +312,14 @@ impl<'a> Parser<'a> {
                 None
             })?;
 
-        Some(Node {
-            kind: NodeKind::Add(Box::new(lhs), Box::new(rhs)),
+        Some(self.new_node(Node {
+            kind: NodeKind::Add(lhs, rhs),
             origin: token.origin,
             typ: Type::default(),
-        })
+        }))
     }
 
-    fn parse_factor(&mut self) -> Option<Node> {
+    fn parse_factor(&mut self) -> Option<NodeId> {
         if self.error_mode {
             return None;
         }
@@ -340,35 +340,35 @@ impl<'a> Parser<'a> {
                 None
             })?;
 
-        Some(Node {
+        Some(self.new_node(Node {
             kind: if token.kind == TokenKind::Star {
-                NodeKind::Multiply(Box::new(lhs), Box::new(rhs))
+                NodeKind::Multiply(lhs, rhs)
             } else {
-                NodeKind::Divide(Box::new(lhs), Box::new(rhs))
+                NodeKind::Divide(lhs, rhs)
             },
             origin: token.origin,
             typ: Type::default(),
-        })
+        }))
     }
 
-    fn parse_unary(&mut self) -> Option<Node> {
+    fn parse_unary(&mut self) -> Option<NodeId> {
         if self.error_mode {
             return None;
         }
         self.parse_call()
     }
 
-    fn parse_call(&mut self) -> Option<Node> {
+    fn parse_call(&mut self) -> Option<NodeId> {
         if self.error_mode {
             return None;
         }
 
-        let f = self.parse_primary()?;
+        let callee = self.parse_primary()?;
 
         let lparen = if let Some(lparen) = self.match_kind(TokenKind::LeftParen) {
             lparen
         } else {
-            return Some(f);
+            return Some(callee);
         };
 
         let mut args = Vec::new();
@@ -432,23 +432,20 @@ impl<'a> Parser<'a> {
 
         self.expect_token_exactly_one(TokenKind::RightParen, "function call")?;
 
-        Some(Node {
-            kind: NodeKind::FnCall {
-                callee: Box::new(f),
-                args,
-            },
+        Some(self.new_node(Node {
+            kind: NodeKind::FnCall { callee, args },
             origin: lparen.origin,
             typ: Type::default(),
-        })
+        }))
     }
 
-    fn parse_statement_for(&mut self) -> Option<Node> {
+    fn parse_statement_for(&mut self) -> Option<NodeId> {
         if self.error_mode {
             return None;
         }
 
         let keyword_for = self.match_kind(TokenKind::KeywordFor)?;
-        let cond: Option<Box<Node>> = if self.match_kind(TokenKind::LeftCurly).is_some() {
+        let cond: Option<NodeId> = if self.match_kind(TokenKind::LeftCurly).is_some() {
             None
         } else {
             let cond = if let Some(cond) = self.parse_expr() {
@@ -463,7 +460,7 @@ impl<'a> Parser<'a> {
             };
 
             self.expect_token_exactly_one(TokenKind::LeftCurly, "for body")?;
-            Some(Box::new(cond))
+            Some(cond)
         };
 
         let mut stmts = Vec::new();
@@ -483,14 +480,14 @@ impl<'a> Parser<'a> {
         }
         self.expect_token_exactly_one(TokenKind::RightCurly, "for body")?;
 
-        Some(Node {
+        Some(self.new_node(Node {
             kind: NodeKind::For { cond, block: stmts },
             origin: keyword_for.origin,
             typ: Type::new_void(),
-        })
+        }))
     }
 
-    fn parse_statement_if(&mut self) -> Option<Node> {
+    fn parse_statement_if(&mut self) -> Option<NodeId> {
         if self.error_mode {
             return None;
         }
@@ -517,17 +514,13 @@ impl<'a> Parser<'a> {
         }
         self.expect_token_exactly_one(TokenKind::RightCurly, "then body")?;
 
-        let then_block = if stmts.is_empty() {
-            None
-        } else {
-            Some(Box::new(Node {
-                kind: NodeKind::Block(stmts),
-                origin: left_curly.origin,
-                typ: Type::new_void(),
-            }))
-        };
+        let then_block = self.new_node(Node {
+            kind: NodeKind::Block(stmts),
+            origin: left_curly.origin,
+            typ: Type::new_void(),
+        });
 
-        let else_block = if self.match_kind(TokenKind::KeywordElse).is_some() {
+        let else_stmts = if self.match_kind(TokenKind::KeywordElse).is_some() {
             let left_curly = self.expect_token_exactly_one(TokenKind::LeftCurly, "else body")?;
             let mut stmts = Vec::new();
             for _ in 0..self.remaining_tokens_count() {
@@ -544,33 +537,30 @@ impl<'a> Parser<'a> {
                 stmts.push(stmt);
             }
             self.expect_token_exactly_one(TokenKind::RightCurly, "else body")?;
-            if stmts.is_empty() {
-                None
-            } else {
-                Some(Box::new(Node {
-                    kind: NodeKind::Block(stmts),
-                    origin: left_curly.origin,
-                    typ: Type::new_void(),
-                }))
-            }
+            stmts
         } else {
-            None
+            Vec::new()
         };
+        let else_block = self.new_node(Node {
+            kind: NodeKind::Block(stmts),
+            origin: left_curly.origin,
+            typ: Type::new_void(),
+        });
 
-        Some(Node {
+        Some(self.new_node(Node {
             kind: NodeKind::If {
-                cond: Box::new(cond),
+                cond,
                 then_block,
                 else_block,
             },
             origin: keyword_if.origin,
             typ: Type::new_void(),
-        })
+        }))
     }
 
     // TODO: Support shot var decl: `x := 1`.
     // TODO: Support more forms.
-    fn parse_statement_var_decl(&mut self) -> Option<Node> {
+    fn parse_statement_var_decl(&mut self) -> Option<NodeId> {
         let var = self.match_kind(TokenKind::KeywordVar)?;
         let identifier = self.expect_token_exactly_one(TokenKind::Identifier, "var declaration")?;
         let eq = self.expect_token_exactly_one(TokenKind::Eq, "var declaration")?;
@@ -590,16 +580,16 @@ impl<'a> Parser<'a> {
         };
 
         let identifier_str = Self::str_from_source(self.input, &identifier.origin);
-        let typ = expr.typ.clone();
+        let typ = self.nodes[expr].typ.clone();
 
-        Some(Node {
-            kind: NodeKind::VarDecl(identifier_str.to_owned(), Box::new(expr)),
+        Some(self.new_node(Node {
+            kind: NodeKind::VarDecl(identifier_str.to_owned(), expr),
             origin: var.origin,
             typ,
-        })
+        }))
     }
 
-    fn parse_statement(&mut self) -> Option<Node> {
+    fn parse_statement(&mut self) -> Option<NodeId> {
         if self.error_mode {
             return None;
         }
@@ -637,7 +627,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_package_clause(&mut self) -> Option<Node> {
+    fn parse_package_clause(&mut self) -> Option<NodeId> {
         self.expect_token_exactly_one(TokenKind::KeywordPackage, "package clause")?;
 
         let package = if let Some(p) = self.match_kind(TokenKind::Identifier) {
@@ -651,11 +641,11 @@ impl<'a> Parser<'a> {
             return None;
         };
 
-        Some(Node {
+        Some(self.new_node(Node {
             kind: NodeKind::Package(Self::str_from_source(self.input, &package.origin).to_owned()),
             origin: package.origin,
             typ: Type::new_void(),
-        })
+        }))
     }
 
     fn str_from_source(src: &'a str, origin: &Origin) -> &'a str {
@@ -679,7 +669,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_function_declaration(&mut self) -> Option<Node> {
+    fn parse_function_declaration(&mut self) -> Option<NodeId> {
         let func = self.expect_token_exactly_one(TokenKind::KeywordFunc, "function declaration")?;
 
         let name = if let Some(name) = self.match_kind(TokenKind::Identifier) {
@@ -721,17 +711,17 @@ impl<'a> Parser<'a> {
 
         self.expect_token_exactly_one(TokenKind::RightCurly, "function declaration")?;
 
-        Some(Node {
+        Some(self.new_node(Node {
             kind: NodeKind::FnDef {
                 name: Self::str_from_source(self.input, &name.origin).to_owned(),
                 body: stmts,
             },
             origin: func.origin,
             typ: Type::new_function(&Type::new_void(), &[], &func.origin), // TODO
-        })
+        }))
     }
 
-    fn parse_declaration(&mut self) -> Option<Node> {
+    fn parse_declaration(&mut self) -> Option<NodeId> {
         if let Some(fn_def) = self.parse_function_declaration() {
             return Some(fn_def);
         }
@@ -740,10 +730,10 @@ impl<'a> Parser<'a> {
     }
 
     #[warn(unused_results)]
-    pub fn parse(&mut self) -> Vec<Node> {
+    pub fn parse(&mut self) -> Vec<NodeId> {
         let mut decls = Vec::new();
-        let builtins_nodes = Self::builtins(self.tokens.len());
-        decls.extend_from_slice(&builtins_nodes);
+        let builtins = self.builtins(self.tokens.len());
+        decls.extend(builtins);
         self.fn_name_to_type = FnNameToType::new();
 
         if let Some(p) = self.parse_package_clause() {
@@ -788,7 +778,8 @@ impl<'a> Parser<'a> {
         decls
     }
 
-    fn resolve_node(&mut self, node: &mut Node) {
+    fn resolve_node(&mut self, node_id: NodeId) {
+        let node = &mut self.nodes[node_id];
         match &mut node.kind {
             // Nothing to do.
             NodeKind::Package(_) | NodeKind::Number(_) | NodeKind::Bool(_) => {}
@@ -898,18 +889,13 @@ impl<'a> Parser<'a> {
                 then_block,
                 else_block,
             } => {
-                self.resolve_node(&mut *cond);
-
-                if let Some(then_block) = then_block {
-                    self.resolve_node(then_block)
-                }
-                if let Some(else_block) = else_block {
-                    self.resolve_node(else_block)
-                }
+                self.resolve_node(cond);
+                self.resolve_node(then_block);
+                self.resolve_node(else_block);
             }
             NodeKind::For { cond, block } => {
                 if let Some(cond) = cond {
-                    self.resolve_node(&mut *cond);
+                    self.resolve_node(cond);
                 }
 
                 for stmt in block {
