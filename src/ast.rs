@@ -1,6 +1,7 @@
 use std::{
     collections::{BTreeMap, HashMap},
     num::ParseIntError,
+    ops::{Index, IndexMut},
 };
 
 use crate::{
@@ -12,7 +13,7 @@ use crate::{
 use serde::Serialize;
 
 // TODO: u32?
-#[derive(Serialize, Clone, PartialEq, Eq, Debug)]
+#[derive(Serialize, Clone, Copy, PartialEq, Eq, Debug)]
 struct NodeId(usize);
 
 #[derive(Serialize, Clone, PartialEq, Eq, Debug)]
@@ -55,6 +56,34 @@ pub struct Node {
 
 pub type FnNameToType = BTreeMap<String, (Type, Origin)>;
 pub type VarNameToType = HashMap<String, Vec<(Type, Origin, usize /* Scope */)>>;
+
+impl IndexMut<NodeId> for [Node] {
+    fn index_mut(&mut self, index: NodeId) -> &mut Self::Output {
+        &mut self[index.0]
+    }
+}
+
+impl Index<NodeId> for [Node] {
+    type Output = Node;
+
+    fn index(&self, index: NodeId) -> &Self::Output {
+        &self[index.0]
+    }
+}
+
+impl IndexMut<NodeId> for Vec<Node> {
+    fn index_mut(&mut self, index: NodeId) -> &mut Self::Output {
+        &mut self[index.0]
+    }
+}
+
+impl Index<NodeId> for Vec<Node> {
+    type Output = Node;
+
+    fn index(&self, index: NodeId) -> &Self::Output {
+        &self[index.0]
+    }
+}
 
 #[derive(Debug)]
 pub struct Parser<'a> {
@@ -521,7 +550,7 @@ impl<'a> Parser<'a> {
         });
 
         let else_stmts = if self.match_kind(TokenKind::KeywordElse).is_some() {
-            let left_curly = self.expect_token_exactly_one(TokenKind::LeftCurly, "else body")?;
+            self.expect_token_exactly_one(TokenKind::LeftCurly, "else body")?;
             let mut stmts = Vec::new();
             for _ in 0..self.remaining_tokens_count() {
                 match self.peek_token() {
@@ -542,7 +571,7 @@ impl<'a> Parser<'a> {
             Vec::new()
         };
         let else_block = self.new_node(Node {
-            kind: NodeKind::Block(stmts),
+            kind: NodeKind::Block(else_stmts),
             origin: left_curly.origin,
             typ: Type::new_void(),
         });
@@ -778,20 +807,21 @@ impl<'a> Parser<'a> {
         decls
     }
 
-    fn resolve_node(&mut self, node_id: NodeId) {
-        let node = &mut self.nodes[node_id];
-        match &mut node.kind {
+    fn resolve_node(node_id: NodeId, nodes: &[Node], errors: &mut Vec<Error>) {
+        let node = &nodes[node_id];
+        match &node.kind {
             // Nothing to do.
             NodeKind::Package(_) | NodeKind::Number(_) | NodeKind::Bool(_) => {}
 
             NodeKind::Identifier(name) => {
-                if let Some((t, _)) = self.fn_name_to_type.get(name) {
-                    node.typ = t.clone();
-                } else if let Some(scopes) = self.var_name_to_type.get(name)
-                    && let Some((t, _, _)) = scopes.last()
-                {
-                    node.typ = t.clone();
-                }
+                todo!()
+                //if let Some((t, _)) = self.fn_name_to_type.get(name) {
+                //    node.typ = t.clone();
+                //} else if let Some(scopes) = self.var_name_to_type.get(name)
+                //    && let Some((t, _, _)) = scopes.last()
+                //{
+                //    node.typ = t.clone();
+                //}
             }
 
             // Recurse.
@@ -799,115 +829,117 @@ impl<'a> Parser<'a> {
             | NodeKind::Multiply(lhs, rhs)
             | NodeKind::Divide(lhs, rhs)
             | NodeKind::Cmp(lhs, rhs) => {
-                self.resolve_node(lhs);
-                self.resolve_node(rhs);
+                Self::resolve_node(*lhs, nodes, errors);
+                Self::resolve_node(*rhs, nodes, errors);
                 if *node.typ.kind == TypeKind::Any {
-                    node.typ = lhs.typ.clone();
+                    //node.typ = nodes[*lhs].typ.clone();
                     assert_ne!(*node.typ.kind, TypeKind::Any);
                 }
             }
             NodeKind::VarDecl(identifier, expr) => {
-                self.resolve_node(expr);
+                Self::resolve_node(*expr, nodes, errors);
 
-                if let Some(scopes) = self.var_name_to_type.get(identifier)
-                    && scopes
-                        .last()
-                        .map(|(_, _, scope)| *scope)
-                        .unwrap_or_default()
-                        == self.current_scope
-                {
-                    let prev_origin = scopes.last().map(|(_, origin, _)| origin).unwrap();
-                    self.add_error_with_explanation(
-                        ErrorKind::NameAlreadyDefined,
-                        node.origin,
-                        format!(
-                            "variable redefines existing name, defined here: {}",
-                            prev_origin.display(self.file_id_to_name)
-                        ),
-                    );
-                }
-                self.var_name_to_type
-                    .entry(identifier.to_owned())
-                    .or_default()
-                    .push((node.typ.clone(), node.origin, self.current_scope));
+                todo!()
+                //if let Some(scopes) = self.var_name_to_type.get(identifier)
+                //    && scopes
+                //        .last()
+                //        .map(|(_, _, scope)| *scope)
+                //        .unwrap_or_default()
+                //        == self.current_scope
+                //{
+                //    let prev_origin = scopes.last().map(|(_, origin, _)| origin).unwrap();
+                //    self.add_error_with_explanation(
+                //        ErrorKind::NameAlreadyDefined,
+                //        node.origin,
+                //        format!(
+                //            "variable redefines existing name, defined here: {}",
+                //            prev_origin.display(self.file_id_to_name)
+                //        ),
+                //    );
+                //}
+                //self.var_name_to_type
+                //    .entry(identifier.to_owned())
+                //    .or_default()
+                //    .push((node.typ.clone(), node.origin, self.current_scope));
             }
             NodeKind::FnCall { callee, args } => {
-                self.resolve_node(callee);
-                match &*callee.typ.kind {
+                Self::resolve_node(*callee, nodes, errors);
+                let callee_typ = &nodes[*callee].typ;
+                match *callee_typ.kind {
                     TypeKind::Function(_, _) => {}
                     _ => {
-                        self.errors.push(Error {
+                        errors.push(Error {
                             kind: ErrorKind::CallingANonFunction,
                             origin: node.origin,
-                            explanation: format!("calling a non-function: {}", &callee.typ),
+                            explanation: format!("calling a non-function: {}", callee_typ),
                         });
                     }
                 }
 
                 for op in args {
-                    self.resolve_node(op)
+                    Self::resolve_node(*op, nodes, errors);
                 }
                 if *node.typ.kind == TypeKind::Any {
-                    node.typ = callee.typ.clone();
+                    //node.typ = callee_typ.clone();
                 }
             }
             NodeKind::Block(stmts) => {
                 assert_eq!(*node.typ.kind, TypeKind::Void);
 
                 for op in stmts {
-                    self.resolve_node(op)
+                    Self::resolve_node(*op, nodes, errors);
                 }
             }
             NodeKind::FnDef { name, body } => {
                 assert!(matches!(&*node.typ.kind, TypeKind::Function(_, _)));
-                if let Some((old_typ, old_origin)) = self.fn_name_to_type.get(name) {
-                    self.errors.push(Error::new_name_already_defined(
-                        old_typ,
-                        &node.typ,
-                        name,
-                        old_origin,
-                        &node.origin,
-                        self.file_id_to_name,
-                    ));
-                } else {
-                    self.fn_name_to_type
-                        .insert(name.to_owned(), (node.typ.clone(), node.origin));
+                //if let Some((old_typ, old_origin)) = self.fn_name_to_type.get(name) {
+                //    self.errors.push(Error::new_name_already_defined(
+                //        old_typ,
+                //        &node.typ,
+                //        name,
+                //        old_origin,
+                //        &node.origin,
+                //        self.file_id_to_name,
+                //    ));
+                //} else {
+                //    self.fn_name_to_type
+                //        .insert(name.to_owned(), (node.typ.clone(), node.origin));
+                //}
+                //
+                //// TODO: When supporting global variables and closures, this needs to be smarter
+                //// and only remove some entries.
+                //self.var_name_to_type.clear();
+
+                for node_id in body {
+                    Self::resolve_node(*node_id, nodes, errors);
                 }
 
-                // TODO: When supporting global variables and closures, this needs to be smarter
-                // and only remove some entries.
-                self.var_name_to_type.clear();
-
-                for op in body {
-                    self.resolve_node(op)
-                }
-
-                self.var_name_to_type.clear();
+                //self.var_name_to_type.clear();
             }
             NodeKind::If {
                 cond,
                 then_block,
                 else_block,
             } => {
-                self.resolve_node(cond);
-                self.resolve_node(then_block);
-                self.resolve_node(else_block);
+                Self::resolve_node(*cond, nodes, errors);
+                Self::resolve_node(*then_block, nodes, errors);
+                Self::resolve_node(*else_block, nodes, errors);
             }
             NodeKind::For { cond, block } => {
                 if let Some(cond) = cond {
-                    self.resolve_node(cond);
+                    Self::resolve_node(*cond, nodes, errors);
                 }
 
                 for stmt in block {
-                    self.resolve_node(stmt)
+                    Self::resolve_node(*stmt, nodes, errors);
                 }
             }
         }
     }
 
-    fn resolve_nodes(&mut self, nodes: &mut [Node]) {
-        for node in nodes {
-            self.resolve_node(node);
+    fn resolve_nodes(&mut self, node_ids: &[NodeId]) {
+        for node_id in node_ids {
+            Self::resolve_node(*node_id, &mut self.nodes, &mut self.errors);
         }
     }
 }
@@ -928,7 +960,8 @@ mod tests {
         file_id_to_name.insert(1, String::from("test.go"));
 
         let mut parser = Parser::new(input, &lexer, &file_id_to_name);
-        let root = parser.parse_expr().unwrap();
+        let root_id = parser.parse_expr().unwrap();
+        let root = &parser.nodes[root_id];
 
         assert!(parser.errors.is_empty());
 
@@ -949,15 +982,20 @@ mod tests {
         file_id_to_name.insert(1, String::from("test.go"));
 
         let mut parser = Parser::new(input, &lexer, &file_id_to_name);
-        let root = parser.parse_expr().unwrap();
+        let root_id = parser.parse_expr().unwrap();
+        let root = &parser.nodes[root_id];
 
         assert!(parser.errors.is_empty());
 
-        match root.kind {
+        match &root.kind {
             NodeKind::Add(lhs, rhs) => {
+                let lhs = &parser.nodes[*lhs];
                 assert!(matches!(lhs.kind, NodeKind::Number(123)));
+                let rhs = &parser.nodes[*rhs];
                 match rhs.kind {
                     NodeKind::Add(mhs, rhs) => {
+                        let mhs = &parser.nodes[mhs];
+                        let rhs = &parser.nodes[rhs];
                         assert!(matches!(mhs.kind, NodeKind::Number(45)));
                         assert!(matches!(rhs.kind, NodeKind::Number(0)));
                     }
