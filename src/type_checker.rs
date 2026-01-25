@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display};
 
 #[cfg(test)]
 use proptest_derive::Arbitrary;
@@ -292,15 +292,11 @@ pub fn check_node(
     }
 }
 
-pub fn check_nodes(
-    nodes: &mut [Node],
-    name_to_type: &mut FnNameToType,
-    var_name_to_type: &mut VarNameToType,
-) -> Vec<Error> {
+pub fn check_nodes(nodes: & [Node], node_to_type: &mut HashMap<NodeId, Type>) -> Vec<Error> {
     let mut errs = Vec::new();
 
     for node in nodes {
-        check_node(node, &mut errs, name_to_type, var_name_to_type);
+        check_node(node, &mut errs, , node_to_type: &mut HashMap<NodeId, Type>);
     }
 
     errs
