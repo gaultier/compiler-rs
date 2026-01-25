@@ -94,7 +94,6 @@ pub struct Parser<'a> {
     current_scope: usize,
     file_id_to_name: &'a HashMap<FileId, String>,
     nodes: Vec<Node>,
-    node_to_type: HashMap<NodeId, Type>,
 }
 
 impl<'a> Parser<'a> {
@@ -109,7 +108,6 @@ impl<'a> Parser<'a> {
             tokens_consumed: 0,
             errors: lexer.errors.clone(),
             input,
-            node_to_type: HashMap::new(),
             file_id_to_name,
             current_scope: 0,
             nodes: Vec::new(),
