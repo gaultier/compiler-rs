@@ -8,12 +8,12 @@ use crate::{
     error::{Error, ErrorKind},
     lex::{Lexer, Token, TokenKind},
     origin::{FileId, Origin},
-    type_checker::{Type, TypeKind},
+    type_checker::Type,
 };
 use serde::Serialize;
 
 // TODO: u32?
-#[derive(Serialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Serialize, Clone, Copy, PartialEq, Eq, Debug, Hash)]
 struct NodeId(usize);
 
 #[derive(Serialize, Clone, PartialEq, Eq, Debug)]
@@ -51,7 +51,6 @@ pub enum NodeKind {
 pub struct Node {
     pub kind: NodeKind,
     pub origin: Origin,
-    pub typ: Type,
 }
 
 pub type FnNameToType = BTreeMap<String, (Type, Origin)>;
@@ -92,11 +91,10 @@ pub struct Parser<'a> {
     tokens_consumed: usize,
     pub errors: Vec<Error>,
     input: &'a str,
-    pub fn_name_to_type: FnNameToType,
-    pub var_name_to_type: VarNameToType,
     current_scope: usize,
     file_id_to_name: &'a HashMap<FileId, String>,
     nodes: Vec<Node>,
+    node_to_type: HashMap<NodeId, Type>,
 }
 
 impl<'a> Parser<'a> {
@@ -111,8 +109,7 @@ impl<'a> Parser<'a> {
             tokens_consumed: 0,
             errors: lexer.errors.clone(),
             input,
-            fn_name_to_type: FnNameToType::new(),
-            var_name_to_type: VarNameToType::new(),
+            node_to_type: HashMap::new(),
             file_id_to_name,
             current_scope: 0,
             nodes: Vec::new(),
@@ -128,20 +125,21 @@ impl<'a> Parser<'a> {
         let mut res = Vec::with_capacity(cap_hint);
 
         let origin = Origin::new_builtin();
-        let typ = Type::new_function(
-            &Type::new_void(),
-            &[Type::new_any()],
-            &Origin::new_builtin(),
-        );
 
-        res.push(self.new_node(Node {
+        let node_id = self.new_node(Node {
             kind: NodeKind::FnDef {
                 name: String::from("println"),
                 body: Vec::new(),
             },
             origin,
-            typ,
-        }));
+        });
+        let typ = Type::new_function(
+            &Type::new_void(),
+            &[Type::new_any()],
+            &Origin::new_builtin(),
+        );
+        self.node_to_type.insert(node_id, typ);
+        res.push(node_id);
 
         res
     }
@@ -225,22 +223,24 @@ impl<'a> Parser<'a> {
                     return None;
                 }
             };
-            return Some(self.new_node(Node {
+            let node_id = self.new_node(Node {
                 kind: NodeKind::Number(num),
                 origin: token.origin,
-                typ: Type::new_int(),
-            }));
+            });
+            self.node_to_type.insert(node_id, Type::new_int());
+            return Some(node_id);
         }
         if let Some(token) = self.match_kind(TokenKind::LiteralBool) {
             let src = &self.input[token.origin.offset as usize..][..token.origin.len as usize];
 
             assert!(src == "true" || src == "false");
 
-            return Some(self.new_node(Node {
+            let node_id = self.new_node(Node {
                 kind: NodeKind::Bool(src == "true"),
                 origin: token.origin,
-                typ: Type::new_bool(),
-            }));
+            });
+            self.node_to_type.insert(node_id, Type::new_bool());
+            return Some(node_id);
         }
 
         if let Some(token) = self.match_kind(TokenKind::Identifier) {
@@ -249,7 +249,6 @@ impl<'a> Parser<'a> {
                     Self::str_from_source(self.input, &token.origin).to_owned(),
                 ),
                 origin: token.origin,
-                typ: Type::default(), // Will be resolved.
             }));
         }
 
@@ -296,7 +295,6 @@ impl<'a> Parser<'a> {
                 Some(self.new_node(Node {
                     kind: NodeKind::Cmp(lhs, rhs),
                     origin: eq.origin,
-                    typ: Type::new_bool(),
                 }))
             } else {
                 let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
@@ -344,7 +342,6 @@ impl<'a> Parser<'a> {
         Some(self.new_node(Node {
             kind: NodeKind::Add(lhs, rhs),
             origin: token.origin,
-            typ: Type::default(),
         }))
     }
 
@@ -376,7 +373,6 @@ impl<'a> Parser<'a> {
                 NodeKind::Divide(lhs, rhs)
             },
             origin: token.origin,
-            typ: Type::default(),
         }))
     }
 
@@ -464,7 +460,6 @@ impl<'a> Parser<'a> {
         Some(self.new_node(Node {
             kind: NodeKind::FnCall { callee, args },
             origin: lparen.origin,
-            typ: Type::default(),
         }))
     }
 
@@ -512,7 +507,6 @@ impl<'a> Parser<'a> {
         Some(self.new_node(Node {
             kind: NodeKind::For { cond, block: stmts },
             origin: keyword_for.origin,
-            typ: Type::new_void(),
         }))
     }
 
@@ -546,7 +540,6 @@ impl<'a> Parser<'a> {
         let then_block = self.new_node(Node {
             kind: NodeKind::Block(stmts),
             origin: left_curly.origin,
-            typ: Type::new_void(),
         });
 
         let else_stmts = if self.match_kind(TokenKind::KeywordElse).is_some() {
@@ -573,7 +566,6 @@ impl<'a> Parser<'a> {
         let else_block = self.new_node(Node {
             kind: NodeKind::Block(else_stmts),
             origin: left_curly.origin,
-            typ: Type::new_void(),
         });
 
         Some(self.new_node(Node {
@@ -583,7 +575,6 @@ impl<'a> Parser<'a> {
                 else_block,
             },
             origin: keyword_if.origin,
-            typ: Type::new_void(),
         }))
     }
 
@@ -609,12 +600,10 @@ impl<'a> Parser<'a> {
         };
 
         let identifier_str = Self::str_from_source(self.input, &identifier.origin);
-        let typ = self.nodes[expr].typ.clone();
 
         Some(self.new_node(Node {
             kind: NodeKind::VarDecl(identifier_str.to_owned(), expr),
             origin: var.origin,
-            typ,
         }))
     }
 
@@ -673,7 +662,6 @@ impl<'a> Parser<'a> {
         Some(self.new_node(Node {
             kind: NodeKind::Package(Self::str_from_source(self.input, &package.origin).to_owned()),
             origin: package.origin,
-            typ: Type::new_void(),
         }))
     }
 
@@ -746,7 +734,6 @@ impl<'a> Parser<'a> {
                 body: stmts,
             },
             origin: func.origin,
-            typ: Type::new_function(&Type::new_void(), &[], &func.origin), // TODO
         }))
     }
 
@@ -763,7 +750,6 @@ impl<'a> Parser<'a> {
         let mut decls = Vec::new();
         let builtins = self.builtins(self.tokens.len());
         decls.extend(builtins);
-        self.fn_name_to_type = FnNameToType::new();
 
         if let Some(p) = self.parse_package_clause() {
             decls.push(p);
@@ -831,10 +817,6 @@ impl<'a> Parser<'a> {
             | NodeKind::Cmp(lhs, rhs) => {
                 Self::resolve_node(*lhs, nodes, errors);
                 Self::resolve_node(*rhs, nodes, errors);
-                if *node.typ.kind == TypeKind::Any {
-                    //node.typ = nodes[*lhs].typ.clone();
-                    assert_ne!(*node.typ.kind, TypeKind::Any);
-                }
             }
             NodeKind::VarDecl(identifier, expr) => {
                 Self::resolve_node(*expr, nodes, errors);
@@ -864,34 +846,28 @@ impl<'a> Parser<'a> {
             }
             NodeKind::FnCall { callee, args } => {
                 Self::resolve_node(*callee, nodes, errors);
-                let callee_typ = &nodes[*callee].typ;
-                match *callee_typ.kind {
-                    TypeKind::Function(_, _) => {}
-                    _ => {
-                        errors.push(Error {
-                            kind: ErrorKind::CallingANonFunction,
-                            origin: node.origin,
-                            explanation: format!("calling a non-function: {}", callee_typ),
-                        });
-                    }
-                }
+                //let callee_typ = &nodes[*callee].typ;
+                //match *callee_typ.kind {
+                //    TypeKind::Function(_, _) => {}
+                //    _ => {
+                //        errors.push(Error {
+                //            kind: ErrorKind::CallingANonFunction,
+                //            origin: node.origin,
+                //            explanation: format!("calling a non-function: {}", callee_typ),
+                //        });
+                //    }
+                //}
 
                 for op in args {
                     Self::resolve_node(*op, nodes, errors);
                 }
-                if *node.typ.kind == TypeKind::Any {
-                    //node.typ = callee_typ.clone();
-                }
             }
             NodeKind::Block(stmts) => {
-                assert_eq!(*node.typ.kind, TypeKind::Void);
-
                 for op in stmts {
                     Self::resolve_node(*op, nodes, errors);
                 }
             }
             NodeKind::FnDef { name, body } => {
-                assert!(matches!(&*node.typ.kind, TypeKind::Function(_, _)));
                 //if let Some((old_typ, old_origin)) = self.fn_name_to_type.get(name) {
                 //    self.errors.push(Error::new_name_already_defined(
                 //        old_typ,
