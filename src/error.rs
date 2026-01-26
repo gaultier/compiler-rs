@@ -47,27 +47,6 @@ impl Error {
         }
     }
 
-    pub(crate) fn new_name_already_defined(
-        old_type: &Type,
-        new_type: &Type,
-        name: &str,
-        old_origin: &Origin,
-        new_origin: &Origin,
-        file_id_to_name: &HashMap<FileId, String>,
-    ) -> Self {
-        Self {
-            kind: ErrorKind::NameAlreadyDefined,
-            origin: *new_origin,
-            explanation: format!(
-                "name {} already defined: old:{} new:{}. Defined here first: {}",
-                name,
-                old_type,
-                new_type,
-                old_origin.display(file_id_to_name),
-            ),
-        }
-    }
-
     pub(crate) fn new_incompatible_types(origin: &Origin, a: &Type, b: &Type) -> Self {
         Self {
             kind: crate::error::ErrorKind::IncompatibleTypes,
