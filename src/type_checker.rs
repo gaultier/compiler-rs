@@ -286,10 +286,6 @@ pub fn check_node(
             }
         }
         NodeKind::Cmp(lhs, rhs) => {
-            // Set by the parser.
-            let typ = node_to_type.get(lhs).unwrap();
-            assert_eq!(*typ.kind, TypeKind::Bool);
-
             check_node(*lhs, nodes, errs, node_to_type, name_to_def);
             check_node(*rhs, nodes, errs, node_to_type, name_to_def);
 
@@ -299,6 +295,7 @@ pub fn check_node(
             if let Err(err) = typ {
                 errs.push(err);
             }
+            node_to_type.insert(node_id, Type::new_bool());
         }
         NodeKind::If {
             cond,
