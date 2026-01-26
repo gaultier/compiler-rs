@@ -69,6 +69,7 @@ pub struct Emitter<'a> {
     label_current: usize,
     node_to_type: &'a HashMap<NodeId, Type>,
     nodes: &'a [Node],
+    name_to_def: &'a HashMap<String, NodeId>,
 }
 
 #[derive(Debug, Serialize)]
@@ -231,13 +232,18 @@ impl FnDef {
 }
 
 impl<'a> Emitter<'a> {
-    pub(crate) fn new(nodes: &'a [Node], node_to_type: &'a HashMap<NodeId, Type>) -> Self {
+    pub(crate) fn new(
+        nodes: &'a [Node],
+        node_to_type: &'a HashMap<NodeId, Type>,
+        name_to_def: &'a HashMap<String, NodeId>,
+    ) -> Self {
         Self {
             fn_defs: Vec::new(),
             labels: Vec::new(),
             label_current: 0,
             node_to_type,
             nodes,
+            name_to_def,
         }
     }
 
@@ -364,14 +370,16 @@ impl<'a> Emitter<'a> {
             }
             crate::ast::NodeKind::FnCall { callee, args } => {
                 // TODO: Support function pointers.
-                let ast_fn_name = &self.nodes[*callee].kind.as_fn_def().unwrap().name;
-                let callee_type = self.node_to_type.get(callee).unwrap();
+                let ast_fn_name = self.nodes[*callee].kind.as_identifier().unwrap();
+                let def_id = self.name_to_def.get(ast_fn_name).unwrap();
+
+                let callee_type = self.node_to_type.get(def_id).unwrap();
                 let arg_type = callee_type.to_string();
                 let arg0_typ = args
                     .first()
                     .map(|x| self.node_to_type.get(x).unwrap().to_string())
                     .unwrap_or_default();
-                let real_fn_name = fn_name_ast_to_ir(ast_fn_name.as_str(), &arg_type, &arg0_typ);
+                let real_fn_name = fn_name_ast_to_ir(ast_fn_name, &arg_type, &arg0_typ);
 
                 // Check type.
                 let typ = self.node_to_type.get(&node_id).unwrap();
@@ -1020,7 +1028,8 @@ mod tests {
             return Err(errors);
         }
 
-        let mut ir_emitter = super::Emitter::new(&parser.nodes, &parser.node_to_type);
+        let mut ir_emitter =
+            super::Emitter::new(&parser.nodes, &parser.node_to_type, &parser.name_to_def);
         ir_emitter.emit_nodes();
 
         let main = ir_emitter

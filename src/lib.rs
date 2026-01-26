@@ -213,7 +213,7 @@ pub fn compile(
         };
     }
 
-    let mut ir_emitter = ir::Emitter::new(&parser.nodes, &parser.node_to_type);
+    let mut ir_emitter = ir::Emitter::new(&parser.nodes, &parser.node_to_type, &parser.name_to_def);
     ir_emitter.emit_nodes();
     trace!("ir_emitter: {:#?}", ir_emitter);
 
