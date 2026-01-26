@@ -3024,9 +3024,7 @@ impl<'a> Display for InstructionFormatter<'a> {
             f.write_str(":")?;
         }
 
-        f.write_str(" // ")?;
-        dbg!(self.ins.origin);
-        self.ins.origin.display(self.file_id_to_name);
+        write!(f, " // {}", self.ins.origin.display(self.file_id_to_name))?;
 
         Ok(())
     }
