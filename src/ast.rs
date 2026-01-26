@@ -1014,13 +1014,6 @@ impl NodeKind {
         }
     }
 
-    pub(crate) fn as_file(&self) -> Option<&Vec<NodeId>> {
-        match self {
-            NodeKind::File(v) => Some(v),
-            _ => None,
-        }
-    }
-
     pub(crate) fn as_block(&self) -> Option<&[NodeId]> {
         match self {
             NodeKind::Block(stmts) => Some(stmts),
