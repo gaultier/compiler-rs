@@ -995,8 +995,8 @@ mod tests {
         lexer.lex(input);
 
         let mut parser = Parser::new(input, &lexer, &file_id_to_name);
-        let builtins_len = parser.nodes[0].kind.as_file().unwrap().len();
         parser.parse();
+        let builtins_len = 1;
 
         let mut errors = parser.errors;
         errors.extend(type_checker::check_nodes(
