@@ -339,7 +339,7 @@ impl<'a> Emitter<'a> {
             crate::ast::NodeKind::Bool(b) => {
                 assert_eq!(*typ.kind, TypeKind::Bool);
 
-                let res_vreg = self.fn_def_mut().make_vreg(&node.typ);
+                let res_vreg = self.fn_def_mut().make_vreg(typ);
                 self.fn_def_mut().instructions.push(Instruction {
                     kind: InstructionKind::Set(Operand::new_bool(*b)),
                     origin: node.origin,
@@ -441,7 +441,7 @@ impl<'a> Emitter<'a> {
                     ),
                     origin: node.origin,
                     res_vreg: Some(res_vreg),
-                    typ: node.typ.clone(),
+                    typ: typ.clone(),
                 });
             }
             crate::ast::NodeKind::Add(ast_lhs, ast_rhs) => {
@@ -494,7 +494,7 @@ impl<'a> Emitter<'a> {
                     self.fn_def_mut().instructions.last().unwrap().typ.clone(),
                 );
 
-                let res_vreg = self.fn_def_mut().make_vreg(&node.typ);
+                let res_vreg = self.fn_def_mut().make_vreg(typ);
 
                 self.fn_def_mut().instructions.push(Instruction {
                     kind: InstructionKind::IMultiply(
@@ -988,7 +988,47 @@ pub fn eval(irs: &[Instruction]) -> Eval {
 mod tests {
     use std::collections::HashMap;
 
-    use crate::{ast::Parser, lex::Lexer, type_checker};
+    use crate::{
+        ast::Parser,
+        error::Error,
+        ir::{Eval, FnDef},
+        lex::Lexer,
+        type_checker,
+    };
+
+    fn run(input: &str) -> Result<(usize, Vec<FnDef>, Eval), Vec<Error>> {
+        let file_id = 1;
+        let mut file_id_to_name = HashMap::new();
+        file_id_to_name.insert(1, String::from("test.go"));
+
+        let mut lexer = Lexer::new(file_id);
+        lexer.lex(input);
+
+        let mut parser = Parser::new(input, &lexer, &file_id_to_name);
+        let builtins_len = parser.nodes[0].kind.as_file().unwrap().len();
+        parser.parse();
+
+        let mut errors = parser.errors;
+        errors.extend(type_checker::check_nodes(
+            &parser.nodes,
+            &mut parser.node_to_type,
+            &parser.name_to_def,
+        ));
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        let mut ir_emitter = super::Emitter::new(&parser.nodes, &parser.node_to_type);
+        ir_emitter.emit_nodes();
+
+        let main = ir_emitter
+            .fn_defs
+            .iter()
+            .find(|f| f.name == "main")
+            .unwrap();
+        let ir_eval = super::eval(&main.instructions);
+        Ok((builtins_len, ir_emitter.fn_defs, ir_eval))
+    }
 
     #[test]
     fn eval_print_iadd() {
@@ -998,30 +1038,9 @@ mod tests {
             }
             ";
 
-        let file_id = 1;
-        let mut file_id_to_name = HashMap::new();
-        file_id_to_name.insert(1, String::from("test.go"));
-
-        let mut lexer = Lexer::new(file_id);
-        lexer.lex(input);
-        assert!(lexer.errors.is_empty());
-
-        let mut parser = Parser::new(input, &lexer, &file_id_to_name);
-        let mut ast_nodes = parser.parse();
-        assert!(parser.errors.is_empty());
-
-        let mut name_to_type = parser.name_to_type;
-
-        assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
-
-        let mut ir_emitter = super::Emitter::new();
-        ir_emitter.emit_nodes(&ast_nodes);
-
-        let builtins = Parser::builtins(16);
-        assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
-
-        let ir_eval = super::eval(&ir_emitter.fn_defs[1].instructions);
-        assert_eq!(ir_eval.stdout, b"579\n");
+        let (builtins_len, fn_defs, eval) = run(&input).unwrap();
+        assert_eq!(fn_defs.len(), builtins_len + 1);
+        assert_eq!(eval.stdout, b"579\n");
     }
 
     #[test]
@@ -1032,29 +1051,9 @@ mod tests {
             }
             ";
 
-        let file_id = 1;
-        let mut file_id_to_name = HashMap::new();
-        file_id_to_name.insert(1, String::from("test.go"));
-
-        let mut lexer = Lexer::new(file_id);
-        lexer.lex(input);
-        assert!(lexer.errors.is_empty());
-
-        let mut parser = Parser::new(input, &lexer, &file_id_to_name);
-        let mut ast_nodes = parser.parse();
-        assert!(parser.errors.is_empty());
-
-        let mut name_to_type = parser.name_to_type;
-        assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
-
-        let mut ir_emitter = super::Emitter::new();
-        ir_emitter.emit_nodes(&ast_nodes);
-
-        let builtins = Parser::builtins(16);
-        assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
-
-        let ir_eval = super::eval(&ir_emitter.fn_defs[1].instructions);
-        assert_eq!(ir_eval.stdout, b"56091\n");
+        let (builtins_len, fn_defs, eval) = run(&input).unwrap();
+        assert_eq!(fn_defs.len(), builtins_len + 1);
+        assert_eq!(eval.stdout, b"56091\n");
     }
 
     #[test]
@@ -1065,29 +1064,9 @@ mod tests {
             }
             ";
 
-        let file_id = 1;
-        let mut file_id_to_name = HashMap::new();
-        file_id_to_name.insert(1, String::from("test.go"));
-
-        let mut lexer = Lexer::new(file_id);
-        lexer.lex(input);
-        assert!(lexer.errors.is_empty());
-
-        let mut parser = Parser::new(input, &lexer, &file_id_to_name);
-        let mut ast_nodes = parser.parse();
-        assert!(parser.errors.is_empty());
-
-        let mut name_to_type = parser.name_to_type;
-        assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
-
-        let mut ir_emitter = super::Emitter::new();
-        ir_emitter.emit_nodes(&ast_nodes);
-
-        let builtins = Parser::builtins(16);
-        assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
-
-        let ir_eval = super::eval(&ir_emitter.fn_defs[1].instructions);
-        assert_eq!(ir_eval.stdout, b"18696\n");
+        let (builtins_len, fn_defs, eval) = run(&input).unwrap();
+        assert_eq!(fn_defs.len(), builtins_len + 1);
+        assert_eq!(eval.stdout, b"18696\n");
     }
 
     #[test]
@@ -1099,30 +1078,9 @@ mod tests {
             }
             ";
 
-        let file_id = 1;
-        let mut file_id_to_name = HashMap::new();
-        file_id_to_name.insert(1, String::from("test.go"));
-
-        let mut lexer = Lexer::new(file_id);
-        lexer.lex(input);
-        assert!(lexer.errors.is_empty());
-
-        let mut parser = Parser::new(input, &lexer, &file_id_to_name);
-        let mut ast_nodes = parser.parse();
-        assert!(parser.errors.is_empty());
-
-        let mut name_to_type = parser.name_to_type;
-        let type_errors = type_checker::check_nodes(&mut ast_nodes, &mut name_to_type);
-        assert!(type_errors.is_empty(), "{:#?}", type_errors);
-
-        let mut ir_emitter = super::Emitter::new();
-        ir_emitter.emit_nodes(&ast_nodes);
-
-        let builtins = Parser::builtins(16);
-        assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
-
-        let ir_eval = super::eval(&ir_emitter.fn_defs[1].instructions);
-        assert_eq!(ir_eval.stdout, b"true\nfalse\n");
+        let (builtins_len, fn_defs, eval) = run(&input).unwrap();
+        assert_eq!(fn_defs.len(), builtins_len + 1);
+        assert_eq!(eval.stdout, b"true\nfalse\n");
     }
 
     #[test]
@@ -1135,29 +1093,9 @@ mod tests {
             }
             ";
 
-        let file_id = 1;
-        let mut file_id_to_name = HashMap::new();
-        file_id_to_name.insert(1, String::from("test.go"));
-
-        let mut lexer = Lexer::new(file_id);
-        lexer.lex(input);
-        assert!(lexer.errors.is_empty());
-
-        let mut parser = Parser::new(input, &lexer, &file_id_to_name);
-        let mut ast_nodes = parser.parse();
-        assert!(parser.errors.is_empty());
-
-        let mut name_to_type = parser.name_to_type;
-        assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
-
-        let mut ir_emitter = super::Emitter::new();
-        ir_emitter.emit_nodes(&ast_nodes);
-
-        let builtins = Parser::builtins(16);
-        assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
-
-        let ir_eval = super::eval(&ir_emitter.fn_defs[1].instructions);
-        assert!(ir_eval.stdout.is_empty());
+        let (builtins_len, fn_defs, eval) = run(&input).unwrap();
+        assert_eq!(fn_defs.len(), builtins_len + 1);
+        assert!(eval.stdout.is_empty());
     }
 
     #[test]
@@ -1170,29 +1108,9 @@ mod tests {
             }
             ";
 
-        let file_id = 1;
-        let mut file_id_to_name = HashMap::new();
-        file_id_to_name.insert(1, String::from("test.go"));
-
-        let mut lexer = Lexer::new(file_id);
-        lexer.lex(input);
-        assert!(lexer.errors.is_empty());
-
-        let mut parser = Parser::new(input, &lexer, &file_id_to_name);
-        let mut ast_nodes = parser.parse();
-        assert!(parser.errors.is_empty());
-
-        let mut name_to_type = parser.name_to_type;
-        assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
-
-        let mut ir_emitter = super::Emitter::new();
-        ir_emitter.emit_nodes(&ast_nodes);
-
-        let builtins = Parser::builtins(16);
-        assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
-
-        let ir_eval = super::eval(&ir_emitter.fn_defs[1].instructions);
-        assert_eq!(ir_eval.stdout, b"123\n");
+        let (builtins_len, fn_defs, eval) = run(&input).unwrap();
+        assert_eq!(fn_defs.len(), builtins_len + 1);
+        assert_eq!(eval.stdout, b"123\n");
     }
 
     #[test]
@@ -1209,29 +1127,9 @@ func main() {
 }
             ";
 
-        let file_id = 1;
-        let mut file_id_to_name = HashMap::new();
-        file_id_to_name.insert(1, String::from("test.go"));
-
-        let mut lexer = Lexer::new(file_id);
-        lexer.lex(input);
-        assert!(lexer.errors.is_empty());
-
-        let mut parser = Parser::new(input, &lexer, &file_id_to_name);
-        let mut ast_nodes = parser.parse();
-        assert!(parser.errors.is_empty());
-
-        let mut name_to_type = parser.name_to_type;
-        assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
-
-        let mut ir_emitter = super::Emitter::new();
-        ir_emitter.emit_nodes(&ast_nodes);
-
-        let builtins = Parser::builtins(16);
-        assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
-
-        let ir_eval = super::eval(&ir_emitter.fn_defs[1].instructions);
-        assert_eq!(ir_eval.stdout, b"2\n");
+        let (builtins_len, fn_defs, eval) = run(&input).unwrap();
+        assert_eq!(fn_defs.len(), builtins_len + 1);
+        assert_eq!(eval.stdout, b"2\n");
     }
 
     #[test]
@@ -1248,29 +1146,9 @@ func main() {
 }
             ";
 
-        let file_id = 1;
-        let mut file_id_to_name = HashMap::new();
-        file_id_to_name.insert(1, String::from("test.go"));
-
-        let mut lexer = Lexer::new(file_id);
-        lexer.lex(input);
-        assert!(lexer.errors.is_empty());
-
-        let mut parser = Parser::new(input, &lexer, &file_id_to_name);
-        let mut ast_nodes = parser.parse();
-        assert!(parser.errors.is_empty());
-
-        let mut name_to_type = parser.name_to_type;
-        assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
-
-        let mut ir_emitter = super::Emitter::new();
-        ir_emitter.emit_nodes(&ast_nodes);
-
-        let builtins = Parser::builtins(16);
-        assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
-
-        let ir_eval = super::eval(&ir_emitter.fn_defs[1].instructions);
-        assert_eq!(ir_eval.stdout, b"3\n");
+        let (builtins_len, fn_defs, eval) = run(&input).unwrap();
+        assert_eq!(fn_defs.len(), builtins_len + 1);
+        assert_eq!(eval.stdout, b"3\n");
     }
 
     #[test]
@@ -1287,29 +1165,9 @@ func main() {
 }
             ";
 
-        let file_id = 1;
-        let mut file_id_to_name = HashMap::new();
-        file_id_to_name.insert(1, String::from("test.go"));
-
-        let mut lexer = Lexer::new(file_id);
-        lexer.lex(input);
-        assert!(lexer.errors.is_empty());
-
-        let mut parser = Parser::new(input, &lexer, &file_id_to_name);
-        let mut ast_nodes = parser.parse();
-        assert!(parser.errors.is_empty());
-
-        let mut name_to_type = parser.name_to_type;
-        assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
-
-        let mut ir_emitter = super::Emitter::new();
-        ir_emitter.emit_nodes(&ast_nodes);
-
-        let builtins = Parser::builtins(16);
-        assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
-
-        let ir_eval = super::eval(&ir_emitter.fn_defs[1].instructions);
-        assert_eq!(ir_eval.stdout, b"1\n");
+        let (builtins_len, fn_defs, eval) = run(&input).unwrap();
+        assert_eq!(fn_defs.len(), builtins_len + 1);
+        assert_eq!(eval.stdout, b"1\n");
     }
 
     #[test]
@@ -1326,29 +1184,9 @@ func main() {
 }
             ";
 
-        let file_id = 1;
-        let mut file_id_to_name = HashMap::new();
-        file_id_to_name.insert(1, String::from("test.go"));
-
-        let mut lexer = Lexer::new(file_id);
-        lexer.lex(input);
-        assert!(lexer.errors.is_empty());
-
-        let mut parser = Parser::new(input, &lexer, &file_id_to_name);
-        let mut ast_nodes = parser.parse();
-        assert!(parser.errors.is_empty());
-
-        let mut name_to_type = parser.name_to_type;
-        assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
-
-        let mut ir_emitter = super::Emitter::new();
-        ir_emitter.emit_nodes(&ast_nodes);
-
-        let builtins = Parser::builtins(16);
-        assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
-
-        let ir_eval = super::eval(&ir_emitter.fn_defs[1].instructions);
-        assert_eq!(ir_eval.stdout, b"2\n");
+        let (builtins_len, fn_defs, eval) = run(&input).unwrap();
+        assert_eq!(fn_defs.len(), builtins_len + 1);
+        assert_eq!(eval.stdout, b"2\n");
     }
 
     #[test]
@@ -1364,28 +1202,8 @@ func main() {
 }
 ";
 
-        let file_id = 1;
-        let mut file_id_to_name = HashMap::new();
-        file_id_to_name.insert(1, String::from("test.go"));
-
-        let mut lexer = Lexer::new(file_id);
-        lexer.lex(input);
-        assert!(lexer.errors.is_empty());
-
-        let mut parser = Parser::new(input, &lexer, &file_id_to_name);
-        let mut ast_nodes = parser.parse();
-        assert!(parser.errors.is_empty());
-
-        let mut name_to_type = parser.name_to_type;
-        assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
-
-        let mut ir_emitter = super::Emitter::new();
-        ir_emitter.emit_nodes(&ast_nodes);
-
-        let builtins = Parser::builtins(16);
-        assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
-
-        let ir_eval = super::eval(&ir_emitter.fn_defs[1].instructions);
-        assert_eq!(ir_eval.stdout, b"12\n15\n");
+        let (builtins_len, fn_defs, eval) = run(&input).unwrap();
+        assert_eq!(fn_defs.len(), builtins_len + 1);
+        assert_eq!(eval.stdout, b"12\n15\n");
     }
 }
