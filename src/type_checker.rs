@@ -76,6 +76,7 @@ impl Display for Type {
 }
 
 impl Type {
+    // TODO: Intern.
     pub(crate) fn new(kind: &TypeKind, size: &Option<Size>, origin: &Origin) -> Self {
         Self {
             kind: Box::new(kind.clone()),
