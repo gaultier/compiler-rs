@@ -89,17 +89,40 @@ impl Index<NodeId> for Vec<Node> {
 }
 
 #[derive(Debug)]
+pub struct NameToDef(Vec<HashMap<String, NodeId>>);
+
 pub struct Parser<'a> {
     error_mode: bool,
     pub tokens: Vec<Token>,
     tokens_consumed: usize,
     pub errors: Vec<Error>,
     input: &'a str,
-    current_scope: usize,
     file_id_to_name: &'a HashMap<FileId, String>,
     pub(crate) nodes: Vec<Node>,
     pub(crate) node_to_type: HashMap<NodeId, Type>,
-    pub(crate) name_to_def: HashMap<String, NodeId>,
+    pub(crate) name_to_def: NameToDef,
+}
+
+impl NameToDef {
+    fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    pub(crate) fn get(&self, name: &str) -> Option<&NodeId> {
+        self.0.iter().rev().find_map(|scope| scope.get(name))
+    }
+
+    pub(crate) fn insert(&mut self, name: String, node_id: NodeId) {
+        self.0.last_mut().unwrap().insert(name, node_id);
+    }
+
+    fn enter(&mut self) {
+        self.0.push(HashMap::new());
+    }
+
+    fn leave(&mut self) {
+        self.0.pop();
+    }
 }
 
 impl<'a> Parser<'a> {
@@ -115,10 +138,9 @@ impl<'a> Parser<'a> {
             errors: lexer.errors.clone(),
             input,
             file_id_to_name,
-            current_scope: 0,
             nodes: Vec::new(),
             node_to_type: HashMap::new(),
-            name_to_def: HashMap::new(),
+            name_to_def: NameToDef::new(),
         }
     }
 
@@ -818,7 +840,7 @@ impl<'a> Parser<'a> {
         node_id: NodeId,
         nodes: &[Node],
         errors: &mut Vec<Error>,
-        name_to_def: &mut HashMap<String, NodeId>,
+        name_to_def: &mut NameToDef,
         file_id_to_name: &'a HashMap<FileId, String>,
     ) {
         let node = &nodes[node_id];

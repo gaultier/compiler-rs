@@ -9,7 +9,7 @@ use log::trace;
 use serde::Serialize;
 
 use crate::{
-    ast::{Node, NodeId, NodeKind},
+    ast::{NameToDef, Node, NodeId, NodeKind},
     origin::Origin,
     type_checker::{Size, Type, TypeKind},
 };
@@ -69,7 +69,7 @@ pub struct Emitter<'a> {
     label_current: usize,
     node_to_type: &'a HashMap<NodeId, Type>,
     nodes: &'a [Node],
-    name_to_def: &'a HashMap<String, NodeId>,
+    name_to_def: &'a NameToDef,
 }
 
 #[derive(Debug, Serialize)]
@@ -235,7 +235,7 @@ impl<'a> Emitter<'a> {
     pub(crate) fn new(
         nodes: &'a [Node],
         node_to_type: &'a HashMap<NodeId, Type>,
-        name_to_def: &'a HashMap<String, NodeId>,
+        name_to_def: &'a NameToDef,
     ) -> Self {
         Self {
             fn_defs: Vec::new(),

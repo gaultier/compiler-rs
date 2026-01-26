@@ -6,7 +6,7 @@ use proptest_derive::Arbitrary;
 use serde::Serialize;
 
 use crate::{
-    ast::{Node, NodeId, NodeKind},
+    ast::{NameToDef, Node, NodeId, NodeKind},
     error::Error,
     origin::{Origin, OriginKind},
 };
@@ -140,7 +140,7 @@ pub fn check_node(
     nodes: &[Node],
     errs: &mut Vec<Error>,
     node_to_type: &mut HashMap<NodeId, Type>,
-    name_to_def: &HashMap<String, NodeId>,
+    name_to_def: &NameToDef,
 ) {
     let node = &nodes[node_id];
     match &node.kind {
@@ -220,8 +220,6 @@ pub fn check_node(
             ));
         }
         NodeKind::Identifier(identifier) => {
-            dbg!(identifier, name_to_def);
-
             let def_id = name_to_def.get(identifier).unwrap();
             let def_type = node_to_type.get(def_id).unwrap();
 
@@ -318,7 +316,7 @@ pub fn check_node(
 pub fn check_nodes(
     nodes: &[Node],
     node_to_type: &mut HashMap<NodeId, Type>,
-    name_to_def: &HashMap<String, NodeId>,
+    name_to_def: &NameToDef,
 ) -> Vec<Error> {
     assert!(!nodes.is_empty());
 
