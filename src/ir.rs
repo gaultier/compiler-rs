@@ -258,10 +258,6 @@ impl<'a> Emitter<'a> {
 
     fn emit_node(&mut self, node_id: NodeId) {
         let node = &self.nodes[node_id];
-        let typ = self.node_to_type.get(&node_id).unwrap_or_else(|| {
-            dbg!(node_id, self.node_to_type, node_id);
-            unreachable!()
-        });
 
         match &node.kind {
             NodeKind::File(decls) => {
@@ -278,6 +274,7 @@ impl<'a> Emitter<'a> {
                 body,
             }) => {
                 let stack_size = 0; // TODO
+                let typ = self.node_to_type.get(&node_id).unwrap();
                 self.fn_defs
                     .push(FnDef::new(name.to_owned(), typ, node.origin, stack_size));
                 for stmt in body {
@@ -287,8 +284,6 @@ impl<'a> Emitter<'a> {
                 self.fn_def_mut().live_ranges = self.fn_def_mut().compute_live_ranges();
             }
             NodeKind::For { cond, block } => {
-                assert_eq!(*typ.kind, TypeKind::Void);
-
                 let loop_label = format!(".{}_for_loop", self.label_current);
                 let end_label = format!(".{}_for_end", self.label_current);
                 self.label_current += 1;
@@ -333,6 +328,7 @@ impl<'a> Emitter<'a> {
                 });
             }
             crate::ast::NodeKind::Number(num) => {
+                let typ = self.node_to_type.get(&node_id).unwrap();
                 assert_eq!(*typ.kind, TypeKind::Number);
 
                 let res_vreg = self.fn_def_mut().make_vreg(typ);
@@ -344,6 +340,7 @@ impl<'a> Emitter<'a> {
                 });
             }
             crate::ast::NodeKind::Bool(b) => {
+                let typ = self.node_to_type.get(&node_id).unwrap();
                 assert_eq!(*typ.kind, TypeKind::Bool);
 
                 let res_vreg = self.fn_def_mut().make_vreg(typ);
@@ -356,6 +353,7 @@ impl<'a> Emitter<'a> {
             }
             crate::ast::NodeKind::Identifier(identifier) => {
                 let vreg = *self.fn_def_mut().name_to_vreg.get(identifier).unwrap();
+                let typ = self.node_to_type.get(&node_id).unwrap();
                 let res_vreg = self.fn_def_mut().make_vreg(typ);
                 self.fn_def_mut().instructions.push(Instruction {
                     kind: InstructionKind::Set(Operand::new_vreg(vreg, typ)),
@@ -376,6 +374,7 @@ impl<'a> Emitter<'a> {
                 let real_fn_name = fn_name_ast_to_ir(ast_fn_name.as_str(), &arg_type, &arg0_typ);
 
                 // Check type.
+                let typ = self.node_to_type.get(&node_id).unwrap();
                 let (res_vreg, ret_type) = match &*callee_type.kind {
                     TypeKind::Function(ret_type, _) if *ret_type.kind == TypeKind::Void => {
                         (None, ret_type.clone())
@@ -412,6 +411,7 @@ impl<'a> Emitter<'a> {
             }
             crate::ast::NodeKind::Cmp(lhs, rhs) => {
                 // Set by the parser.
+                let typ = self.node_to_type.get(&node_id).unwrap();
                 assert_eq!(*typ.kind, TypeKind::Bool);
 
                 let lhs_type = self.node_to_type.get(lhs).unwrap();
@@ -443,6 +443,7 @@ impl<'a> Emitter<'a> {
                 });
             }
             crate::ast::NodeKind::Add(ast_lhs, ast_rhs) => {
+                let typ = self.node_to_type.get(&node_id).unwrap();
                 let lhs_type = self.node_to_type.get(ast_lhs).unwrap();
                 let rhs_type = self.node_to_type.get(ast_rhs).unwrap();
                 assert_eq!(*lhs_type.kind, TypeKind::Number);
@@ -474,6 +475,7 @@ impl<'a> Emitter<'a> {
                 });
             }
             crate::ast::NodeKind::Multiply(ast_lhs, ast_rhs) => {
+                let typ = self.node_to_type.get(&node_id).unwrap();
                 let lhs_type = self.node_to_type.get(ast_lhs).unwrap();
                 let rhs_type = self.node_to_type.get(ast_rhs).unwrap();
                 assert_eq!(*lhs_type.kind, TypeKind::Number);
@@ -505,6 +507,7 @@ impl<'a> Emitter<'a> {
                 });
             }
             crate::ast::NodeKind::Divide(ast_lhs, ast_rhs) => {
+                let typ = self.node_to_type.get(&node_id).unwrap();
                 let lhs_type = self.node_to_type.get(ast_lhs).unwrap();
                 let rhs_type = self.node_to_type.get(ast_rhs).unwrap();
                 assert_eq!(*lhs_type.kind, TypeKind::Number);
@@ -623,6 +626,7 @@ impl<'a> Emitter<'a> {
                     .name_to_vreg
                     .insert(identifier.to_owned(), op_vreg);
 
+                let typ = self.node_to_type.get(&node_id).unwrap();
                 self.fn_def_mut().instructions.push(Instruction {
                     kind: InstructionKind::VarDecl(
                         identifier.clone(),

@@ -135,7 +135,6 @@ impl<'a> Parser<'a> {
             kind: NodeKind::File(Vec::new()),
             origin,
         });
-        self.node_to_type.insert(root, Type::new_void());
 
         let any = self.new_node(Node {
             kind: NodeKind::Identifier(String::from("any")),
@@ -158,7 +157,7 @@ impl<'a> Parser<'a> {
             &[Type::new_any()],
             &Origin::new_builtin(),
         );
-        self.nodes[0].kind.as_file_mut().unwrap().push(println);
+        self.nodes[root].kind.as_file_mut().unwrap().push(println);
         self.name_to_def.insert(String::from("println"), println);
         dbg!(&println, &println_type);
         self.node_to_type.insert(println, println_type);
