@@ -7,7 +7,7 @@ use std::{
 use crate::{
     error::{Error, ErrorKind},
     lex::{Lexer, Token, TokenKind},
-    origin::{FileId, Origin},
+    origin::{FileId, Origin, OriginKind},
     type_checker::Type,
 };
 use serde::Serialize;
@@ -136,27 +136,31 @@ impl<'a> Parser<'a> {
             origin,
         });
 
-        let arg = self.new_node(Node {
+        let any = self.new_node(Node {
             kind: NodeKind::Identifier(String::from("any")),
             origin,
         });
-        let node_id = self.new_node(Node {
+        self.name_to_def.insert(String::from("any"), any);
+        self.node_to_type.insert(any, Type::new_any());
+
+        let println = self.new_node(Node {
             kind: NodeKind::FnDef(FnDef {
                 name: String::from("println"),
-                args: vec![arg],
+                args: vec![any],
                 ret: None,
                 body: Vec::new(),
             }),
             origin,
         });
-        let typ = Type::new_function(
+        let println_type = Type::new_function(
             &Type::new_void(),
             &[Type::new_any()],
             &Origin::new_builtin(),
         );
-        self.nodes[0].kind.as_file_mut().unwrap().push(node_id);
-        self.name_to_def.insert(String::from("println"), node_id);
-        self.node_to_type.insert(node_id, typ);
+        self.nodes[0].kind.as_file_mut().unwrap().push(println);
+        self.name_to_def.insert(String::from("println"), println);
+        dbg!(&println, &println_type);
+        self.node_to_type.insert(println, println_type);
     }
 
     fn peek_token(&self) -> Option<&Token> {
@@ -831,11 +835,13 @@ impl<'a> Parser<'a> {
                 let def_id = if let Some(def_id) = name_to_def.get(name) {
                     def_id
                 } else {
-                    errors.push(Error::new(
-                        ErrorKind::UnknownIdentifier,
-                        node.origin,
-                        String::from("unknown identifier"),
-                    ));
+                    if node.origin.kind != OriginKind::Builtin {
+                        errors.push(Error::new(
+                            ErrorKind::UnknownIdentifier,
+                            node.origin,
+                            format!("unknown identifier: {}", name),
+                        ));
+                    }
                     return;
                 };
 
@@ -887,8 +893,19 @@ impl<'a> Parser<'a> {
             }
             NodeKind::FnCall { callee, args } => {
                 Self::resolve_node(*callee, nodes, errors, name_to_def, file_id_to_name);
+                let callee_name = nodes[*callee].kind.as_identifier().unwrap();
+                let def_id = name_to_def.get(callee_name);
+                if def_id.is_none() {
+                    errors.push(Error {
+                        kind: ErrorKind::UnknownIdentifier,
+                        origin: node.origin,
+                        explanation: format!("unknown identifier: {}", callee_name),
+                    });
 
-                let def = &nodes[*callee];
+                    // TODO: Should we pretend we found it?
+                    return;
+                }
+                let def = &nodes[*def_id.unwrap()];
 
                 match def.kind {
                     NodeKind::FnDef { .. } => {} // All good.
@@ -981,6 +998,13 @@ impl NodeKind {
     fn as_file_mut(&mut self) -> Option<&mut Vec<NodeId>> {
         match self {
             NodeKind::File(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn as_identifier(&self) -> Option<&str> {
+        match self {
+            NodeKind::Identifier(s) => Some(s),
             _ => None,
         }
     }
