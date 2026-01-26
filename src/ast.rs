@@ -18,6 +18,7 @@ pub struct NodeId(usize);
 
 #[derive(Serialize, Clone, PartialEq, Eq, Debug)]
 pub enum NodeKind {
+    File(Vec<NodeId>), // Root.
     Number(u64),
     Bool(bool),
     Add(NodeId, NodeId),
@@ -120,8 +121,13 @@ impl<'a> Parser<'a> {
         NodeId(self.nodes.len() - 1)
     }
 
-    pub(crate) fn builtins(&mut self, cap_hint: usize) -> Vec<NodeId> {
-        let mut node_ids = Vec::with_capacity(cap_hint);
+    pub(crate) fn builtins(&mut self) {
+        assert!(self.nodes.is_empty());
+
+        self.nodes.push(Node {
+            kind: NodeKind::File(Vec::new()),
+            origin: Origin::new_builtin(),
+        });
 
         let origin = Origin::new_builtin();
 
