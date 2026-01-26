@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     fmt::Display,
     io::{self, Write},
     ops::Neg,
@@ -18,7 +18,7 @@ use serde::Serialize;
 use crate::{
     asm::{self, Abi, Encoding, Stack, Symbol, Target},
     ir::{self},
-    origin::{Origin, OriginKind},
+    origin::{FileId, Origin, OriginKind},
     register_alloc::{MemoryLocation, RegisterMapping},
     type_checker::Size,
 };
@@ -243,7 +243,11 @@ impl Display for Operand {
     }
 }
 
-pub(crate) fn encode(instructions: &[asm::Instruction], target: &Target) -> Encoding {
+pub(crate) fn encode(
+    instructions: &[asm::Instruction],
+    target: &Target,
+    file_id_to_name: &HashMap<FileId, String>,
+) -> Encoding {
     let mut w = Vec::with_capacity(instructions.len() * 5);
     let mut symbols = BTreeMap::new();
     let mut jump_target_locations = BTreeMap::new();
@@ -357,6 +361,7 @@ pub(crate) fn encode(instructions: &[asm::Instruction], target: &Target) -> Enco
             &symbols,
             &mut jump_target_locations,
             &mut jumps_to_patch,
+            file_id_to_name,
         )
         .unwrap();
     }
@@ -390,17 +395,23 @@ pub(crate) fn encode(instructions: &[asm::Instruction], target: &Target) -> Enco
         Symbol {
             location: w.len(),
             visibility: asm::Visibility::Global,
-            origin: Origin::new_builtin(),
+            origin: Origin::new_synth_codegen(),
         },
     );
     {
         let ins_call = Instruction {
             kind: InstructionKind::Call,
             operands: vec![Operand::FnName(String::from("main"))],
-            origin: Origin::new_unknown(),
+            origin: Origin::new_synth_codegen(),
         };
         ins_call
-            .encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+            .encode(
+                &mut w,
+                &symbols,
+                &mut jumps,
+                &mut jumps_to_patch,
+                &file_id_to_name,
+            )
             .unwrap();
     }
 
@@ -416,30 +427,48 @@ pub(crate) fn encode(instructions: &[asm::Instruction], target: &Target) -> Enco
                 Operand::Register(Register::Eax),
                 Operand::Immediate(sys_exit as i64),
             ],
-            origin: Origin::new_unknown(),
+            origin: Origin::new_synth_codegen(),
         };
         ins_mov
-            .encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+            .encode(
+                &mut w,
+                &symbols,
+                &mut jumps,
+                &mut jumps_to_patch,
+                &file_id_to_name,
+            )
             .unwrap();
     }
     {
         let ins_mov = Instruction {
             kind: InstructionKind::Mov,
             operands: vec![Operand::Register(Register::Edi), Operand::Immediate(0)],
-            origin: Origin::new_unknown(),
+            origin: Origin::new_synth_codegen(),
         };
         ins_mov
-            .encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+            .encode(
+                &mut w,
+                &symbols,
+                &mut jumps,
+                &mut jumps_to_patch,
+                &file_id_to_name,
+            )
             .unwrap();
     }
     {
         let ins_syscall = Instruction {
             kind: InstructionKind::Syscall,
             operands: vec![],
-            origin: Origin::new_unknown(),
+            origin: Origin::new_synth_codegen(),
         };
         ins_syscall
-            .encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+            .encode(
+                &mut w,
+                &symbols,
+                &mut jumps,
+                &mut jumps_to_patch,
+                &file_id_to_name,
+            )
             .unwrap();
     }
 
@@ -607,7 +636,7 @@ impl Emitter {
                         self.emit_store(
                             &MemoryLocation::Register(asm::Register::Amd64(Register::R11)),
                             &((*rhs_loc).into()),
-                            &Origin::new_synth_codegen(),
+                            &ins.origin,
                         );
                         (
                             InstructionKind::Add,
@@ -685,7 +714,7 @@ impl Emitter {
                     self.emit_store(
                         &spill_slot,
                         &MemoryLocation::Register(asm::Register::Amd64(Register::Rdx)).into(),
-                        &Origin::new_synth_codegen(),
+                        &ins.origin,
                     );
                     trace!("spill rdx before idiv: spill_slot={:#?}", spill_slot);
 
@@ -696,7 +725,7 @@ impl Emitter {
                     self.emit_store(
                         &spill_slot,
                         &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)).into(),
-                        &Origin::new_synth_codegen(),
+                        &ins.origin,
                     );
                     trace!("spill rax before idiv: spill_slot={:#?}", spill_slot);
 
@@ -707,7 +736,7 @@ impl Emitter {
                 self.emit_store(
                     &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)),
                     &lhs.into(),
-                    &Origin::new_synth_codegen(),
+                    &ins.origin,
                 );
 
                 // `idiv` technically divides the 128 bit `rdx:rax` value.
@@ -741,14 +770,14 @@ impl Emitter {
                     self.emit_store(
                         &MemoryLocation::Register(asm::Register::Amd64(Register::Rdx)),
                         &rdx_spill_slot.into(),
-                        &Origin::new_synth_codegen(),
+                        &ins.origin,
                     );
 
                     trace!("unspill rax after idiv: spill_slot={:#?}", rax_spill_slot);
                     self.emit_store(
                         &MemoryLocation::Register(asm::Register::Amd64(Register::Rax)),
                         &rax_spill_slot.into(),
-                        &Origin::new_synth_codegen(),
+                        &ins.origin,
                     );
                 }
             }
@@ -832,7 +861,7 @@ impl Emitter {
                     self.asm.push(Instruction {
                         kind: InstructionKind::Mov,
                         operands: vec![Operand::Register(dst_reg), src],
-                        origin: Origin::new_synth_codegen(),
+                        origin: ins.origin,
                     });
                 }
 
@@ -1438,7 +1467,17 @@ impl Display for InstructionKind {
     }
 }
 
-impl Instruction {
+impl<'a> Instruction {
+    pub(crate) fn display(
+        &'a self,
+        file_id_to_name: &'a HashMap<FileId, String>,
+    ) -> InstructionFormatter<'a> {
+        InstructionFormatter {
+            ins: self,
+            file_id_to_name,
+        }
+    }
+
     // w: register is extended (r8-r15) OR manipulates operand size
     // r: modr/m reg field is extended
     // x: the index field in SIB is extended
@@ -1918,8 +1957,13 @@ impl Instruction {
         symbols: &BTreeMap<String, Symbol>,
         jump_target_locations: &mut BTreeMap<String, usize>,
         jumps_to_patch: &mut BTreeMap<String, Vec<usize>>,
+        file_id_to_name: &'a HashMap<FileId, String>,
     ) -> std::io::Result<()> {
-        trace!("amd64: action=encode pos={:#X} ins={}", w.len(), self);
+        trace!(
+            "amd64: action=encode pos={:#X} ins={}",
+            w.len(),
+            self.display(file_id_to_name)
+        );
 
         match self.kind {
             InstructionKind::LabelDef => {
@@ -2951,25 +2995,38 @@ impl Operand {
     }
 }
 
-impl Display for Instruction {
+pub struct InstructionFormatter<'a> {
+    ins: &'a Instruction,
+    file_id_to_name: &'a HashMap<FileId, String>,
+}
+
+impl<'a> Display for InstructionFormatter<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.kind.fmt(f)?;
+        self.ins.kind.fmt(f)?;
 
-        self.operands.iter().enumerate().try_for_each(|(i, o)| {
-            if i == 0 {
-                if self.kind != InstructionKind::LabelDef {
-                    f.write_str(" ")?;
+        self.ins
+            .operands
+            .iter()
+            .enumerate()
+            .try_for_each(|(i, o)| {
+                if i == 0 {
+                    if self.ins.kind != InstructionKind::LabelDef {
+                        f.write_str(" ")?;
+                    }
+                } else {
+                    f.write_str(", ")?;
                 }
-            } else {
-                f.write_str(", ")?;
-            }
 
-            write!(f, "{}", o)
-        })?;
+                write!(f, "{}", o)
+            })?;
 
-        if self.kind == InstructionKind::LabelDef {
+        if self.ins.kind == InstructionKind::LabelDef {
             f.write_str(":")?;
         }
+
+        f.write_str(" // ")?;
+        dbg!(self.ins.origin);
+        self.ins.origin.display(self.file_id_to_name);
 
         Ok(())
     }
@@ -3032,6 +3089,8 @@ mod tests {
     fn test_encoding() {
         let mut jumps = BTreeMap::new();
         let mut jumps_to_patch = BTreeMap::new();
+        let file_id_to_name = HashMap::new();
+
         {
             let ins = Instruction {
                 kind: InstructionKind::Mov,
@@ -3048,8 +3107,14 @@ mod tests {
             };
             let mut w = Vec::with_capacity(8);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
-                .unwrap();
+            ins.encode(
+                &mut w,
+                &symbols,
+                &mut jumps,
+                &mut jumps_to_patch,
+                &file_id_to_name,
+            )
+            .unwrap();
             assert_eq!(&w, &[0x48, 0x8b, 0x7c, 0x24, 0xf8]);
         }
         {
@@ -3069,8 +3134,14 @@ mod tests {
             let mut w = Vec::with_capacity(8);
             let symbols = BTreeMap::new();
             let mut jumps = BTreeMap::new();
-            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
-                .unwrap();
+            ins.encode(
+                &mut w,
+                &symbols,
+                &mut jumps,
+                &mut jumps_to_patch,
+                &file_id_to_name,
+            )
+            .unwrap();
             assert_eq!(&w, &[0x48, 0x89, 0x7c, 0x24, 0xf8]);
         }
         {
@@ -3082,8 +3153,14 @@ mod tests {
             let mut w = Vec::with_capacity(8);
             let symbols = BTreeMap::new();
             let mut jumps = BTreeMap::new();
-            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
-                .unwrap();
+            ins.encode(
+                &mut w,
+                &symbols,
+                &mut jumps,
+                &mut jumps_to_patch,
+                &file_id_to_name,
+            )
+            .unwrap();
             assert_eq!(&w, &[0x48, 0xc7, 0xc0, 0x01, 0x00, 0x00, 0x00]);
         }
         {
@@ -3106,7 +3183,13 @@ mod tests {
                     origin: Origin::new_unknown(),
                 };
                 ins_mov
-                    .encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+                    .encode(
+                        &mut w,
+                        &symbols,
+                        &mut jumps,
+                        &mut jumps_to_patch,
+                        &file_id_to_name,
+                    )
                     .unwrap();
 
                 let ins_ret = Instruction {
@@ -3115,7 +3198,13 @@ mod tests {
                     origin: Origin::new_unknown(),
                 };
                 ins_ret
-                    .encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+                    .encode(
+                        &mut w,
+                        &symbols,
+                        &mut jumps,
+                        &mut jumps_to_patch,
+                        &file_id_to_name,
+                    )
                     .unwrap();
             }
 
@@ -3126,7 +3215,13 @@ mod tests {
                     origin: Origin::new_unknown(),
                 };
                 ins_call
-                    .encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
+                    .encode(
+                        &mut w,
+                        &symbols,
+                        &mut jumps,
+                        &mut jumps_to_patch,
+                        &file_id_to_name,
+                    )
                     .unwrap();
             }
 
@@ -3157,8 +3252,14 @@ mod tests {
             let mut w = Vec::new();
             // Error on overflow.
             assert!(
-                ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
-                    .is_err()
+                ins.encode(
+                    &mut w,
+                    &symbols,
+                    &mut jumps,
+                    &mut jumps_to_patch,
+                    &file_id_to_name
+                )
+                .is_err()
             );
         }
         {
@@ -3169,8 +3270,14 @@ mod tests {
             };
             let mut w = Vec::with_capacity(5);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
-                .unwrap();
+            ins.encode(
+                &mut w,
+                &symbols,
+                &mut jumps,
+                &mut jumps_to_patch,
+                &file_id_to_name,
+            )
+            .unwrap();
             assert_eq!(&w, &[0x66, 0x83, 0xc3, 0x00]);
         }
         {
@@ -3186,8 +3293,14 @@ mod tests {
             };
             let mut w = Vec::with_capacity(15);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
-                .unwrap();
+            ins.encode(
+                &mut w,
+                &symbols,
+                &mut jumps,
+                &mut jumps_to_patch,
+                &file_id_to_name,
+            )
+            .unwrap();
             assert_eq!(&w, &[0x67, 0xf6, 0xab, 0x7f, 0xff, 0xff, 0xff]);
         }
         {
@@ -3203,8 +3316,14 @@ mod tests {
             };
             let mut w = Vec::with_capacity(5);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
-                .unwrap();
+            ins.encode(
+                &mut w,
+                &symbols,
+                &mut jumps,
+                &mut jumps_to_patch,
+                &file_id_to_name,
+            )
+            .unwrap();
             assert_eq!(&w, &[0x67, 0xff, 0x73, 0x01]);
         }
         {
@@ -3220,8 +3339,14 @@ mod tests {
             };
             let mut w = Vec::with_capacity(5);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
-                .unwrap();
+            ins.encode(
+                &mut w,
+                &symbols,
+                &mut jumps,
+                &mut jumps_to_patch,
+                &file_id_to_name,
+            )
+            .unwrap();
             assert_eq!(&w, &[0x67, 0xff, 0x33]);
         }
         {
@@ -3237,8 +3362,14 @@ mod tests {
             };
             let mut w = Vec::with_capacity(5);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
-                .unwrap();
+            ins.encode(
+                &mut w,
+                &symbols,
+                &mut jumps,
+                &mut jumps_to_patch,
+                &file_id_to_name,
+            )
+            .unwrap();
             assert_eq!(&w, &[0x67, 0xff, 0x33]);
         }
         {
@@ -3254,8 +3385,14 @@ mod tests {
             };
             let mut w = Vec::with_capacity(5);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
-                .unwrap();
+            ins.encode(
+                &mut w,
+                &symbols,
+                &mut jumps,
+                &mut jumps_to_patch,
+                &file_id_to_name,
+            )
+            .unwrap();
             assert_eq!(&w, &[0x67, 0x66, 0xff, 0x34, 0x5d, 0, 0, 0, 0]);
         }
         {
@@ -3266,8 +3403,14 @@ mod tests {
             };
             let mut w = Vec::with_capacity(2);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
-                .unwrap();
+            ins.encode(
+                &mut w,
+                &symbols,
+                &mut jumps,
+                &mut jumps_to_patch,
+                &file_id_to_name,
+            )
+            .unwrap();
             assert_eq!(&w, &[0x41, 0x57]);
         }
 
@@ -3279,8 +3422,14 @@ mod tests {
             };
             let mut w = Vec::with_capacity(2);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
-                .unwrap();
+            ins.encode(
+                &mut w,
+                &symbols,
+                &mut jumps,
+                &mut jumps_to_patch,
+                &file_id_to_name,
+            )
+            .unwrap();
             assert_eq!(&w, &[0x5b]);
         }
 
@@ -3300,8 +3449,14 @@ mod tests {
             };
             let mut w = Vec::with_capacity(5);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
-                .unwrap();
+            ins.encode(
+                &mut w,
+                &symbols,
+                &mut jumps,
+                &mut jumps_to_patch,
+                &file_id_to_name,
+            )
+            .unwrap();
             assert_eq!(&w, &[0x4f, 0x8d, 0x44, 0xf5, 0x2a]);
         }
         {
@@ -3317,8 +3472,14 @@ mod tests {
             };
             let mut w = Vec::with_capacity(5);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
-                .unwrap();
+            ins.encode(
+                &mut w,
+                &symbols,
+                &mut jumps,
+                &mut jumps_to_patch,
+                &file_id_to_name,
+            )
+            .unwrap();
             assert_eq!(&w, &[0x41, 0xff, 0x74, 0x9c, 0x01]);
         }
         {
@@ -3334,8 +3495,14 @@ mod tests {
             };
             let mut w = Vec::with_capacity(5);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
-                .unwrap();
+            ins.encode(
+                &mut w,
+                &symbols,
+                &mut jumps,
+                &mut jumps_to_patch,
+                &file_id_to_name,
+            )
+            .unwrap();
             assert_eq!(&w, &[0x41, 0x8f, 0x44, 0x9c, 0x01]);
         }
         {
@@ -3353,8 +3520,14 @@ mod tests {
             let symbols = BTreeMap::new();
             // Error due to ambiguous size.
             assert!(
-                ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
-                    .is_err()
+                ins.encode(
+                    &mut w,
+                    &symbols,
+                    &mut jumps,
+                    &mut jumps_to_patch,
+                    &file_id_to_name
+                )
+                .is_err()
             );
         }
         {
@@ -3370,8 +3543,14 @@ mod tests {
             };
             let mut w = Vec::with_capacity(5);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
-                .unwrap();
+            ins.encode(
+                &mut w,
+                &symbols,
+                &mut jumps,
+                &mut jumps_to_patch,
+                &file_id_to_name,
+            )
+            .unwrap();
             assert_eq!(&w, &[0x49, 0xf7, 0x7c, 0x9c, 0x01]);
         }
         {
@@ -3385,13 +3564,21 @@ mod tests {
             };
             let mut w = Vec::with_capacity(5);
             let symbols = BTreeMap::new();
-            ins.encode(&mut w, &symbols, &mut jumps, &mut jumps_to_patch)
-                .unwrap();
+            ins.encode(
+                &mut w,
+                &symbols,
+                &mut jumps,
+                &mut jumps_to_patch,
+                &file_id_to_name,
+            )
+            .unwrap();
             assert_eq!(&w, &[0x48, 0x89, 0xe5]);
         }
     }
 
     fn oracle_encode(ins: &Instruction) -> Result<Vec<u8>, (ExitStatus, String, Vec<u8>)> {
+        let empty_file_id_to_name = HashMap::new();
+
         let mut child = std::process::Command::new("clang")
             .args(&[
                 "--target=x86_64-unknown-linux",
@@ -3423,7 +3610,7 @@ mod tests {
 
         {
             let mut stdin = child.stdin.take().unwrap();
-            write!(&mut stdin, "{}", ins).map_err(|err| {
+            write!(&mut stdin, "{}", ins.display(&empty_file_id_to_name)).map_err(|err| {
                 (
                     ExitStatus::default(),
                     String::new(),
@@ -3463,6 +3650,8 @@ mod tests {
     proptest! {
       #[test]
       fn test_encode_proptest(ins in arb_instruction()){
+    let empty_file_id_to_name = HashMap::new();
+
           // Skip malformed effective addresses (if any).
           let has_invalid_addresses = ins.operands.iter().any(|op| if let Some(addr) = op.as_effective_address() && !addr.is_valid() { return true; } else {false});
 
@@ -3472,11 +3661,11 @@ mod tests {
             let symbols = BTreeMap::new();
             let mut jumps = BTreeMap::new();
             let mut jumps_to_patch = BTreeMap::new();
-            match (ins.encode(&mut actual, &symbols,&mut jumps,&mut jumps_to_patch), oracle_encode(&ins)) {
-                (Ok(()), Ok(expected)) => assert_eq!(actual, expected, "ins={}, {:#?} actual={:x?} expected={:x?}", ins,ins, &actual, &expected),
+            match (ins.encode(&mut actual, &symbols,&mut jumps,&mut jumps_to_patch,&empty_file_id_to_name), oracle_encode(&ins)) {
+                (Ok(()), Ok(expected)) => assert_eq!(actual, expected, "ins={}, {:#?} actual={:x?} expected={:x?}", ins.display(&empty_file_id_to_name),ins, &actual, &expected),
                 (Err(_), Err(_)) => {},
-                (Ok(actual),Err((status, stdout, stderr))) => panic!("oracle and implementation disagree: actual={:#?} oracle_status={} oracle_stdout={} oracle_stderr={} ins={} {:#?}",actual,status,stdout, String::from_utf8_lossy(&stderr), ins,ins ),
-                (Err(actual),Ok(oracle)) => panic!("oracle and implementation disagree: actual={:#?} oracle={:x?} ins={} {:#?}",actual,&oracle, ins,ins ),
+                (Ok(actual),Err((status, stdout, stderr))) => panic!("oracle and implementation disagree: actual={:#?} oracle_status={} oracle_stdout={} oracle_stderr={} ins={} {:#?}",actual,status,stdout, String::from_utf8_lossy(&stderr), ins.display(&empty_file_id_to_name),ins ),
+                (Err(actual),Ok(oracle)) => panic!("oracle and implementation disagree: actual={:#?} oracle={:x?} ins={} {:#?}",actual,&oracle, ins.display(&empty_file_id_to_name),ins ),
             }
           }
       }

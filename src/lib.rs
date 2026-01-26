@@ -256,7 +256,7 @@ pub fn compile(
         writeln!(&mut asm_text, "{}:", &fn_def.name).unwrap();
 
         for ins in &fn_asm_instructions {
-            writeln!(&mut asm_text, "  {}", ins).unwrap();
+            writeln!(&mut asm_text, "  {}", ins.display(file_id_to_name)).unwrap();
         }
         writeln!(&mut asm_text, "\n").unwrap();
         // FIXME: Keep fn_def.instructions structure to be able to record each fn location in order
@@ -266,7 +266,7 @@ pub fn compile(
 
     trace!("asm_text: {}", &asm_text);
 
-    let encoding = asm::encode(&asm_instructions, target);
+    let encoding = asm::encode(&asm_instructions, target, file_id_to_name);
     trace!(
         "asm encoded: entrypoint={:#X} bin={:#04X?}",
         encoding.entrypoint, &encoding.instructions

@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     fmt::{Debug, Display},
 };
 
@@ -9,7 +9,7 @@ use serde::Serialize;
 use crate::{
     amd64,
     ir::{self},
-    origin::Origin,
+    origin::{FileId, Origin},
     register_alloc::RegisterMapping,
 };
 
@@ -84,9 +84,13 @@ pub(crate) fn abi(target_arch: &Architecture) -> Abi {
     }
 }
 
-pub(crate) fn encode(instructions: &[Instruction], target: &Target) -> Encoding {
+pub(crate) fn encode(
+    instructions: &[Instruction],
+    target: &Target,
+    file_id_to_name: &HashMap<FileId, String>,
+) -> Encoding {
     match target.arch {
-        Architecture::Amd64 => amd64::encode(instructions, target),
+        Architecture::Amd64 => amd64::encode(instructions, target, file_id_to_name),
     }
 }
 
@@ -142,10 +146,27 @@ pub(crate) fn emit_fn_def(
     }
 }
 
-impl Display for Instruction {
+pub struct InstructionFormatter<'a> {
+    ins: &'a Instruction,
+    file_id_to_name: &'a HashMap<FileId, String>,
+}
+
+impl<'a> Display for InstructionFormatter<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Instruction::Amd64(ins) => write!(f, "{}", ins),
+        match self.ins {
+            Instruction::Amd64(ins) => write!(f, "{}", ins.display(self.file_id_to_name)),
+        }
+    }
+}
+
+impl<'a> Instruction {
+    pub(crate) fn display(
+        &'a self,
+        file_id_to_name: &'a HashMap<FileId, String>,
+    ) -> InstructionFormatter<'a> {
+        InstructionFormatter {
+            ins: self,
+            file_id_to_name,
         }
     }
 }
