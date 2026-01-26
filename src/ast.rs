@@ -1021,13 +1021,6 @@ impl NodeKind {
         }
     }
 
-    pub(crate) fn as_fn_def(&self) -> Option<&FnDef> {
-        match self {
-            NodeKind::FnDef(fn_def) => Some(fn_def),
-            _ => None,
-        }
-    }
-
     pub(crate) fn as_block(&self) -> Option<&[NodeId]> {
         match self {
             NodeKind::Block(stmts) => Some(stmts),
