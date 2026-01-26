@@ -197,28 +197,24 @@ pub fn compile(
     trace!("ast_nodes: {:#?}", ast_nodes);
     trace!("parser errors: {:#?}", parser.errors);
 
-    let name_to_def = &parser.name_to_def;
-    let node_to_type = parser.node_to_type;
-    let nodes = &parser.nodes;
     let mut errors = parser.errors;
     errors.extend(type_checker::check_nodes(
-        &ast_nodes,
-        nodes,
-        &mut node_to_type,
-        name_to_def,
+        &parser.nodes,
+        &mut parser.node_to_type,
+        &parser.name_to_def,
     ));
 
     if !errors.is_empty() {
         return CompileResult {
             lex_tokens: parser.tokens,
-            ast_nodes,
+            ast_nodes: parser.nodes,
             errors,
             ..Default::default()
         };
     }
 
     let mut ir_emitter = ir::Emitter::new();
-    ir_emitter.emit(&ast_nodes);
+    ir_emitter.emit_nodes(&parser.nodes);
     trace!("ir_emitter: {:#?}", ir_emitter);
 
     let mut ir_text = String::with_capacity(input.len() * 3);

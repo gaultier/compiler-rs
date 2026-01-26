@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::HashMap,
     num::ParseIntError,
     ops::{Index, IndexMut},
 };
@@ -14,7 +14,7 @@ use serde::Serialize;
 
 // TODO: u32?
 #[derive(Serialize, Clone, Copy, PartialEq, Eq, Debug, Hash)]
-pub struct NodeId(usize);
+pub struct NodeId(pub(crate) usize);
 
 #[derive(Serialize, Clone, PartialEq, Eq, Debug)]
 pub enum NodeKind {
@@ -143,11 +143,9 @@ impl<'a> Parser<'a> {
             &[Type::new_any()],
             &Origin::new_builtin(),
         );
-        node_ids.push(node_id);
+        self.nodes[0].kind.as_file_mut().unwrap().push(node_id);
         self.name_to_def.insert(String::from("println"), node_id);
         self.node_to_type.insert(node_id, typ);
-
-        node_ids
     }
 
     fn peek_token(&self) -> Option<&Token> {
@@ -752,20 +750,18 @@ impl<'a> Parser<'a> {
     }
 
     #[warn(unused_results)]
-    pub fn parse(&mut self) -> Vec<NodeId> {
-        let mut decls = Vec::new();
-        let builtin_node_ids = self.builtins(self.tokens.len());
-        decls.extend(builtin_node_ids);
+    pub fn parse(&mut self) {
+        self.builtins();
 
         if let Some(p) = self.parse_package_clause() {
-            decls.push(p);
+            self.nodes[0].kind.as_file_mut().unwrap().push(p);
         } else {
-            return decls;
+            return;
         }
 
         for _i in 0..self.tokens.len() {
             if self.peek_token().is_none() {
-                return decls;
+                return;
             }
 
             if self.error_mode {
@@ -778,7 +774,7 @@ impl<'a> Parser<'a> {
                 None | Some(TokenKind::Eof) => break,
                 token => {
                     if let Some(decl) = self.parse_declaration() {
-                        decls.push(decl);
+                        self.nodes[0].kind.as_file_mut().unwrap().push(decl);
                         continue;
                     }
 
@@ -796,8 +792,7 @@ impl<'a> Parser<'a> {
         }
 
         let mut name_to_def = HashMap::new();
-        self.resolve_nodes(&mut decls, &mut name_to_def, self.file_id_to_name);
-        decls
+        self.resolve_nodes(&mut name_to_def);
     }
 
     fn resolve_node(
@@ -809,6 +804,11 @@ impl<'a> Parser<'a> {
     ) {
         let node = &nodes[node_id];
         match &node.kind {
+            NodeKind::File(decls) => {
+                for decl in decls {
+                    Self::resolve_node(*decl, nodes, errors, name_to_def, file_id_to_name);
+                }
+            }
             // Nothing to do.
             NodeKind::Package(_) | NodeKind::Number(_) | NodeKind::Bool(_) => {}
 
@@ -955,20 +955,38 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn resolve_nodes(
-        &mut self,
-        node_ids: &[NodeId],
-        name_to_def: &mut HashMap<String, NodeId>,
-        file_id_to_name: &'a HashMap<FileId, String>,
-    ) {
-        for node_id in node_ids {
-            Self::resolve_node(
-                *node_id,
-                &mut self.nodes,
-                &mut self.errors,
-                name_to_def,
-                file_id_to_name,
-            );
+    fn resolve_nodes(&mut self, name_to_def: &mut HashMap<String, NodeId>) {
+        assert!(!self.nodes.is_empty());
+
+        Self::resolve_node(
+            NodeId(0),
+            &self.nodes,
+            &mut self.errors,
+            name_to_def,
+            self.file_id_to_name,
+        );
+    }
+}
+
+impl NodeKind {
+    fn as_file_mut(&mut self) -> Option<&mut Vec<NodeId>> {
+        match self {
+            NodeKind::File(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn as_file(&self) -> Option<&Vec<NodeId>> {
+        match self {
+            NodeKind::File(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn as_block(&self) -> Option<&[NodeId]> {
+        match self {
+            NodeKind::Block(stmts) => Some(stmts),
+            _ => None,
         }
     }
 }

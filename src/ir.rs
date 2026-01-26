@@ -1,10 +1,15 @@
-use std::{collections::BTreeMap, fmt::Display, io::Write, panic};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fmt::Display,
+    io::Write,
+    panic,
+};
 
 use log::trace;
 use serde::Serialize;
 
 use crate::{
-    ast::{Node, NodeKind},
+    ast::{Node, NodeId, NodeKind},
     origin::Origin,
     type_checker::{Size, Type, TypeKind},
 };
@@ -58,10 +63,12 @@ pub struct LiveRange {
 pub type LiveRanges = BTreeMap<VirtualRegister, LiveRange>;
 
 #[derive(Debug)]
-pub struct Emitter {
+pub struct Emitter<'a> {
     pub fn_defs: Vec<FnDef>,
     pub labels: Vec<String>,
     label_current: usize,
+    node_to_type: HashMap<NodeId, Type>,
+    nodes: &'a [Node],
 }
 
 #[derive(Debug, Serialize)]
@@ -92,12 +99,6 @@ impl Display for VirtualRegister {
 impl Display for LiveRange {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "[{}, {})", self.start, self.end)
-    }
-}
-
-impl Default for Emitter {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -229,31 +230,63 @@ impl FnDef {
     }
 }
 
-impl Emitter {
-    pub(crate) fn new() -> Self {
+impl<'a> Emitter<'a> {
+    pub(crate) fn new(nodes: &'a [Node], node_to_type: HashMap<NodeId, Type>) -> Self {
         Self {
             fn_defs: Vec::new(),
             labels: Vec::new(),
             label_current: 0,
+            node_to_type,
+            nodes,
         }
     }
 
-    fn emit_node(&mut self, fn_def: &mut FnDef, node: &Node) {
+    fn fn_def_mut(&mut self) -> &mut FnDef {
+        self.fn_defs.last_mut().unwrap()
+    }
+
+    fn vreg(&self) -> VirtualRegister {
+        self.fn_defs
+            .last()
+            .unwrap()
+            .instructions
+            .last()
+            .unwrap()
+            .res_vreg
+            .unwrap()
+    }
+
+    fn emit_node(&mut self, node_id: NodeId) {
+        let node = &self.nodes[node_id];
+        let typ = self.node_to_type.get(&node_id).unwrap();
+
         match &node.kind {
-            crate::ast::NodeKind::Package(_) | crate::ast::NodeKind::FnDef { .. } => {
-                panic!(
-                    "unexpected AST node inside function definition: {:#?}",
-                    &node
-                );
+            NodeKind::File(decls) => {
+                for decl in decls {
+                    self.emit_node(*decl);
+                }
             }
+            NodeKind::Package(_) => {}
+            // Start of a new function.
+            NodeKind::FnDef { name, body } => {
+                let stack_size = 0; // TODO
+                self.fn_defs
+                    .push(FnDef::new(name.to_owned(), &typ, node.origin, stack_size));
+                for stmt in body {
+                    self.emit_node(*stmt);
+                }
+
+                self.fn_def_mut().live_ranges = self.fn_def_mut().compute_live_ranges();
+            }
+            NodeKind::Package(_) | NodeKind::FnDef { .. } => {}
             NodeKind::For { cond, block } => {
-                assert_eq!(*node.typ.kind, TypeKind::Void);
+                assert_eq!(*typ.kind, TypeKind::Void);
 
                 let loop_label = format!(".{}_for_loop", self.label_current);
                 let end_label = format!(".{}_for_end", self.label_current);
                 self.label_current += 1;
 
-                fn_def.instructions.push(Instruction {
+                self.fn_def_mut().instructions.push(Instruction {
                     kind: InstructionKind::LabelDef(loop_label.clone()),
                     origin: node.origin,
                     res_vreg: None,
@@ -261,14 +294,14 @@ impl Emitter {
                 });
 
                 if let Some(cond) = cond {
-                    self.emit_node(fn_def, cond);
-                    let vreg = fn_def.instructions.last().unwrap().res_vreg.unwrap();
+                    self.emit_node(*cond);
+                    let vreg = self.vreg();
 
                     let op = Operand {
                         kind: OperandKind::VirtualRegister(vreg),
-                        typ: fn_def.instructions.last().unwrap().typ.clone(),
+                        typ: self.fn_def_mut().instructions.last().unwrap().typ.clone(),
                     };
-                    fn_def.instructions.push(Instruction {
+                    self.fn_def_mut().instructions.push(Instruction {
                         kind: InstructionKind::JumpIfFalse(end_label.clone(), op),
                         origin: node.origin,
                         res_vreg: None,
@@ -276,16 +309,16 @@ impl Emitter {
                     });
                 }
                 for stmt in block {
-                    self.emit_node(fn_def, stmt);
+                    self.emit_node(*stmt);
                 }
-                fn_def.instructions.push(Instruction {
+                self.fn_def_mut().instructions.push(Instruction {
                     kind: InstructionKind::Jump(loop_label.clone()),
                     origin: node.origin,
                     res_vreg: None,
                     typ: Type::new_void(),
                 });
 
-                fn_def.instructions.push(Instruction {
+                self.fn_def_mut().instructions.push(Instruction {
                     kind: InstructionKind::LabelDef(end_label),
                     origin: node.origin,
                     res_vreg: None,
@@ -293,35 +326,35 @@ impl Emitter {
                 });
             }
             crate::ast::NodeKind::Number(num) => {
-                assert_eq!(*node.typ.kind, TypeKind::Number);
+                assert_eq!(*typ.kind, TypeKind::Number);
 
-                let res_vreg = fn_def.make_vreg(&node.typ);
-                fn_def.instructions.push(Instruction {
+                let res_vreg = self.fn_def_mut().make_vreg(&typ);
+                self.fn_def_mut().instructions.push(Instruction {
                     kind: InstructionKind::Set(Operand::new_int(*num as i64)),
                     origin: node.origin,
                     res_vreg: Some(res_vreg),
-                    typ: node.typ.clone(),
+                    typ: typ.clone(),
                 });
             }
             crate::ast::NodeKind::Bool(b) => {
-                assert_eq!(*node.typ.kind, TypeKind::Bool);
+                assert_eq!(*typ.kind, TypeKind::Bool);
 
-                let res_vreg = fn_def.make_vreg(&node.typ);
-                fn_def.instructions.push(Instruction {
+                let res_vreg = self.fn_def_mut().make_vreg(&node.typ);
+                self.fn_def_mut().instructions.push(Instruction {
                     kind: InstructionKind::Set(Operand::new_bool(*b)),
                     origin: node.origin,
                     res_vreg: Some(res_vreg),
-                    typ: node.typ.clone(),
+                    typ: typ.clone(),
                 });
             }
             crate::ast::NodeKind::Identifier(identifier) => {
-                let vreg = *fn_def.name_to_vreg.get(identifier).unwrap();
-                let res_vreg = fn_def.make_vreg(&node.typ);
-                fn_def.instructions.push(Instruction {
-                    kind: InstructionKind::Set(Operand::new_vreg(vreg, &node.typ)),
+                let vreg = *self.fn_def_mut().name_to_vreg.get(identifier).unwrap();
+                let res_vreg = self.fn_def_mut().make_vreg(typ);
+                self.fn_def_mut().instructions.push(Instruction {
+                    kind: InstructionKind::Set(Operand::new_vreg(vreg, typ)),
                     origin: node.origin,
                     res_vreg: Some(res_vreg),
-                    typ: node.typ.clone(),
+                    typ: typ.clone(),
                 });
             }
             crate::ast::NodeKind::FnCall { callee, args } => {
@@ -336,25 +369,30 @@ impl Emitter {
                     panic!("invalid fn call function name: {:#?}", node)
                 };
 
-                let arg_type = callee.typ.to_string();
-                let arg0_typ = args.first().map(|x| x.typ.to_string()).unwrap_or_default();
-                let real_fn_name = fn_name_ast_to_ir(ast_fn_name, &arg_type, &arg0_typ);
+                let callee_type = self.node_to_type.get(callee).unwrap();
+                let arg_type = callee_type.to_string();
+                let arg0_typ = args
+                    .first()
+                    .map(|x| self.node_to_type.get(x).unwrap().to_string())
+                    .unwrap_or_default();
+                let real_fn_name = fn_name_ast_to_ir(ast_fn_name.as_str(), &arg_type, &arg0_typ);
 
                 // Check type.
-                let (res_vreg, ret_type) = match &*callee.typ.kind {
+                let (res_vreg, ret_type) = match &*callee_type.kind {
                     TypeKind::Function(ret_type, _) if *ret_type.kind == TypeKind::Void => {
                         (None, ret_type.clone())
                     }
                     TypeKind::Function(ret_type, _) => {
-                        (Some(fn_def.make_vreg(&node.typ)), ret_type.clone())
+                        (Some(self.fn_def_mut().make_vreg(typ)), ret_type.clone())
                     }
-                    _ => panic!("not a function type: {:#?}", node.typ),
+                    _ => panic!("not a function type: {:#?}", typ),
                 };
 
                 let mut operands = Vec::with_capacity(args.len());
                 for arg in args {
-                    self.emit_node(fn_def, arg);
-                    let (vreg, typ) = fn_def
+                    self.emit_node(*arg);
+                    let (vreg, typ) = self
+                        .fn_def_mut()
                         .instructions
                         .last()
                         .map(|x| (x.res_vreg.unwrap(), &x.typ))
@@ -367,7 +405,7 @@ impl Emitter {
                     ast_fn_name, real_fn_name, arg_type,
                 );
 
-                fn_def.instructions.push(Instruction {
+                self.fn_def_mut().instructions.push(Instruction {
                     kind: InstructionKind::FnCall(real_fn_name, operands),
                     origin: node.origin,
                     res_vreg,
@@ -376,26 +414,29 @@ impl Emitter {
             }
             crate::ast::NodeKind::Cmp(lhs, rhs) => {
                 // Set by the parser.
-                assert_eq!(*node.typ.kind, TypeKind::Bool);
-                assert_ne!(*lhs.typ.kind, TypeKind::Any);
-                assert_ne!(*rhs.typ.kind, TypeKind::Any);
+                assert_eq!(*typ.kind, TypeKind::Bool);
 
-                self.emit_node(fn_def, lhs);
-                let lhs_vreg = fn_def.instructions.last().unwrap().res_vreg.unwrap();
-                self.emit_node(fn_def, rhs);
-                let rhs_vreg = fn_def.instructions.last().unwrap().res_vreg.unwrap();
+                let lhs_type = self.node_to_type.get(lhs).unwrap();
+                let rhs_type = self.node_to_type.get(rhs).unwrap();
+                assert_ne!(*lhs_type.kind, TypeKind::Any);
+                assert_ne!(*rhs_type.kind, TypeKind::Any);
 
-                let res_vreg = fn_def.make_vreg(&node.typ);
+                self.emit_node(*lhs);
+                let lhs_vreg = self.vreg();
+                self.emit_node(*rhs);
+                let rhs_vreg = self.vreg();
 
-                fn_def.instructions.push(Instruction {
+                let res_vreg = self.fn_def_mut().make_vreg(typ);
+
+                self.fn_def_mut().instructions.push(Instruction {
                     kind: InstructionKind::ICmp(
                         Operand {
                             kind: OperandKind::VirtualRegister(lhs_vreg),
-                            typ: lhs.typ.clone(),
+                            typ: lhs_type.clone(),
                         },
                         Operand {
                             kind: OperandKind::VirtualRegister(rhs_vreg),
-                            typ: rhs.typ.clone(),
+                            typ: rhs_type.clone(),
                         },
                     ),
                     origin: node.origin,
@@ -404,114 +445,119 @@ impl Emitter {
                 });
             }
             crate::ast::NodeKind::Add(ast_lhs, ast_rhs) => {
-                assert_eq!(*ast_lhs.typ.kind, TypeKind::Number);
-                assert_eq!(*ast_lhs.typ.kind, TypeKind::Number);
-                assert_eq!(*node.typ.kind, TypeKind::Number);
+                let lhs_type = self.node_to_type.get(ast_lhs).unwrap();
+                let rhs_type = self.node_to_type.get(ast_rhs).unwrap();
+                assert_eq!(*lhs_type.kind, TypeKind::Number);
+                assert_eq!(*rhs_type.kind, TypeKind::Number);
+                assert_eq!(*typ.kind, TypeKind::Number);
 
-                self.emit_node(fn_def, ast_lhs);
+                self.emit_node(*ast_lhs);
                 let (ir_lhs_vreg, ir_lhs_typ) = (
-                    fn_def.instructions.last().unwrap().res_vreg.unwrap(),
-                    fn_def.instructions.last().unwrap().typ.clone(),
+                    self.vreg(),
+                    self.fn_def_mut().instructions.last().unwrap().typ.clone(),
                 );
 
-                self.emit_node(fn_def, ast_rhs);
+                self.emit_node(*ast_rhs);
                 let (ir_rhs_vreg, ir_rhs_typ) = (
-                    fn_def.instructions.last().unwrap().res_vreg.unwrap(),
-                    fn_def.instructions.last().unwrap().typ.clone(),
+                    self.vreg(),
+                    self.fn_def_mut().instructions.last().unwrap().typ.clone(),
                 );
 
-                let res_vreg = fn_def.make_vreg(&node.typ);
+                let res_vreg = self.fn_def_mut().make_vreg(typ);
 
-                fn_def.instructions.push(Instruction {
+                self.fn_def_mut().instructions.push(Instruction {
                     kind: InstructionKind::IAdd(
                         Operand::new_vreg(ir_lhs_vreg, &ir_lhs_typ),
                         Operand::new_vreg(ir_rhs_vreg, &ir_rhs_typ),
                     ),
                     origin: node.origin,
                     res_vreg: Some(res_vreg),
-                    typ: node.typ.clone(),
+                    typ: typ.clone(),
                 });
             }
             crate::ast::NodeKind::Multiply(ast_lhs, ast_rhs) => {
-                assert_eq!(*ast_lhs.typ.kind, TypeKind::Number);
-                assert_eq!(*ast_lhs.typ.kind, TypeKind::Number);
-                assert_eq!(*node.typ.kind, TypeKind::Number);
+                let lhs_type = self.node_to_type.get(ast_lhs).unwrap();
+                let rhs_type = self.node_to_type.get(ast_rhs).unwrap();
+                assert_eq!(*lhs_type.kind, TypeKind::Number);
+                assert_eq!(*rhs_type.kind, TypeKind::Number);
+                assert_eq!(*typ.kind, TypeKind::Number);
 
-                self.emit_node(fn_def, ast_lhs);
+                self.emit_node(*ast_lhs);
                 let (ir_lhs_vreg, ir_lhs_typ) = (
-                    fn_def.instructions.last().unwrap().res_vreg.unwrap(),
-                    fn_def.instructions.last().unwrap().typ.clone(),
+                    self.vreg(),
+                    self.fn_def_mut().instructions.last().unwrap().typ.clone(),
                 );
 
-                self.emit_node(fn_def, ast_rhs);
+                self.emit_node(*ast_rhs);
                 let (ir_rhs_vreg, ir_rhs_typ) = (
-                    fn_def.instructions.last().unwrap().res_vreg.unwrap(),
-                    fn_def.instructions.last().unwrap().typ.clone(),
+                    self.vreg(),
+                    self.fn_def_mut().instructions.last().unwrap().typ.clone(),
                 );
 
-                let res_vreg = fn_def.make_vreg(&node.typ);
+                let res_vreg = self.fn_def_mut().make_vreg(&node.typ);
 
-                fn_def.instructions.push(Instruction {
+                self.fn_def_mut().instructions.push(Instruction {
                     kind: InstructionKind::IMultiply(
                         Operand::new_vreg(ir_lhs_vreg, &ir_lhs_typ),
                         Operand::new_vreg(ir_rhs_vreg, &ir_rhs_typ),
                     ),
                     origin: node.origin,
                     res_vreg: Some(res_vreg),
-                    typ: node.typ.clone(),
+                    typ: typ.clone(),
                 });
             }
             crate::ast::NodeKind::Divide(ast_lhs, ast_rhs) => {
-                assert_eq!(*ast_lhs.typ.kind, TypeKind::Number);
-                assert_eq!(*ast_lhs.typ.kind, TypeKind::Number);
-                assert_eq!(*node.typ.kind, TypeKind::Number);
+                let lhs_type = self.node_to_type.get(ast_lhs).unwrap();
+                let rhs_type = self.node_to_type.get(ast_rhs).unwrap();
+                assert_eq!(*lhs_type.kind, TypeKind::Number);
+                assert_eq!(*rhs_type.kind, TypeKind::Number);
+                assert_eq!(*typ.kind, TypeKind::Number);
 
-                self.emit_node(fn_def, ast_lhs);
+                self.emit_node(*ast_lhs);
                 let (ir_lhs_vreg, ir_lhs_typ) = (
-                    fn_def.instructions.last().unwrap().res_vreg.unwrap(),
-                    fn_def.instructions.last().unwrap().typ.clone(),
+                    self.vreg(),
+                    self.fn_def_mut().instructions.last().unwrap().typ.clone(),
                 );
 
-                self.emit_node(fn_def, ast_rhs);
+                self.emit_node(*ast_rhs);
                 let (ir_rhs_vreg, ir_rhs_typ) = (
-                    fn_def.instructions.last().unwrap().res_vreg.unwrap(),
-                    fn_def.instructions.last().unwrap().typ.clone(),
+                    self.vreg(),
+                    self.fn_def_mut().instructions.last().unwrap().typ.clone(),
                 );
 
-                let res_vreg = fn_def.make_vreg(&node.typ);
+                let res_vreg = self.fn_def_mut().make_vreg(typ);
 
-                fn_def.instructions.push(Instruction {
+                self.fn_def_mut().instructions.push(Instruction {
                     kind: InstructionKind::IDivide(
                         Operand::new_vreg(ir_lhs_vreg, &ir_lhs_typ),
                         Operand::new_vreg(ir_rhs_vreg, &ir_rhs_typ),
                     ),
                     origin: node.origin,
                     res_vreg: Some(res_vreg),
-                    typ: node.typ.clone(),
+                    typ: typ.clone(),
                 });
             }
             NodeKind::Block(stmts) => {
-                for node in stmts {
-                    self.emit_node(fn_def, node);
+                for stmt in stmts {
+                    self.emit_node(*stmt);
                 }
             }
             NodeKind::If {
                 cond,
-                then_block,
-                else_block,
+                then_block: then_block_id,
+                else_block: else_block_id,
             } => {
-                assert_eq!(*cond.typ.kind, TypeKind::Bool);
+                let cond_type = &self.node_to_type.get(cond).unwrap();
+                assert_eq!(*cond_type.kind, TypeKind::Bool);
 
-                self.emit_node(fn_def, cond);
+                self.emit_node(*cond);
 
-                if then_block.is_none() {
-                    return;
-                }
-                let then_body = then_block.as_ref().unwrap();
+                let then_block = &self.nodes[*then_block_id];
+                assert!(matches!(then_block.kind, NodeKind::Block(_)));
 
-                assert!(matches!(then_body.kind, NodeKind::Block(_)));
+                let else_block = self.nodes[*else_block_id].kind.as_block().unwrap();
 
-                let else_label = if else_block.is_some() {
+                let else_label = if !else_block.is_empty() {
                     Some(format!(".{}_if_else", self.label_current))
                 } else {
                     None
@@ -519,15 +565,15 @@ impl Emitter {
                 let end_label = format!(".{}_if_end", self.label_current);
                 self.label_current += 1;
 
-                let vreg: VirtualRegister = fn_def.instructions.last().unwrap().res_vreg.unwrap();
-                let typ = fn_def.instructions.last().unwrap().typ.clone();
+                let vreg: VirtualRegister = self.vreg();
+                let typ = self.fn_def_mut().instructions.last().unwrap().typ.clone();
                 assert_eq!(*typ.kind, TypeKind::Bool);
 
                 let op = Operand {
                     kind: OperandKind::VirtualRegister(vreg),
                     typ,
                 };
-                fn_def.instructions.push(Instruction {
+                self.fn_def_mut().instructions.push(Instruction {
                     kind: InstructionKind::JumpIfFalse(
                         else_label.clone().unwrap_or_else(|| end_label.clone()),
                         op,
@@ -538,40 +584,30 @@ impl Emitter {
                 });
 
                 // Then-body.
-                if let NodeKind::Block(stmts) = &then_body.kind {
-                    for node in stmts {
-                        self.emit_node(fn_def, node);
-                    }
-                }
+                self.emit_node(*then_block_id);
 
                 // Else body.
-                if let Some(else_body) = else_block {
-                    assert!(matches!(else_body.kind, NodeKind::Block(_)));
-
-                    fn_def.instructions.push(Instruction {
+                if !else_block.is_empty() {
+                    self.fn_def_mut().instructions.push(Instruction {
                         kind: InstructionKind::Jump(end_label.clone()),
                         origin: node.origin,
                         res_vreg: None,
                         typ: Type::new_void(),
                     });
 
-                    fn_def.instructions.push(Instruction {
+                    self.fn_def_mut().instructions.push(Instruction {
                         kind: InstructionKind::LabelDef(else_label.clone().unwrap()),
                         origin: node.origin,
                         res_vreg: None,
                         typ: Type::new_void(),
                     });
 
-                    if let NodeKind::Block(stmts) = &else_body.kind {
-                        for node in stmts {
-                            self.emit_node(fn_def, node);
-                        }
-                    }
+                    self.emit_node(*else_block_id);
                 }
 
                 // End.
                 {
-                    fn_def.instructions.push(Instruction {
+                    self.fn_def_mut().instructions.push(Instruction {
                         kind: InstructionKind::LabelDef(end_label),
                         origin: node.origin,
                         res_vreg: None,
@@ -580,14 +616,16 @@ impl Emitter {
                 }
             }
             NodeKind::VarDecl(identifier, expr) => {
-                self.emit_node(fn_def, expr);
-                let op_vreg = fn_def.instructions.last().unwrap().res_vreg.unwrap();
-                let op_typ = fn_def.instructions.last().unwrap().typ.clone();
+                self.emit_node(*expr);
+                let op_vreg = self.vreg();
+                let op_typ = self.fn_def_mut().instructions.last().unwrap().typ.clone();
 
-                assert!(!fn_def.name_to_vreg.contains_key(identifier));
-                fn_def.name_to_vreg.insert(identifier.to_owned(), op_vreg);
+                assert!(!self.fn_def_mut().name_to_vreg.contains_key(identifier));
+                self.fn_def_mut()
+                    .name_to_vreg
+                    .insert(identifier.to_owned(), op_vreg);
 
-                fn_def.instructions.push(Instruction {
+                self.fn_def_mut().instructions.push(Instruction {
                     kind: InstructionKind::VarDecl(
                         identifier.clone(),
                         Operand {
@@ -597,36 +635,14 @@ impl Emitter {
                     ),
                     origin: node.origin,
                     res_vreg: None,
-                    typ: node.typ.clone(),
+                    typ: typ.clone(),
                 });
             }
         }
     }
 
-    fn emit_def(&mut self, node: &Node) -> Option<FnDef> {
-        match &node.kind {
-            crate::ast::NodeKind::Package(_) => None,
-            // Start of a new function.
-            crate::ast::NodeKind::FnDef { name, body } => {
-                let stack_size = 0; // TODO
-                let mut fn_def = FnDef::new(name.to_owned(), &node.typ, node.origin, stack_size);
-                for node in body {
-                    self.emit_node(&mut fn_def, node);
-                }
-
-                fn_def.live_ranges = fn_def.compute_live_ranges();
-                Some(fn_def)
-            }
-            _ => panic!("unexpected top-level AST node: {:#?}", node),
-        }
-    }
-
-    pub fn emit(&mut self, nodes: &[Node]) {
-        for node in nodes {
-            if let Some(def) = self.emit_def(node) {
-                self.fn_defs.push(def);
-            }
-        }
+    pub fn emit_nodes(&mut self) {
+        self.emit_node(NodeId(0));
     }
 }
 
@@ -999,7 +1015,7 @@ mod tests {
         assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
 
         let mut ir_emitter = super::Emitter::new();
-        ir_emitter.emit(&ast_nodes);
+        ir_emitter.emit_nodes(&ast_nodes);
 
         let builtins = Parser::builtins(16);
         assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
@@ -1032,7 +1048,7 @@ mod tests {
         assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
 
         let mut ir_emitter = super::Emitter::new();
-        ir_emitter.emit(&ast_nodes);
+        ir_emitter.emit_nodes(&ast_nodes);
 
         let builtins = Parser::builtins(16);
         assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
@@ -1065,7 +1081,7 @@ mod tests {
         assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
 
         let mut ir_emitter = super::Emitter::new();
-        ir_emitter.emit(&ast_nodes);
+        ir_emitter.emit_nodes(&ast_nodes);
 
         let builtins = Parser::builtins(16);
         assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
@@ -1100,7 +1116,7 @@ mod tests {
         assert!(type_errors.is_empty(), "{:#?}", type_errors);
 
         let mut ir_emitter = super::Emitter::new();
-        ir_emitter.emit(&ast_nodes);
+        ir_emitter.emit_nodes(&ast_nodes);
 
         let builtins = Parser::builtins(16);
         assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
@@ -1135,7 +1151,7 @@ mod tests {
         assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
 
         let mut ir_emitter = super::Emitter::new();
-        ir_emitter.emit(&ast_nodes);
+        ir_emitter.emit_nodes(&ast_nodes);
 
         let builtins = Parser::builtins(16);
         assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
@@ -1170,7 +1186,7 @@ mod tests {
         assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
 
         let mut ir_emitter = super::Emitter::new();
-        ir_emitter.emit(&ast_nodes);
+        ir_emitter.emit_nodes(&ast_nodes);
 
         let builtins = Parser::builtins(16);
         assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
@@ -1209,7 +1225,7 @@ func main() {
         assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
 
         let mut ir_emitter = super::Emitter::new();
-        ir_emitter.emit(&ast_nodes);
+        ir_emitter.emit_nodes(&ast_nodes);
 
         let builtins = Parser::builtins(16);
         assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
@@ -1248,7 +1264,7 @@ func main() {
         assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
 
         let mut ir_emitter = super::Emitter::new();
-        ir_emitter.emit(&ast_nodes);
+        ir_emitter.emit_nodes(&ast_nodes);
 
         let builtins = Parser::builtins(16);
         assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
@@ -1287,7 +1303,7 @@ func main() {
         assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
 
         let mut ir_emitter = super::Emitter::new();
-        ir_emitter.emit(&ast_nodes);
+        ir_emitter.emit_nodes(&ast_nodes);
 
         let builtins = Parser::builtins(16);
         assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
@@ -1326,7 +1342,7 @@ func main() {
         assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
 
         let mut ir_emitter = super::Emitter::new();
-        ir_emitter.emit(&ast_nodes);
+        ir_emitter.emit_nodes(&ast_nodes);
 
         let builtins = Parser::builtins(16);
         assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);
@@ -1364,7 +1380,7 @@ func main() {
         assert!(type_checker::check_nodes(&mut ast_nodes, &mut name_to_type).is_empty());
 
         let mut ir_emitter = super::Emitter::new();
-        ir_emitter.emit(&ast_nodes);
+        ir_emitter.emit_nodes(&ast_nodes);
 
         let builtins = Parser::builtins(16);
         assert_eq!(ir_emitter.fn_defs.len(), builtins.len() + 1);

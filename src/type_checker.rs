@@ -143,7 +143,12 @@ pub fn check_node(
 ) {
     let node = &nodes[node_id];
     match &node.kind {
-        crate::ast::NodeKind::Package(_) => {}
+        NodeKind::File(decls) => {
+            for decl in decls {
+                check_node(*decl, nodes, errs, node_to_type, name_to_def);
+            }
+        }
+        NodeKind::Package(_) => {}
         NodeKind::VarDecl(_identifier, expr) => {
             check_node(*expr, nodes, errs, node_to_type, name_to_def);
 
@@ -296,16 +301,15 @@ pub fn check_node(
 }
 
 pub fn check_nodes(
-    node_ids: &[NodeId],
     nodes: &[Node],
     node_to_type: &mut HashMap<NodeId, Type>,
     name_to_def: &HashMap<String, NodeId>,
 ) -> Vec<Error> {
+    assert!(!nodes.is_empty());
+
     let mut errs = Vec::new();
 
-    for node_id in node_ids {
-        check_node(*node_id, nodes, &mut errs, node_to_type, name_to_def);
-    }
+    check_node(NodeId(0), nodes, &mut errs, node_to_type, name_to_def);
 
     errs
 }
