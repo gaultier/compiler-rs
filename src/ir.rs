@@ -371,7 +371,7 @@ impl<'a> Emitter<'a> {
             crate::ast::NodeKind::FnCall { callee, args } => {
                 // TODO: Support function pointers.
                 let ast_fn_name = self.nodes[*callee].kind.as_identifier().unwrap();
-                let def_id = self.name_to_def.get(ast_fn_name).unwrap();
+                let def_id = self.name_to_def.get_definitive(ast_fn_name).unwrap();
 
                 let callee_type = self.node_to_type.get(def_id).unwrap();
                 let arg_type = callee_type.to_string();
