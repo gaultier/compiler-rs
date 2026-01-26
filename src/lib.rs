@@ -193,8 +193,8 @@ pub fn compile(
     trace!("lexer: {:#?}", lexer);
 
     let mut parser = Parser::new(input, &lexer, file_id_to_name);
-    let mut ast_nodes = parser.parse();
-    trace!("ast_nodes: {:#?}", ast_nodes);
+    parser.parse();
+    trace!("ast_nodes: {:#?}", &parser.nodes);
     trace!("parser errors: {:#?}", parser.errors);
 
     let mut errors = parser.errors;
@@ -213,8 +213,8 @@ pub fn compile(
         };
     }
 
-    let mut ir_emitter = ir::Emitter::new();
-    ir_emitter.emit_nodes(&parser.nodes);
+    let mut ir_emitter = ir::Emitter::new(&parser.nodes, &parser.node_to_type);
+    ir_emitter.emit_nodes();
     trace!("ir_emitter: {:#?}", ir_emitter);
 
     let mut ir_text = String::with_capacity(input.len() * 3);
@@ -274,7 +274,7 @@ pub fn compile(
 
     CompileResult {
         lex_tokens: parser.tokens,
-        ast_nodes,
+        ast_nodes: vec![], //parser.nodes,
         errors,
         ir_fn_defs: ir_emitter.fn_defs,
         ir_text,

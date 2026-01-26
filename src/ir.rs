@@ -67,7 +67,7 @@ pub struct Emitter<'a> {
     pub fn_defs: Vec<FnDef>,
     pub labels: Vec<String>,
     label_current: usize,
-    node_to_type: HashMap<NodeId, Type>,
+    node_to_type: &'a HashMap<NodeId, Type>,
     nodes: &'a [Node],
 }
 
@@ -231,7 +231,7 @@ impl FnDef {
 }
 
 impl<'a> Emitter<'a> {
-    pub(crate) fn new(nodes: &'a [Node], node_to_type: HashMap<NodeId, Type>) -> Self {
+    pub(crate) fn new(nodes: &'a [Node], node_to_type: &'a HashMap<NodeId, Type>) -> Self {
         Self {
             fn_defs: Vec::new(),
             labels: Vec::new(),
