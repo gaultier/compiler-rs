@@ -735,13 +735,12 @@ impl<'a> Parser<'a> {
 
         self.expect_token_exactly_one(TokenKind::RightCurly, "function declaration")?;
 
-        Some(self.new_node(Node {
-            kind: NodeKind::FnDef(FnDef {
-                name: Self::str_from_source(self.input, &name.origin).to_owned(),
-                body: stmts,
-            }),
+        let name = Self::str_from_source(self.input, &name.origin).to_owned();
+        let node_id = self.new_node(Node {
+            kind: NodeKind::FnDef(FnDef { name, body: stmts }),
             origin: func.origin,
-        }))
+        });
+        Some(node_id)
     }
 
     fn parse_declaration(&mut self) -> Option<NodeId> {
