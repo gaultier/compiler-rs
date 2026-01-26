@@ -6,7 +6,7 @@ use proptest_derive::Arbitrary;
 use serde::Serialize;
 
 use crate::{
-    ast::{FnNameToType, Node, NodeKind, VarNameToType},
+    ast::{Node, NodeId, NodeKind},
     error::Error,
     origin::{Origin, OriginKind},
 };
@@ -135,85 +135,88 @@ impl Type {
 }
 
 pub fn check_node(
-    node: &mut Node,
+    node_id: NodeId,
+    nodes: &[Node],
     errs: &mut Vec<Error>,
-    fn_name_to_type: &mut FnNameToType,
-    var_name_to_type: &mut VarNameToType,
+    node_to_type: &mut HashMap<NodeId, Type>,
+    name_to_def: &HashMap<String, NodeId>,
 ) {
-    match &mut node.kind {
+    let node = &nodes[node_id];
+    match &node.kind {
         crate::ast::NodeKind::Package(_) => {}
-        NodeKind::VarDecl(identifier, expr) => {
-            check_node(expr, errs, fn_name_to_type, var_name_to_type);
+        NodeKind::VarDecl(_identifier, expr) => {
+            check_node(*expr, nodes, errs, node_to_type, name_to_def);
 
-            if *node.typ.kind == TypeKind::Any {
-                node.typ = expr.typ.clone();
+            let expr_typ = node_to_type.get(&expr).unwrap();
+            node_to_type.insert(node_id, expr_typ.clone());
 
-                // FIXME: Since the current scope gets popped
-                // when exiting it, we lose information.
-                var_name_to_type
-                    .get_mut(identifier)
-                    .unwrap()
-                    .last_mut()
-                    .unwrap()
-                    .0 = node.typ.clone();
-            }
+            // FIXME: Since the current scope gets popped
+            // when exiting it, we lose information.
+            //var_name_to_type
+            //    .get_mut(identifier)
+            //    .unwrap()
+            //    .last_mut()
+            //    .unwrap()
+            //    .0 = node.typ.clone();
         }
         NodeKind::For { cond, block } => {
-            assert_eq!(*node.typ.kind, TypeKind::Void);
             if let Some(cond) = cond {
-                check_node(cond, errs, fn_name_to_type, var_name_to_type);
+                check_node(*cond, nodes, errs, node_to_type, name_to_def);
             }
 
             for stmt in block {
-                check_node(stmt, errs, fn_name_to_type, var_name_to_type);
+                check_node(*stmt, nodes, errs, node_to_type, name_to_def);
             }
         }
-        crate::ast::NodeKind::FnDef { name: _, body } => match &*node.typ.kind {
-            TypeKind::Function(ret_type, args) => {
-                assert_ne!(*ret_type.kind, TypeKind::Any);
+        crate::ast::NodeKind::FnDef { name: _, body } => {
+            let typ = node_to_type.get(&node_id).unwrap();
+            let (_ret, args) = match &*typ.kind {
+                TypeKind::Function(ret, args) => (ret, args),
+                _ => panic!("invalid function type"),
+            };
 
-                if matches!(*ret_type.kind, TypeKind::Function(_, _)) {
-                    unimplemented!();
+            for arg in args {
+                if node.origin.kind != OriginKind::Builtin && *arg.kind == TypeKind::Any {
+                    todo!();
                 }
-
-                for arg in args {
-                    if node.origin.kind != OriginKind::Builtin {
-                        assert_ne!(*arg.kind, TypeKind::Any);
-                    }
-                    if matches!(*arg.kind, TypeKind::Function(_, _)) {
-                        unimplemented!();
-                    }
-                }
-
-                for node in body {
-                    check_node(node, errs, fn_name_to_type, var_name_to_type);
+                if matches!(*arg.kind, TypeKind::Function(_, _)) {
+                    todo!();
                 }
             }
-            _ => panic!("invalid type for function definition"),
-        },
+
+            for stmt in body {
+                check_node(*stmt, nodes, errs, node_to_type, name_to_def);
+            }
+        }
         crate::ast::NodeKind::Number(_) => {
-            assert_eq!(*node.typ.kind, TypeKind::Number);
-            assert_ne!(node.typ.size, None);
+            assert!(matches!(
+                *node_to_type.get(&node_id).unwrap().kind,
+                TypeKind::Number
+            ));
         }
         crate::ast::NodeKind::Bool(_) => {
-            assert_eq!(*node.typ.kind, TypeKind::Bool);
-            assert_eq!(node.typ.size, Some(Size::_8));
+            assert!(matches!(
+                *node_to_type.get(&node_id).unwrap().kind,
+                TypeKind::Bool
+            ));
         }
         crate::ast::NodeKind::Identifier(identifier) => {
-            let (typ, _) = fn_name_to_type.get(identifier).unwrap();
-            assert_ne!(*typ.kind, TypeKind::Any);
+            let def_id = name_to_def.get(identifier).unwrap();
+            let def_type = node_to_type.get(def_id).unwrap();
 
-            node.typ = typ.clone();
+            node_to_type.insert(node_id, def_type.clone());
         }
         crate::ast::NodeKind::FnCall { callee, args } => {
-            let (ret_type, args_type) = match &*callee.typ.kind {
-                TypeKind::Function(ret_type, args_type) => (ret_type, args_type),
+            let def_type = node_to_type.get(&callee).unwrap();
+            let (ret_type, args_type) = match &*def_type.kind {
+                TypeKind::Function(ret_type, args_type) => (ret_type.clone(), args_type.clone()),
                 _ => {
-                    // Trying to call a non-function.
-                    // Cannot do more type checking here, so bail.
-                    return;
+                    panic!("invalid function type")
                 }
             };
+            if *ret_type.kind != TypeKind::Void {
+                todo!();
+            }
 
             if args.len() != args_type.len() {
                 errs.push(Error::new_incompatible_arguments_count(
@@ -225,10 +228,11 @@ pub fn check_node(
                 return;
             }
 
-            for (i, arg) in args.iter_mut().enumerate() {
-                check_node(arg, errs, fn_name_to_type, var_name_to_type);
+            for (i, arg) in args.iter().enumerate() {
+                check_node(*arg, nodes, errs, node_to_type, name_to_def);
+                let arg_type = node_to_type.get(arg).unwrap();
 
-                let _typ = match arg.typ.merge(&args_type[i]) {
+                let _typ = match arg_type.merge(&args_type[i]) {
                     Err(err) => {
                         errs.push(err);
                         continue;
@@ -237,36 +241,39 @@ pub fn check_node(
                 };
             }
 
-            node.typ = ret_type.clone();
-
-            if *ret_type.kind != TypeKind::Void {
-                todo!();
-            }
+            node_to_type.insert(node_id, ret_type);
         }
         crate::ast::NodeKind::Add(lhs, rhs)
         | crate::ast::NodeKind::Multiply(lhs, rhs)
         | crate::ast::NodeKind::Divide(lhs, rhs) => {
-            check_node(lhs, errs, fn_name_to_type, var_name_to_type);
-            check_node(rhs, errs, fn_name_to_type, var_name_to_type);
+            check_node(*lhs, nodes, errs, node_to_type, name_to_def);
+            check_node(*rhs, nodes, errs, node_to_type, name_to_def);
 
-            let typ = lhs.typ.merge(&rhs.typ);
+            let lhs_type = node_to_type.get(&lhs).unwrap();
+            let rhs_type = node_to_type.get(&lhs).unwrap();
+            let typ = lhs_type.merge(&rhs_type);
             match typ {
-                Ok(typ) => node.typ = typ,
+                Ok(typ) => {
+                    node_to_type.insert(node_id, typ);
+                }
                 Err(err) => {
                     errs.push(err);
                     // To avoid cascading errors, pretend the type is fine.
-                    node.typ = Type::new_int();
+                    node_to_type.insert(node_id, Type::new_int());
                 }
             }
         }
         crate::ast::NodeKind::Cmp(lhs, rhs) => {
             // Set by the parser.
-            assert_eq!(*node.typ.kind, TypeKind::Bool);
+            let typ = node_to_type.get(&lhs).unwrap();
+            assert_eq!(*typ.kind, TypeKind::Bool);
 
-            check_node(lhs, errs, fn_name_to_type, var_name_to_type);
-            check_node(rhs, errs, fn_name_to_type, var_name_to_type);
+            check_node(*lhs, nodes, errs, node_to_type, name_to_def);
+            check_node(*rhs, nodes, errs, node_to_type, name_to_def);
 
-            let typ = lhs.typ.merge(&rhs.typ);
+            let lhs_type = node_to_type.get(&lhs).unwrap();
+            let rhs_type = node_to_type.get(&lhs).unwrap();
+            let typ = lhs_type.merge(&rhs_type);
             if let Err(err) = typ {
                 errs.push(err);
             }
@@ -276,27 +283,28 @@ pub fn check_node(
             then_block,
             else_block,
         } => {
-            check_node(cond, errs, fn_name_to_type, var_name_to_type);
-            if let Some(then_block) = then_block {
-                check_node(then_block, errs, fn_name_to_type, var_name_to_type);
-            }
-            if let Some(else_block) = else_block {
-                check_node(else_block, errs, fn_name_to_type, var_name_to_type);
-            }
+            check_node(*cond, nodes, errs, node_to_type, name_to_def);
+            check_node(*then_block, nodes, errs, node_to_type, name_to_def);
+            check_node(*else_block, nodes, errs, node_to_type, name_to_def);
         }
         crate::ast::NodeKind::Block(stmts) => {
-            for node in stmts {
-                check_node(node, errs, fn_name_to_type, var_name_to_type);
+            for stmt in stmts {
+                check_node(*stmt, nodes, errs, node_to_type, name_to_def);
             }
         }
     }
 }
 
-pub fn check_nodes(nodes: & [Node], node_to_type: &mut HashMap<NodeId, Type>) -> Vec<Error> {
+pub fn check_nodes(
+    node_ids: &[NodeId],
+    nodes: &[Node],
+    node_to_type: &mut HashMap<NodeId, Type>,
+    name_to_def: &HashMap<String, NodeId>,
+) -> Vec<Error> {
     let mut errs = Vec::new();
 
-    for node in nodes {
-        check_node(node, &mut errs, , node_to_type: &mut HashMap<NodeId, Type>);
+    for node_id in node_ids {
+        check_node(*node_id, nodes, &mut errs, node_to_type, name_to_def);
     }
 
     errs

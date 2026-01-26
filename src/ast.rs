@@ -14,7 +14,7 @@ use serde::Serialize;
 
 // TODO: u32?
 #[derive(Serialize, Clone, Copy, PartialEq, Eq, Debug, Hash)]
-struct NodeId(usize);
+pub struct NodeId(usize);
 
 #[derive(Serialize, Clone, PartialEq, Eq, Debug)]
 pub enum NodeKind {
@@ -53,9 +53,6 @@ pub struct Node {
     pub origin: Origin,
 }
 
-pub type FnNameToType = BTreeMap<String, (Type, Origin)>;
-pub type VarNameToType = HashMap<String, Vec<(Type, Origin, usize /* Scope */)>>;
-
 impl IndexMut<NodeId> for [Node] {
     fn index_mut(&mut self, index: NodeId) -> &mut Self::Output {
         &mut self[index.0]
@@ -93,8 +90,9 @@ pub struct Parser<'a> {
     input: &'a str,
     current_scope: usize,
     file_id_to_name: &'a HashMap<FileId, String>,
-    nodes: Vec<Node>,
-        node_to_type: HashMap<NodeId,Type>,
+    pub(crate) nodes: Vec<Node>,
+    pub(crate) node_to_type: HashMap<NodeId, Type>,
+    pub(crate) name_to_def: HashMap<String, NodeId>,
 }
 
 impl<'a> Parser<'a> {
@@ -113,6 +111,7 @@ impl<'a> Parser<'a> {
             current_scope: 0,
             nodes: Vec::new(),
             node_to_type: HashMap::new(),
+            name_to_def: HashMap::new(),
         }
     }
 
@@ -121,9 +120,8 @@ impl<'a> Parser<'a> {
         NodeId(self.nodes.len() - 1)
     }
 
-    pub(crate) fn builtins(&mut self, cap_hint: usize) -> (Vec<NodeId>, HashMap<String, NodeId>) {
+    pub(crate) fn builtins(&mut self, cap_hint: usize) -> Vec<NodeId> {
         let mut node_ids = Vec::with_capacity(cap_hint);
-        let mut name_to_def = HashMap::new();
 
         let origin = Origin::new_builtin();
 
@@ -140,10 +138,10 @@ impl<'a> Parser<'a> {
             &Origin::new_builtin(),
         );
         node_ids.push(node_id);
-        name_to_def.insert(String::from("println"), node_id);
+        self.name_to_def.insert(String::from("println"), node_id);
         self.node_to_type.insert(node_id, typ);
 
-        (node_ids, name_to_def)
+        node_ids
     }
 
     fn peek_token(&self) -> Option<&Token> {
@@ -750,9 +748,8 @@ impl<'a> Parser<'a> {
     #[warn(unused_results)]
     pub fn parse(&mut self) -> Vec<NodeId> {
         let mut decls = Vec::new();
-        let (builtin_node_ids, builtin name_to_def)= self.builtins(self.tokens.len());
+        let builtin_node_ids = self.builtins(self.tokens.len());
         decls.extend(builtin_node_ids);
-
 
         if let Some(p) = self.parse_package_clause() {
             decls.push(p);
