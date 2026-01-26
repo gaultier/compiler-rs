@@ -152,7 +152,7 @@ pub fn check_node(
         NodeKind::VarDecl(_identifier, expr) => {
             check_node(*expr, nodes, errs, node_to_type, name_to_def);
 
-            let expr_typ = node_to_type.get(&expr).unwrap();
+            let expr_typ = node_to_type.get(expr).unwrap();
             node_to_type.insert(node_id, expr_typ.clone());
 
             // FIXME: Since the current scope gets popped
@@ -212,7 +212,7 @@ pub fn check_node(
             node_to_type.insert(node_id, def_type.clone());
         }
         NodeKind::FnCall { callee, args } => {
-            let def_type = node_to_type.get(&callee).unwrap();
+            let def_type = node_to_type.get(callee).unwrap();
             let (ret_type, args_type) = match &*def_type.kind {
                 TypeKind::Function(ret_type, args_type) => (ret_type.clone(), args_type.clone()),
                 _ => {
@@ -252,9 +252,9 @@ pub fn check_node(
             check_node(*lhs, nodes, errs, node_to_type, name_to_def);
             check_node(*rhs, nodes, errs, node_to_type, name_to_def);
 
-            let lhs_type = node_to_type.get(&lhs).unwrap();
-            let rhs_type = node_to_type.get(&lhs).unwrap();
-            let typ = lhs_type.merge(&rhs_type);
+            let lhs_type = node_to_type.get(lhs).unwrap();
+            let rhs_type = node_to_type.get(lhs).unwrap();
+            let typ = lhs_type.merge(rhs_type);
             match typ {
                 Ok(typ) => {
                     node_to_type.insert(node_id, typ);
@@ -268,15 +268,15 @@ pub fn check_node(
         }
         NodeKind::Cmp(lhs, rhs) => {
             // Set by the parser.
-            let typ = node_to_type.get(&lhs).unwrap();
+            let typ = node_to_type.get(lhs).unwrap();
             assert_eq!(*typ.kind, TypeKind::Bool);
 
             check_node(*lhs, nodes, errs, node_to_type, name_to_def);
             check_node(*rhs, nodes, errs, node_to_type, name_to_def);
 
-            let lhs_type = node_to_type.get(&lhs).unwrap();
-            let rhs_type = node_to_type.get(&lhs).unwrap();
-            let typ = lhs_type.merge(&rhs_type);
+            let lhs_type = node_to_type.get(lhs).unwrap();
+            let rhs_type = node_to_type.get(lhs).unwrap();
+            let typ = lhs_type.merge(rhs_type);
             if let Err(err) = typ {
                 errs.push(err);
             }

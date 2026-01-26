@@ -271,7 +271,7 @@ impl<'a> Emitter<'a> {
             NodeKind::FnDef(crate::ast::FnDef { name, body }) => {
                 let stack_size = 0; // TODO
                 self.fn_defs
-                    .push(FnDef::new(name.to_owned(), &typ, node.origin, stack_size));
+                    .push(FnDef::new(name.to_owned(), typ, node.origin, stack_size));
                 for stmt in body {
                     self.emit_node(*stmt);
                 }
@@ -327,7 +327,7 @@ impl<'a> Emitter<'a> {
             crate::ast::NodeKind::Number(num) => {
                 assert_eq!(*typ.kind, TypeKind::Number);
 
-                let res_vreg = self.fn_def_mut().make_vreg(&typ);
+                let res_vreg = self.fn_def_mut().make_vreg(typ);
                 self.fn_def_mut().instructions.push(Instruction {
                     kind: InstructionKind::Set(Operand::new_int(*num as i64)),
                     origin: node.origin,
