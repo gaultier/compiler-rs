@@ -17,7 +17,7 @@ use serde::Serialize;
 pub struct NodeId(pub(crate) usize);
 
 #[derive(Serialize, Clone, PartialEq, Eq, Debug)]
-pub(crate) struct FnDef {
+pub struct FnDef {
     pub(crate) name: String,
     pub(crate) body: Vec<NodeId>,
 }
@@ -973,13 +973,6 @@ impl<'a> Parser<'a> {
 
 impl NodeKind {
     fn as_file_mut(&mut self) -> Option<&mut Vec<NodeId>> {
-        match self {
-            NodeKind::File(v) => Some(v),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn as_file(&self) -> Option<&Vec<NodeId>> {
         match self {
             NodeKind::File(v) => Some(v),
             _ => None,
