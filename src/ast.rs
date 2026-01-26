@@ -129,12 +129,12 @@ impl<'a> Parser<'a> {
     pub(crate) fn builtins(&mut self) {
         assert!(self.nodes.is_empty());
 
+        let origin = Origin::new_builtin();
+
         self.nodes.push(Node {
             kind: NodeKind::File(Vec::new()),
-            origin: Origin::new_builtin(),
+            origin,
         });
-
-        let origin = Origin::new_builtin();
 
         let arg = self.new_node(Node {
             kind: NodeKind::Identifier(String::from("any")),

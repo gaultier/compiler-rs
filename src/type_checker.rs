@@ -8,7 +8,7 @@ use serde::Serialize;
 use crate::{
     ast::{Node, NodeId, NodeKind},
     error::Error,
-    origin::Origin,
+    origin::{Origin, OriginKind},
 };
 
 #[derive(Serialize, Clone, PartialEq, Eq, Debug, PartialOrd, Ord)]
@@ -179,6 +179,10 @@ pub fn check_node(
             ret,
             body,
         }) => {
+            if node.origin.kind == OriginKind::Builtin {
+                return;
+            }
+
             for arg in args {
                 check_node(*arg, nodes, errs, node_to_type, name_to_def);
             }
@@ -221,6 +225,7 @@ pub fn check_node(
             node_to_type.insert(node_id, def_type.clone());
         }
         NodeKind::FnCall { callee, args } => {
+            dbg!(callee);
             let def_type = node_to_type.get(callee).unwrap();
             let (ret_type, args_type) = match &*def_type.kind {
                 TypeKind::Function(ret_type, args_type) => (ret_type.clone(), args_type.clone()),
