@@ -19,6 +19,8 @@ pub struct NodeId(pub(crate) usize);
 #[derive(Serialize, Clone, PartialEq, Eq, Debug)]
 pub struct FnDef {
     pub(crate) name: String,
+    pub(crate) args: Vec<NodeId>,
+    pub(crate) ret: Option<NodeId>,
     pub(crate) body: Vec<NodeId>,
 }
 
@@ -134,9 +136,15 @@ impl<'a> Parser<'a> {
 
         let origin = Origin::new_builtin();
 
+        let arg = self.new_node(Node {
+            kind: NodeKind::Identifier(String::from("any")),
+            origin,
+        });
         let node_id = self.new_node(Node {
             kind: NodeKind::FnDef(FnDef {
                 name: String::from("println"),
+                args: vec![arg],
+                ret: None,
                 body: Vec::new(),
             }),
             origin,
@@ -737,7 +745,12 @@ impl<'a> Parser<'a> {
 
         let name = Self::str_from_source(self.input, &name.origin).to_owned();
         let node_id = self.new_node(Node {
-            kind: NodeKind::FnDef(FnDef { name, body: stmts }),
+            kind: NodeKind::FnDef(FnDef {
+                name,
+                args: vec![], // TODO
+                ret: None,    // TODO
+                body: stmts,
+            }),
             origin: func.origin,
         });
         Some(node_id)
@@ -898,7 +911,12 @@ impl<'a> Parser<'a> {
                     Self::resolve_node(*op, nodes, errors, name_to_def, file_id_to_name);
                 }
             }
-            NodeKind::FnDef(FnDef { name, body }) => {
+            NodeKind::FnDef(FnDef {
+                name,
+                args,
+                ret,
+                body,
+            }) => {
                 if let Some(prev) = name_to_def.get(name) {
                     let prev = &nodes[*prev];
                     errors.push(Error::new(
@@ -912,29 +930,18 @@ impl<'a> Parser<'a> {
                 }
                 // TODO: Check shadowing of function name?
                 name_to_def.insert(name.to_owned(), node_id);
-                //if let Some((old_typ, old_origin)) = self.fn_name_to_type.get(name) {
-                //    self.errors.push(Error::new_name_already_defined(
-                //        old_typ,
-                //        &node.typ,
-                //        name,
-                //        old_origin,
-                //        &node.origin,
-                //        self.file_id_to_name,
-                //    ));
-                //} else {
-                //    self.fn_name_to_type
-                //        .insert(name.to_owned(), (node.typ.clone(), node.origin));
-                //}
-                //
-                //// TODO: When supporting global variables and closures, this needs to be smarter
-                //// and only remove some entries.
-                //self.var_name_to_type.clear();
 
-                for node_id in body {
-                    Self::resolve_node(*node_id, nodes, errors, name_to_def, file_id_to_name);
+                for arg in args {
+                    Self::resolve_node(*arg, nodes, errors, name_to_def, file_id_to_name);
                 }
 
-                //self.var_name_to_type.clear();
+                if let Some(ret) = ret {
+                    Self::resolve_node(*ret, nodes, errors, name_to_def, file_id_to_name);
+                }
+
+                for stmt in body {
+                    Self::resolve_node(*stmt, nodes, errors, name_to_def, file_id_to_name);
+                }
             }
             NodeKind::If {
                 cond,

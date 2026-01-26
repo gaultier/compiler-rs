@@ -268,7 +268,12 @@ impl<'a> Emitter<'a> {
             }
             NodeKind::Package(_) => {}
             // Start of a new function.
-            NodeKind::FnDef(crate::ast::FnDef { name, body }) => {
+            NodeKind::FnDef(crate::ast::FnDef {
+                name,
+                args: _,
+                ret: _,
+                body,
+            }) => {
                 let stack_size = 0; // TODO
                 self.fn_defs
                     .push(FnDef::new(name.to_owned(), typ, node.origin, stack_size));

@@ -8,7 +8,7 @@ use serde::Serialize;
 use crate::{
     ast::{Node, NodeId, NodeKind},
     error::Error,
-    origin::{Origin, OriginKind},
+    origin::Origin,
 };
 
 #[derive(Serialize, Clone, PartialEq, Eq, Debug, PartialOrd, Ord)]
@@ -173,21 +173,30 @@ pub fn check_node(
                 check_node(*stmt, nodes, errs, node_to_type, name_to_def);
             }
         }
-        NodeKind::FnDef(crate::ast::FnDef { name: _, body }) => {
-            let typ = node_to_type.get(&node_id).unwrap();
-            let (_ret, args) = match &*typ.kind {
-                TypeKind::Function(ret, args) => (ret, args),
-                _ => panic!("invalid function type"),
-            };
-
+        NodeKind::FnDef(crate::ast::FnDef {
+            name: _,
+            args,
+            ret,
+            body,
+        }) => {
             for arg in args {
-                if node.origin.kind != OriginKind::Builtin && *arg.kind == TypeKind::Any {
-                    todo!();
-                }
-                if matches!(*arg.kind, TypeKind::Function(_, _)) {
-                    todo!();
-                }
+                check_node(*arg, nodes, errs, node_to_type, name_to_def);
             }
+            // TODO: More checks.
+
+            if let Some(ret) = ret {
+                check_node(*ret, nodes, errs, node_to_type, name_to_def);
+            }
+
+            let arg_types: Vec<Type> = args
+                .iter()
+                .map(|a| node_to_type.get(&a).unwrap().clone())
+                .collect();
+            let ret_type = ret
+                .map(|r| node_to_type.get(&r).unwrap().clone())
+                .unwrap_or_else(|| Type::new_void());
+            let typ = Type::new_function(&ret_type, &arg_types, &node.origin);
+            node_to_type.insert(node_id, typ);
 
             for stmt in body {
                 check_node(*stmt, nodes, errs, node_to_type, name_to_def);
