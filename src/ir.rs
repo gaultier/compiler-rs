@@ -258,7 +258,10 @@ impl<'a> Emitter<'a> {
 
     fn emit_node(&mut self, node_id: NodeId) {
         let node = &self.nodes[node_id];
-        let typ = self.node_to_type.get(&node_id).unwrap();
+        let typ = self.node_to_type.get(&node_id).unwrap_or_else(|| {
+            dbg!(node_id, self.node_to_type, node_id);
+            unreachable!()
+        });
 
         match &node.kind {
             NodeKind::File(decls) => {

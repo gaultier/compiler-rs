@@ -219,6 +219,8 @@ pub fn check_node(
             ));
         }
         NodeKind::Identifier(identifier) => {
+            dbg!(identifier, name_to_def);
+
             let def_id = name_to_def.get(identifier).unwrap();
             let def_type = node_to_type.get(def_id).unwrap();
 
@@ -226,7 +228,9 @@ pub fn check_node(
         }
         NodeKind::FnCall { callee, args } => {
             dbg!(callee);
-            let def_type = node_to_type.get(callee).unwrap();
+            let callee_name = nodes[*callee].kind.as_identifier().unwrap();
+            let def_id = name_to_def.get(callee_name).unwrap();
+            let def_type = node_to_type.get(def_id).unwrap();
             let (ret_type, args_type) = match &*def_type.kind {
                 TypeKind::Function(ret_type, args_type) => (ret_type.clone(), args_type.clone()),
                 _ => {
@@ -260,6 +264,7 @@ pub fn check_node(
                 };
             }
 
+            dbg!(node_id, &ret_type);
             node_to_type.insert(node_id, ret_type);
         }
         NodeKind::Add(lhs, rhs) | NodeKind::Multiply(lhs, rhs) | NodeKind::Divide(lhs, rhs) => {

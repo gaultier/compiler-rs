@@ -131,10 +131,11 @@ impl<'a> Parser<'a> {
 
         let origin = Origin::new_builtin();
 
-        self.nodes.push(Node {
+        let root = self.new_node(Node {
             kind: NodeKind::File(Vec::new()),
             origin,
         });
+        self.node_to_type.insert(root, Type::new_void());
 
         let any = self.new_node(Node {
             kind: NodeKind::Identifier(String::from("any")),
@@ -810,8 +811,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        let mut name_to_def = HashMap::new();
-        self.resolve_nodes(&mut name_to_def);
+        self.resolve_nodes();
     }
 
     fn resolve_node(
@@ -822,6 +822,10 @@ impl<'a> Parser<'a> {
         file_id_to_name: &'a HashMap<FileId, String>,
     ) {
         let node = &nodes[node_id];
+        if !matches!(node.kind, NodeKind::File(_)) && node.origin.kind == OriginKind::Builtin {
+            return;
+        }
+
         match &node.kind {
             NodeKind::File(decls) => {
                 for decl in decls {
@@ -835,13 +839,11 @@ impl<'a> Parser<'a> {
                 let def_id = if let Some(def_id) = name_to_def.get(name) {
                     def_id
                 } else {
-                    if node.origin.kind != OriginKind::Builtin {
-                        errors.push(Error::new(
-                            ErrorKind::UnknownIdentifier,
-                            node.origin,
-                            format!("unknown identifier: {}", name),
-                        ));
-                    }
+                    errors.push(Error::new(
+                        ErrorKind::UnknownIdentifier,
+                        node.origin,
+                        format!("unknown identifier: {}", name),
+                    ));
                     return;
                 };
 
@@ -850,6 +852,7 @@ impl<'a> Parser<'a> {
                 match def.kind {
                     NodeKind::FnDef { .. } => {}
                     NodeKind::VarDecl(_, _) => {}
+                    NodeKind::Identifier(_) => {}
                     _ => {
                         panic!("identifier refers to invalid node: {:?}", def);
                     }
@@ -869,6 +872,7 @@ impl<'a> Parser<'a> {
 
                 // TODO: Check shadowing of function name?
                 name_to_def.insert(identifier.to_owned(), node_id);
+                dbg!(identifier, node_id);
                 //if let Some(scopes) = self.var_name_to_type.get(identifier)
                 //    && scopes
                 //        .last()
@@ -940,7 +944,8 @@ impl<'a> Parser<'a> {
                         ErrorKind::NameAlreadyDefined,
                         node.origin,
                         format!(
-                            "name already defined here: {}",
+                            "name {} already defined here: {}",
+                            name,
                             prev.origin.display(file_id_to_name)
                         ),
                     ));
@@ -981,14 +986,14 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn resolve_nodes(&mut self, name_to_def: &mut HashMap<String, NodeId>) {
+    fn resolve_nodes(&mut self) {
         assert!(!self.nodes.is_empty());
 
         Self::resolve_node(
             NodeId(0),
             &self.nodes,
             &mut self.errors,
-            name_to_def,
+            &mut self.name_to_def,
             self.file_id_to_name,
         );
     }
