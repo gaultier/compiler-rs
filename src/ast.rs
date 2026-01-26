@@ -35,6 +35,7 @@ pub enum NodeKind {
     Cmp(NodeId, NodeId),
     Identifier(String),
     FnCall {
+        // Can be a variable (function pointer), or a string.
         callee: NodeId,
         args: Vec<NodeId>,
     },
