@@ -94,6 +94,7 @@ pub struct Parser<'a> {
     current_scope: usize,
     file_id_to_name: &'a HashMap<FileId, String>,
     nodes: Vec<Node>,
+        node_to_type: HashMap<NodeId,Type>,
 }
 
 impl<'a> Parser<'a> {
@@ -111,6 +112,7 @@ impl<'a> Parser<'a> {
             file_id_to_name,
             current_scope: 0,
             nodes: Vec::new(),
+            node_to_type: HashMap::new(),
         }
     }
 
@@ -119,8 +121,9 @@ impl<'a> Parser<'a> {
         NodeId(self.nodes.len() - 1)
     }
 
-    pub(crate) fn builtins(&mut self, cap_hint: usize) -> Vec<NodeId> {
-        let mut res = Vec::with_capacity(cap_hint);
+    pub(crate) fn builtins(&mut self, cap_hint: usize) -> (Vec<NodeId>, HashMap<String, NodeId>) {
+        let mut node_ids = Vec::with_capacity(cap_hint);
+        let mut name_to_def = HashMap::new();
 
         let origin = Origin::new_builtin();
 
@@ -136,10 +139,11 @@ impl<'a> Parser<'a> {
             &[Type::new_any()],
             &Origin::new_builtin(),
         );
+        node_ids.push(node_id);
+        name_to_def.insert(String::from("println"), node_id);
         self.node_to_type.insert(node_id, typ);
-        res.push(node_id);
 
-        res
+        (node_ids, name_to_def)
     }
 
     fn peek_token(&self) -> Option<&Token> {
@@ -746,8 +750,9 @@ impl<'a> Parser<'a> {
     #[warn(unused_results)]
     pub fn parse(&mut self) -> Vec<NodeId> {
         let mut decls = Vec::new();
-        let builtins = self.builtins(self.tokens.len());
-        decls.extend(builtins);
+        let (builtin_node_ids, builtin name_to_def)= self.builtins(self.tokens.len());
+        decls.extend(builtin_node_ids);
+
 
         if let Some(p) = self.parse_package_clause() {
             decls.push(p);
@@ -787,7 +792,8 @@ impl<'a> Parser<'a> {
             }
         }
 
-        self.resolve_nodes(&mut decls);
+        let mut name_to_def = HashMap::new();
+        self.resolve_nodes(&mut decls, &mut name_to_def, self.file_id_to_name);
         decls
     }
 
@@ -796,6 +802,7 @@ impl<'a> Parser<'a> {
         nodes: &[Node],
         errors: &mut Vec<Error>,
         name_to_def: &mut HashMap<String, NodeId>,
+        file_id_to_name: &'a HashMap<FileId, String>,
     ) {
         let node = &nodes[node_id];
         match &node.kind {
@@ -803,14 +810,26 @@ impl<'a> Parser<'a> {
             NodeKind::Package(_) | NodeKind::Number(_) | NodeKind::Bool(_) => {}
 
             NodeKind::Identifier(name) => {
-                todo!()
-                //if let Some((t, _)) = self.fn_name_to_type.get(name) {
-                //    node.typ = t.clone();
-                //} else if let Some(scopes) = self.var_name_to_type.get(name)
-                //    && let Some((t, _, _)) = scopes.last()
-                //{
-                //    node.typ = t.clone();
-                //}
+                let def_id = if let Some(def_id) = name_to_def.get(name) {
+                    def_id
+                } else {
+                    errors.push(Error::new(
+                        ErrorKind::UnknownIdentifier,
+                        node.origin,
+                        String::from("unknown identifier"),
+                    ));
+                    return;
+                };
+
+                let def = &nodes[*def_id];
+
+                match def.kind {
+                    NodeKind::FnDef { .. } => todo!(),
+                    NodeKind::VarDecl(_, _) => {}
+                    _ => {
+                        panic!("identifier refers to invalid node: {:?}", def);
+                    }
+                }
             }
 
             // Recurse.
@@ -818,13 +837,14 @@ impl<'a> Parser<'a> {
             | NodeKind::Multiply(lhs, rhs)
             | NodeKind::Divide(lhs, rhs)
             | NodeKind::Cmp(lhs, rhs) => {
-                Self::resolve_node(*lhs, nodes, errors);
-                Self::resolve_node(*rhs, nodes, errors);
+                Self::resolve_node(*lhs, nodes, errors, name_to_def, file_id_to_name);
+                Self::resolve_node(*rhs, nodes, errors, name_to_def, file_id_to_name);
             }
             NodeKind::VarDecl(identifier, expr) => {
-                Self::resolve_node(*expr, nodes, errors);
+                Self::resolve_node(*expr, nodes, errors, name_to_def, file_id_to_name);
 
-                todo!()
+                // TODO: Check shadowing of function name?
+                name_to_def.insert(identifier.to_owned(), node_id);
                 //if let Some(scopes) = self.var_name_to_type.get(identifier)
                 //    && scopes
                 //        .last()
@@ -848,29 +868,45 @@ impl<'a> Parser<'a> {
                 //    .push((node.typ.clone(), node.origin, self.current_scope));
             }
             NodeKind::FnCall { callee, args } => {
-                Self::resolve_node(*callee, nodes, errors);
-                //let callee_typ = &nodes[*callee].typ;
-                //match *callee_typ.kind {
-                //    TypeKind::Function(_, _) => {}
-                //    _ => {
-                //        errors.push(Error {
-                //            kind: ErrorKind::CallingANonFunction,
-                //            origin: node.origin,
-                //            explanation: format!("calling a non-function: {}", callee_typ),
-                //        });
-                //    }
-                //}
+                Self::resolve_node(*callee, nodes, errors, name_to_def, file_id_to_name);
+
+                let def = &nodes[*callee];
+
+                match def.kind {
+                    NodeKind::FnDef { .. } => {} // All good.
+                    _ => {
+                        // Once function pointers are supported, VarDecl is also a viable option.
+                        errors.push(Error {
+                            kind: ErrorKind::CallingANonFunction,
+                            origin: node.origin,
+                            explanation: String::from("calling a non-function"),
+                        });
+                    }
+                }
 
                 for op in args {
-                    Self::resolve_node(*op, nodes, errors);
+                    Self::resolve_node(*op, nodes, errors, name_to_def, file_id_to_name);
                 }
             }
             NodeKind::Block(stmts) => {
                 for op in stmts {
-                    Self::resolve_node(*op, nodes, errors);
+                    Self::resolve_node(*op, nodes, errors, name_to_def, file_id_to_name);
                 }
             }
             NodeKind::FnDef { name, body } => {
+                if let Some(prev) = name_to_def.get(name) {
+                    let prev = &nodes[*prev];
+                    errors.push(Error::new(
+                        ErrorKind::NameAlreadyDefined,
+                        node.origin,
+                        format!(
+                            "name already defined here: {}",
+                            prev.origin.display(file_id_to_name)
+                        ),
+                    ));
+                }
+                // TODO: Check shadowing of function name?
+                name_to_def.insert(name.to_owned(), node_id);
                 //if let Some((old_typ, old_origin)) = self.fn_name_to_type.get(name) {
                 //    self.errors.push(Error::new_name_already_defined(
                 //        old_typ,
@@ -890,7 +926,7 @@ impl<'a> Parser<'a> {
                 //self.var_name_to_type.clear();
 
                 for node_id in body {
-                    Self::resolve_node(*node_id, nodes, errors);
+                    Self::resolve_node(*node_id, nodes, errors, name_to_def, file_id_to_name);
                 }
 
                 //self.var_name_to_type.clear();
@@ -900,25 +936,36 @@ impl<'a> Parser<'a> {
                 then_block,
                 else_block,
             } => {
-                Self::resolve_node(*cond, nodes, errors);
-                Self::resolve_node(*then_block, nodes, errors);
-                Self::resolve_node(*else_block, nodes, errors);
+                Self::resolve_node(*cond, nodes, errors, name_to_def, file_id_to_name);
+                Self::resolve_node(*then_block, nodes, errors, name_to_def, file_id_to_name);
+                Self::resolve_node(*else_block, nodes, errors, name_to_def, file_id_to_name);
             }
             NodeKind::For { cond, block } => {
                 if let Some(cond) = cond {
-                    Self::resolve_node(*cond, nodes, errors);
+                    Self::resolve_node(*cond, nodes, errors, name_to_def, file_id_to_name);
                 }
 
                 for stmt in block {
-                    Self::resolve_node(*stmt, nodes, errors);
+                    Self::resolve_node(*stmt, nodes, errors, name_to_def, file_id_to_name);
                 }
             }
         }
     }
 
-    fn resolve_nodes(&mut self, node_ids: &[NodeId]) {
+    fn resolve_nodes(
+        &mut self,
+        node_ids: &[NodeId],
+        name_to_def: &mut HashMap<String, NodeId>,
+        file_id_to_name: &'a HashMap<FileId, String>,
+    ) {
         for node_id in node_ids {
-            Self::resolve_node(*node_id, &mut self.nodes, &mut self.errors);
+            Self::resolve_node(
+                *node_id,
+                &mut self.nodes,
+                &mut self.errors,
+                name_to_def,
+                file_id_to_name,
+            );
         }
     }
 }
