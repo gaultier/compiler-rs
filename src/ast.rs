@@ -17,6 +17,12 @@ use serde::Serialize;
 pub struct NodeId(pub(crate) usize);
 
 #[derive(Serialize, Clone, PartialEq, Eq, Debug)]
+pub(crate) struct FnDef {
+    pub(crate) name: String,
+    pub(crate) body: Vec<NodeId>,
+}
+
+#[derive(Serialize, Clone, PartialEq, Eq, Debug)]
 pub enum NodeKind {
     File(Vec<NodeId>), // Root.
     Number(u64),
@@ -30,10 +36,7 @@ pub enum NodeKind {
         callee: NodeId,
         args: Vec<NodeId>,
     },
-    FnDef {
-        name: String,
-        body: Vec<NodeId>,
-    },
+    FnDef(FnDef),
     Package(String),
     If {
         cond: NodeId,
@@ -132,10 +135,10 @@ impl<'a> Parser<'a> {
         let origin = Origin::new_builtin();
 
         let node_id = self.new_node(Node {
-            kind: NodeKind::FnDef {
+            kind: NodeKind::FnDef(FnDef {
                 name: String::from("println"),
                 body: Vec::new(),
-            },
+            }),
             origin,
         });
         let typ = Type::new_function(
@@ -733,10 +736,10 @@ impl<'a> Parser<'a> {
         self.expect_token_exactly_one(TokenKind::RightCurly, "function declaration")?;
 
         Some(self.new_node(Node {
-            kind: NodeKind::FnDef {
+            kind: NodeKind::FnDef(FnDef {
                 name: Self::str_from_source(self.input, &name.origin).to_owned(),
                 body: stmts,
-            },
+            }),
             origin: func.origin,
         }))
     }
@@ -896,7 +899,7 @@ impl<'a> Parser<'a> {
                     Self::resolve_node(*op, nodes, errors, name_to_def, file_id_to_name);
                 }
             }
-            NodeKind::FnDef { name, body } => {
+            NodeKind::FnDef(FnDef { name, body }) => {
                 if let Some(prev) = name_to_def.get(name) {
                     let prev = &nodes[*prev];
                     errors.push(Error::new(
@@ -979,6 +982,13 @@ impl NodeKind {
     pub(crate) fn as_file(&self) -> Option<&Vec<NodeId>> {
         match self {
             NodeKind::File(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn as_fn_def(&self) -> Option<&FnDef> {
+        match self {
+            NodeKind::FnDef(fn_def) => Some(fn_def),
             _ => None,
         }
     }

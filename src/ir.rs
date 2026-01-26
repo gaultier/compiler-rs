@@ -268,7 +268,7 @@ impl<'a> Emitter<'a> {
             }
             NodeKind::Package(_) => {}
             // Start of a new function.
-            NodeKind::FnDef { name, body } => {
+            NodeKind::FnDef(crate::ast::FnDef { name, body }) => {
                 let stack_size = 0; // TODO
                 self.fn_defs
                     .push(FnDef::new(name.to_owned(), &typ, node.origin, stack_size));
@@ -278,7 +278,6 @@ impl<'a> Emitter<'a> {
 
                 self.fn_def_mut().live_ranges = self.fn_def_mut().compute_live_ranges();
             }
-            NodeKind::Package(_) | NodeKind::FnDef { .. } => {}
             NodeKind::For { cond, block } => {
                 assert_eq!(*typ.kind, TypeKind::Void);
 
@@ -359,16 +358,7 @@ impl<'a> Emitter<'a> {
             }
             crate::ast::NodeKind::FnCall { callee, args } => {
                 // TODO: Support function pointers.
-                let ast_fn_name = if let Node {
-                    kind: NodeKind::Identifier(name),
-                    ..
-                } = &**callee
-                {
-                    name
-                } else {
-                    panic!("invalid fn call function name: {:#?}", node)
-                };
-
+                let ast_fn_name = &self.nodes[*callee].kind.as_fn_def().unwrap().name;
                 let callee_type = self.node_to_type.get(callee).unwrap();
                 let arg_type = callee_type.to_string();
                 let arg0_typ = args

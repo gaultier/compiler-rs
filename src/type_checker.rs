@@ -173,7 +173,7 @@ pub fn check_node(
                 check_node(*stmt, nodes, errs, node_to_type, name_to_def);
             }
         }
-        crate::ast::NodeKind::FnDef { name: _, body } => {
+        NodeKind::FnDef(crate::ast::FnDef { name: _, body }) => {
             let typ = node_to_type.get(&node_id).unwrap();
             let (_ret, args) = match &*typ.kind {
                 TypeKind::Function(ret, args) => (ret, args),
@@ -193,25 +193,25 @@ pub fn check_node(
                 check_node(*stmt, nodes, errs, node_to_type, name_to_def);
             }
         }
-        crate::ast::NodeKind::Number(_) => {
+        NodeKind::Number(_) => {
             assert!(matches!(
                 *node_to_type.get(&node_id).unwrap().kind,
                 TypeKind::Number
             ));
         }
-        crate::ast::NodeKind::Bool(_) => {
+        NodeKind::Bool(_) => {
             assert!(matches!(
                 *node_to_type.get(&node_id).unwrap().kind,
                 TypeKind::Bool
             ));
         }
-        crate::ast::NodeKind::Identifier(identifier) => {
+        NodeKind::Identifier(identifier) => {
             let def_id = name_to_def.get(identifier).unwrap();
             let def_type = node_to_type.get(def_id).unwrap();
 
             node_to_type.insert(node_id, def_type.clone());
         }
-        crate::ast::NodeKind::FnCall { callee, args } => {
+        NodeKind::FnCall { callee, args } => {
             let def_type = node_to_type.get(&callee).unwrap();
             let (ret_type, args_type) = match &*def_type.kind {
                 TypeKind::Function(ret_type, args_type) => (ret_type.clone(), args_type.clone()),
@@ -248,9 +248,7 @@ pub fn check_node(
 
             node_to_type.insert(node_id, ret_type);
         }
-        crate::ast::NodeKind::Add(lhs, rhs)
-        | crate::ast::NodeKind::Multiply(lhs, rhs)
-        | crate::ast::NodeKind::Divide(lhs, rhs) => {
+        NodeKind::Add(lhs, rhs) | NodeKind::Multiply(lhs, rhs) | NodeKind::Divide(lhs, rhs) => {
             check_node(*lhs, nodes, errs, node_to_type, name_to_def);
             check_node(*rhs, nodes, errs, node_to_type, name_to_def);
 
@@ -268,7 +266,7 @@ pub fn check_node(
                 }
             }
         }
-        crate::ast::NodeKind::Cmp(lhs, rhs) => {
+        NodeKind::Cmp(lhs, rhs) => {
             // Set by the parser.
             let typ = node_to_type.get(&lhs).unwrap();
             assert_eq!(*typ.kind, TypeKind::Bool);
@@ -283,7 +281,7 @@ pub fn check_node(
                 errs.push(err);
             }
         }
-        crate::ast::NodeKind::If {
+        NodeKind::If {
             cond,
             then_block,
             else_block,
@@ -292,7 +290,7 @@ pub fn check_node(
             check_node(*then_block, nodes, errs, node_to_type, name_to_def);
             check_node(*else_block, nodes, errs, node_to_type, name_to_def);
         }
-        crate::ast::NodeKind::Block(stmts) => {
+        NodeKind::Block(stmts) => {
             for stmt in stmts {
                 check_node(*stmt, nodes, errs, node_to_type, name_to_def);
             }
