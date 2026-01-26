@@ -410,7 +410,7 @@ pub(crate) fn encode(
                 &symbols,
                 &mut jumps,
                 &mut jumps_to_patch,
-                &file_id_to_name,
+                file_id_to_name,
             )
             .unwrap();
     }
@@ -435,7 +435,7 @@ pub(crate) fn encode(
                 &symbols,
                 &mut jumps,
                 &mut jumps_to_patch,
-                &file_id_to_name,
+                file_id_to_name,
             )
             .unwrap();
     }
@@ -451,7 +451,7 @@ pub(crate) fn encode(
                 &symbols,
                 &mut jumps,
                 &mut jumps_to_patch,
-                &file_id_to_name,
+                file_id_to_name,
             )
             .unwrap();
     }
@@ -467,7 +467,7 @@ pub(crate) fn encode(
                 &symbols,
                 &mut jumps,
                 &mut jumps_to_patch,
-                &file_id_to_name,
+                file_id_to_name,
             )
             .unwrap();
     }
