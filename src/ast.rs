@@ -791,7 +791,12 @@ impl<'a> Parser<'a> {
         decls
     }
 
-    fn resolve_node(node_id: NodeId, nodes: &[Node], errors: &mut Vec<Error>) {
+    fn resolve_node(
+        node_id: NodeId,
+        nodes: &[Node],
+        errors: &mut Vec<Error>,
+        name_to_def: &mut HashMap<String, NodeId>,
+    ) {
         let node = &nodes[node_id];
         match &node.kind {
             // Nothing to do.
