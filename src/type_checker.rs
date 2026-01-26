@@ -190,11 +190,11 @@ pub fn check_node(
 
             let arg_types: Vec<Type> = args
                 .iter()
-                .map(|a| node_to_type.get(&a).unwrap().clone())
+                .map(|a| node_to_type.get(a).unwrap().clone())
                 .collect();
             let ret_type = ret
                 .map(|r| node_to_type.get(&r).unwrap().clone())
-                .unwrap_or_else(|| Type::new_void());
+                .unwrap_or_else(Type::new_void);
             let typ = Type::new_function(&ret_type, &arg_types, &node.origin);
             node_to_type.insert(node_id, typ);
 
