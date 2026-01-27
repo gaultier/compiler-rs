@@ -643,6 +643,9 @@ impl<'a> Emitter<'a> {
                     typ: typ.clone(),
                 });
             }
+            NodeKind::Assignment(lhs, op, rhs) => {
+                todo!()
+            }
         }
     }
 

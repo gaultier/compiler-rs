@@ -16,6 +16,7 @@ pub enum ErrorKind {
     ParseDeclaration,
     ParseFunctionDeclaration,
     MissingNewline,
+    MissingBinaryOp,
     MissingTopLevelPackage,
     ParseTermMissingRhs,
     ParseCmpMissingRhs,
