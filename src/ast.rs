@@ -108,6 +108,12 @@ pub struct Parser<'a> {
     pub(crate) name_to_def: NameToDef,
 }
 
+#[derive(PartialEq, Eq)]
+pub(crate) enum ScopeResolution {
+    Current,
+    Ancestor,
+}
+
 impl NameToDef {
     fn new() -> Self {
         Self {
@@ -116,8 +122,17 @@ impl NameToDef {
         }
     }
 
-    pub(crate) fn get_scoped(&self, name: &str) -> Option<&NodeId> {
-        self.scopes.iter().rev().find_map(|scope| scope.get(name))
+    pub(crate) fn get_scoped(&self, name: &str) -> Option<(&NodeId, ScopeResolution)> {
+        self.scopes.iter().rev().enumerate().find_map(|(i, scope)| {
+            scope.get(name).map(|node_id| {
+                let scope = if i == self.scopes.len() - 1 {
+                    ScopeResolution::Current
+                } else {
+                    ScopeResolution::Ancestor
+                };
+                (node_id, scope)
+            })
+        })
     }
 
     pub(crate) fn get_definitive(&self, name: &str) -> Option<&NodeId> {
@@ -891,7 +906,7 @@ impl<'a> Parser<'a> {
             NodeKind::Identifier(name) => {
                 dbg!(name, &name_to_def, node_id, &node.kind);
 
-                let def_id = if let Some(def_id) = name_to_def.get_scoped(name) {
+                let def_id = if let Some((def_id, _)) = name_to_def.get_scoped(name) {
                     def_id
                 } else {
                     errors.push(Error::new(
@@ -925,7 +940,21 @@ impl<'a> Parser<'a> {
             NodeKind::VarDecl(identifier, expr) => {
                 Self::resolve_node(*expr, nodes, errors, name_to_def, file_id_to_name);
 
-                // TODO: Check shadowing of function name?
+                if let Some((prev, scope)) = name_to_def.get_scoped(identifier)
+                    && scope == ScopeResolution::Current
+                {
+                    let prev_origin = nodes[*prev].origin;
+                    errors.push(Error::new(
+                        ErrorKind::NameAlreadyDefined,
+                        node.origin,
+                        format!(
+                            "{} redeclared, already declared here: {}",
+                            identifier,
+                            prev_origin.display(file_id_to_name)
+                        ),
+                    ));
+                }
+
                 name_to_def.insert(identifier.to_owned(), node_id);
                 dbg!(identifier, node_id, &node.kind);
             }
@@ -943,7 +972,7 @@ impl<'a> Parser<'a> {
                     // TODO: Should we pretend we found it?
                     return;
                 }
-                let def = &nodes[*def_id.unwrap()];
+                let def = &nodes[*def_id.unwrap().0];
 
                 match def.kind {
                     NodeKind::FnDef { .. } => {} // All good.
@@ -976,7 +1005,7 @@ impl<'a> Parser<'a> {
                 ret,
                 body,
             }) => {
-                if let Some(prev) = name_to_def.get_scoped(name) {
+                if let Some((prev, _)) = name_to_def.get_scoped(name) {
                     let prev = &nodes[*prev];
                     errors.push(Error::new(
                         ErrorKind::NameAlreadyDefined,
