@@ -866,7 +866,8 @@ impl<'a> Parser<'a> {
 
         match &node.kind {
             NodeKind::File(decls) => {
-                name_to_def.enter();
+                // Already called `.enter()` for builtins.
+                assert_eq!(name_to_def.scopes.len(), 1);
 
                 for decl in decls {
                     Self::resolve_node(*decl, nodes, errors, name_to_def, file_id_to_name);
