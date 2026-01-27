@@ -1309,4 +1309,24 @@ func main() {
                 .is_some()
         );
     }
+
+    #[test]
+    fn eval_var_in_parent_scope() {
+        let input = " 
+package main
+
+func main() {
+  {
+    var a = 3*4
+    {
+        println(a)
+    }
+  } 
+}
+";
+
+        let (builtins_len, fn_defs, eval) = run(&input).unwrap();
+        assert_eq!(fn_defs.len(), builtins_len + 1);
+        assert_eq!(eval.stdout, b"12\n");
+    }
 }
