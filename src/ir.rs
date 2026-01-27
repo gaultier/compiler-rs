@@ -283,9 +283,7 @@ impl<'a> Emitter<'a> {
                 let typ = self.node_to_type.get(&node_id).unwrap();
                 self.fn_defs
                     .push(FnDef::new(name.to_owned(), typ, node.origin, stack_size));
-                for stmt in body {
-                    self.emit_node(*stmt);
-                }
+                self.emit_node(*body);
 
                 self.fn_def_mut().live_ranges = self.fn_def_mut().compute_live_ranges();
             }
@@ -316,9 +314,7 @@ impl<'a> Emitter<'a> {
                         typ: Type::new_void(),
                     });
                 }
-                for stmt in block {
-                    self.emit_node(*stmt);
-                }
+                self.emit_node(*block);
                 self.fn_def_mut().instructions.push(Instruction {
                     kind: InstructionKind::Jump(loop_label.clone()),
                     origin: node.origin,
@@ -566,9 +562,7 @@ impl<'a> Emitter<'a> {
                 let then_block = &self.nodes[*then_block_id];
                 assert!(matches!(then_block.kind, NodeKind::Block(_)));
 
-                let else_block = self.nodes[*else_block_id].kind.as_block().unwrap();
-
-                let else_label = if !else_block.is_empty() {
+                let else_label = if else_block_id.is_some() {
                     Some(format!(".{}_if_else", self.label_current))
                 } else {
                     None
@@ -598,7 +592,7 @@ impl<'a> Emitter<'a> {
                 self.emit_node(*then_block_id);
 
                 // Else body.
-                if !else_block.is_empty() {
+                if let Some(else_block_id) = else_block_id {
                     self.fn_def_mut().instructions.push(Instruction {
                         kind: InstructionKind::Jump(end_label.clone()),
                         origin: node.origin,
@@ -997,7 +991,7 @@ mod tests {
 
     use crate::{
         ast::Parser,
-        error::Error,
+        error::{Error, ErrorKind},
         ir::{Eval, FnDef},
         lex::Lexer,
         type_checker,
@@ -1216,7 +1210,7 @@ func main() {
     }
 
     #[test]
-    fn eval_var_scoped() {
+    fn eval_var_shadowed_if() {
         let input = " 
 package main
 
@@ -1232,5 +1226,26 @@ func main() {
         let (builtins_len, fn_defs, eval) = run(&input).unwrap();
         assert_eq!(fn_defs.len(), builtins_len + 1);
         assert_eq!(eval.stdout, b"1\n");
+    }
+
+    #[test]
+    fn eval_var_not_in_scope() {
+        let input = " 
+package main
+
+func main() {
+  {
+  var a = 3*4
+  }
+  {
+    println(a)
+  }
+}
+";
+
+        let errs = run(&input).unwrap_err();
+        assert_eq!(errs.len(), 1);
+        let err = &errs[0];
+        assert_eq!(err.kind, ErrorKind::UnknownIdentifier);
     }
 }

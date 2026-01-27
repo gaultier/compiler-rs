@@ -22,11 +22,12 @@ pub struct FnDef {
     pub(crate) name: String,
     pub(crate) args: Vec<NodeId>,
     pub(crate) ret: Option<NodeId>,
-    pub(crate) body: Vec<NodeId>,
+    pub(crate) body: NodeId,
 }
 
 #[derive(Serialize, Clone, PartialEq, Eq, Debug)]
 pub enum NodeKind {
+    // TODO: Should we just use 'Block'?
     File(Vec<NodeId>), // Root.
     Number(u64),
     Bool(bool),
@@ -45,11 +46,11 @@ pub enum NodeKind {
     If {
         cond: NodeId,
         then_block: NodeId,
-        else_block: NodeId,
+        else_block: Option<NodeId>,
     },
     For {
         cond: Option<NodeId>,
-        block: Vec<NodeId>,
+        block: NodeId,
     },
     Block(Vec<NodeId>),
     VarDecl(String, NodeId), // TODO: Vec in case of identifier list.
@@ -182,12 +183,17 @@ impl<'a> Parser<'a> {
         self.name_to_def.insert(String::from("any"), any);
         self.node_to_type.insert(any, Type::new_any());
 
+        let body = self.new_node(Node {
+            kind: NodeKind::Block(Vec::new()),
+            origin,
+        });
+
         let println = self.new_node(Node {
             kind: NodeKind::FnDef(FnDef {
                 name: String::from("println"),
                 args: vec![any],
                 ret: None,
-                body: Vec::new(),
+                body,
             }),
             origin,
         });
@@ -541,9 +547,28 @@ impl<'a> Parser<'a> {
                 return None;
             };
 
-            self.expect_token_exactly_one(TokenKind::LeftCurly, "for body")?;
             Some(cond)
         };
+
+        let block = self.parse_statement_block().or_else(|| {
+            let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
+            self.add_error_with_explanation(
+                ErrorKind::MissingExpected(TokenKind::LeftCurly),
+                keyword_for.origin,
+                format!("expect block following for, found: {:?}", found),
+            );
+
+            None
+        })?;
+
+        Some(self.new_node(Node {
+            kind: NodeKind::For { cond, block },
+            origin: keyword_for.origin,
+        }))
+    }
+
+    fn parse_statement_block(&mut self) -> Option<NodeId> {
+        let left_curly = self.match_kind(TokenKind::LeftCurly)?;
 
         let mut stmts = Vec::new();
 
@@ -560,11 +585,11 @@ impl<'a> Parser<'a> {
             let stmt = self.parse_statement()?;
             stmts.push(stmt);
         }
-        self.expect_token_exactly_one(TokenKind::RightCurly, "for body")?;
+        self.expect_token_exactly_one(TokenKind::RightCurly, "block")?;
 
         Some(self.new_node(Node {
-            kind: NodeKind::For { cond, block: stmts },
-            origin: keyword_for.origin,
+            kind: NodeKind::Block(stmts),
+            origin: left_curly.origin,
         }))
     }
 
@@ -576,55 +601,35 @@ impl<'a> Parser<'a> {
         let keyword_if = self.match_kind(TokenKind::KeywordIf)?;
         let cond = self.parse_expr()?;
 
-        let left_curly = self.expect_token_exactly_one(TokenKind::LeftCurly, "if body")?;
-
-        let mut stmts = Vec::new();
-
-        for _ in 0..self.remaining_tokens_count() {
-            match self.peek_token() {
-                None
-                | Some(Token {
-                    kind: TokenKind::RightCurly,
-                    ..
-                }) => break,
-                _ => {}
-            }
-
-            let stmt = self.parse_statement()?;
-            stmts.push(stmt);
-        }
-        self.expect_token_exactly_one(TokenKind::RightCurly, "then body")?;
-
-        let then_block = self.new_node(Node {
-            kind: NodeKind::Block(stmts),
-            origin: left_curly.origin,
-        });
-
-        let else_stmts = if self.match_kind(TokenKind::KeywordElse).is_some() {
-            self.expect_token_exactly_one(TokenKind::LeftCurly, "else body")?;
-            let mut stmts = Vec::new();
-            for _ in 0..self.remaining_tokens_count() {
-                match self.peek_token() {
-                    None
-                    | Some(Token {
-                        kind: TokenKind::RightCurly,
-                        ..
-                    }) => break,
-                    _ => {}
-                }
-
-                let stmt = self.parse_statement()?;
-                stmts.push(stmt);
-            }
-            self.expect_token_exactly_one(TokenKind::RightCurly, "else body")?;
-            stmts
+        let then_block = if let Some(b) = self.parse_statement_block() {
+            b
         } else {
-            Vec::new()
+            let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
+            self.add_error_with_explanation(
+                ErrorKind::MissingExpected(TokenKind::LeftCurly),
+                keyword_if.origin,
+                format!("expect block following if(cond), found: {:?}", found),
+            );
+
+            return None;
         };
-        let else_block = self.new_node(Node {
-            kind: NodeKind::Block(else_stmts),
-            origin: left_curly.origin,
-        });
+
+        let else_block = if self.match_kind(TokenKind::KeywordElse).is_some() {
+            let block = self.parse_statement_block().or_else(|| {
+                let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
+                self.add_error_with_explanation(
+                    ErrorKind::MissingExpected(TokenKind::LeftCurly),
+                    keyword_if.origin,
+                    format!("expect block following else, found: {:?}", found),
+                );
+
+                None
+            })?;
+
+            Some(block)
+        } else {
+            None
+        };
 
         Some(self.new_node(Node {
             kind: NodeKind::If {
@@ -665,10 +670,18 @@ impl<'a> Parser<'a> {
         }))
     }
 
+    // Statement  = Declaration | LabeledStmt | SimpleStmt |
+    //              GoStmt | ReturnStmt | BreakStmt | ContinueStmt | GotoStmt |
+    //              FallthroughStmt | Block | IfStmt | SwitchStmt | SelectStmt | ForStmt |
+    //              DeferStmt .
     fn parse_statement(&mut self) -> Option<NodeId> {
         if self.error_mode {
             return None;
         }
+
+        if let Some(stmt) = self.parse_statement_block() {
+            return Some(stmt);
+        };
 
         if let Some(stmt) = self.parse_statement_if() {
             return Some(stmt);
@@ -762,29 +775,26 @@ impl<'a> Parser<'a> {
 
         // TODO: Args.
 
-        self.expect_token_exactly_one(TokenKind::RightParen, "function declaration")?;
+        let rparen =
+            self.expect_token_exactly_one(TokenKind::RightParen, "function declaration")?;
 
         // TODO: Return type.
 
-        self.expect_token_exactly_one(TokenKind::LeftCurly, "function declaration")?;
+        let body = if let Some(b) = self.parse_statement_block() {
+            b
+        } else {
+            let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
+            self.add_error_with_explanation(
+                ErrorKind::MissingExpected(TokenKind::LeftCurly),
+                rparen.origin,
+                format!(
+                    "expect block following function signature, found: {:?}",
+                    found
+                ),
+            );
 
-        let mut stmts = Vec::new();
-
-        for _ in 0..self.remaining_tokens_count() {
-            match self.peek_token() {
-                None
-                | Some(Token {
-                    kind: TokenKind::RightCurly,
-                    ..
-                }) => break,
-                _ => {}
-            }
-
-            let stmt = self.parse_statement()?;
-            stmts.push(stmt);
-        }
-
-        self.expect_token_exactly_one(TokenKind::RightCurly, "function declaration")?;
+            return None;
+        };
 
         let name = Self::str_from_source(self.input, &name.origin).to_owned();
         let node_id = self.new_node(Node {
@@ -792,7 +802,7 @@ impl<'a> Parser<'a> {
                 name,
                 args: vec![], // TODO
                 ret: None,    // TODO
-                body: stmts,
+                body,
             }),
             origin: func.origin,
         });
@@ -1008,12 +1018,7 @@ impl<'a> Parser<'a> {
                     Self::resolve_node(*ret, nodes, errors, name_to_def, file_id_to_name);
                 }
 
-                name_to_def.enter();
-
-                for stmt in body {
-                    Self::resolve_node(*stmt, nodes, errors, name_to_def, file_id_to_name);
-                }
-                name_to_def.leave();
+                Self::resolve_node(*body, nodes, errors, name_to_def, file_id_to_name);
             }
             NodeKind::If {
                 cond,
@@ -1022,19 +1027,16 @@ impl<'a> Parser<'a> {
             } => {
                 Self::resolve_node(*cond, nodes, errors, name_to_def, file_id_to_name);
                 Self::resolve_node(*then_block, nodes, errors, name_to_def, file_id_to_name);
-                Self::resolve_node(*else_block, nodes, errors, name_to_def, file_id_to_name);
+                if let Some(else_block) = else_block {
+                    Self::resolve_node(*else_block, nodes, errors, name_to_def, file_id_to_name);
+                }
             }
             NodeKind::For { cond, block } => {
                 if let Some(cond) = cond {
                     Self::resolve_node(*cond, nodes, errors, name_to_def, file_id_to_name);
                 }
 
-                name_to_def.enter();
-
-                for stmt in block {
-                    Self::resolve_node(*stmt, nodes, errors, name_to_def, file_id_to_name);
-                }
-                name_to_def.leave();
+                Self::resolve_node(*block, nodes, errors, name_to_def, file_id_to_name);
             }
         }
     }
@@ -1063,13 +1065,6 @@ impl NodeKind {
     pub(crate) fn as_identifier(&self) -> Option<&str> {
         match self {
             NodeKind::Identifier(s) => Some(s),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn as_block(&self) -> Option<&[NodeId]> {
-        match self {
-            NodeKind::Block(stmts) => Some(stmts),
             _ => None,
         }
     }

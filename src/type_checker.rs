@@ -170,9 +170,7 @@ pub fn check_node(
                 check_node(*cond, nodes, errs, node_to_type, name_to_def);
             }
 
-            for stmt in block {
-                check_node(*stmt, nodes, errs, node_to_type, name_to_def);
-            }
+            check_node(*block, nodes, errs, node_to_type, name_to_def);
         }
         NodeKind::FnDef(crate::ast::FnDef {
             name: _,
@@ -203,9 +201,7 @@ pub fn check_node(
             let typ = Type::new_function(&ret_type, &arg_types, &node.origin);
             node_to_type.insert(node_id, typ);
 
-            for stmt in body {
-                check_node(*stmt, nodes, errs, node_to_type, name_to_def);
-            }
+            check_node(*body, nodes, errs, node_to_type, name_to_def);
         }
         NodeKind::Number(_) => {
             assert!(matches!(
@@ -303,7 +299,9 @@ pub fn check_node(
         } => {
             check_node(*cond, nodes, errs, node_to_type, name_to_def);
             check_node(*then_block, nodes, errs, node_to_type, name_to_def);
-            check_node(*else_block, nodes, errs, node_to_type, name_to_def);
+            if let Some(else_block) = else_block {
+                check_node(*else_block, nodes, errs, node_to_type, name_to_def);
+            }
         }
         NodeKind::Block(stmts) => {
             for stmt in stmts {
