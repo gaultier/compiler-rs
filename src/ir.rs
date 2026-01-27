@@ -82,7 +82,7 @@ pub struct FnDef {
     typ: Type,
     pub origin: Origin,
     pub stack_size: usize,
-    name_to_vreg: BTreeMap<String, VirtualRegister>,
+    node_to_vreg: HashMap<NodeId, VirtualRegister>,
 }
 
 impl Display for FnDef {
@@ -123,7 +123,7 @@ impl FnDef {
             typ: typ.clone(),
             origin,
             stack_size,
-            name_to_vreg: BTreeMap::new(),
+            node_to_vreg: HashMap::new(),
         }
     }
 
@@ -358,7 +358,9 @@ impl<'a> Emitter<'a> {
                 });
             }
             crate::ast::NodeKind::Identifier(identifier) => {
-                let vreg = *self.fn_def_mut().name_to_vreg.get(identifier).unwrap();
+                let def_id = self.name_to_def.get_definitive(identifier).unwrap();
+                let vreg = *self.fn_def_mut().node_to_vreg.get(def_id).unwrap();
+
                 let typ = self.node_to_type.get(&node_id).unwrap();
                 let res_vreg = self.fn_def_mut().make_vreg(typ);
                 self.fn_def_mut().instructions.push(Instruction {
@@ -629,10 +631,9 @@ impl<'a> Emitter<'a> {
                 let op_vreg = self.vreg();
                 let op_typ = self.fn_def_mut().instructions.last().unwrap().typ.clone();
 
-                assert!(!self.fn_def_mut().name_to_vreg.contains_key(identifier));
-                self.fn_def_mut()
-                    .name_to_vreg
-                    .insert(identifier.to_owned(), op_vreg);
+                // TODO: Should every `make_vreg()` call also insert in this map?
+                // But the only use of the map is to map a name to a vreg.
+                self.fn_def_mut().node_to_vreg.insert(node_id, op_vreg);
 
                 let typ = self.node_to_type.get(&node_id).unwrap();
                 self.fn_def_mut().instructions.push(Instruction {
@@ -829,7 +830,6 @@ pub fn eval(irs: &[Instruction]) -> Eval {
             _ => None,
         })
         .collect();
-    let mut name_to_vreg: BTreeMap<String, VirtualRegister> = BTreeMap::new();
 
     let mut pc: usize = 0;
     loop {
@@ -840,12 +840,9 @@ pub fn eval(irs: &[Instruction]) -> Eval {
         let ir = &irs[pc];
 
         match &ir.kind {
-            InstructionKind::VarDecl(identifier, op) => {
+            InstructionKind::VarDecl(_, op) => {
                 assert!(ir.res_vreg.is_none());
-                assert!(!name_to_vreg.contains_key(identifier));
-                let vreg = op.as_vreg().unwrap();
-
-                name_to_vreg.insert(identifier.to_owned(), vreg);
+                let __vreg = op.as_vreg().unwrap();
             }
             InstructionKind::JumpIfFalse(label, cond) => {
                 let vreg = cond.as_vreg().unwrap();
@@ -1216,5 +1213,24 @@ func main() {
         let (builtins_len, fn_defs, eval) = run(&input).unwrap();
         assert_eq!(fn_defs.len(), builtins_len + 1);
         assert_eq!(eval.stdout, b"12\n15\n");
+    }
+
+    #[test]
+    fn eval_var_scoped() {
+        let input = " 
+package main
+
+func main() {
+  var a = 3*4
+  if true {
+    var a = 1
+    println(a)
+  }
+}
+";
+
+        let (builtins_len, fn_defs, eval) = run(&input).unwrap();
+        assert_eq!(fn_defs.len(), builtins_len + 1);
+        assert_eq!(eval.stdout, b"1\n");
     }
 }
