@@ -1210,13 +1210,32 @@ func main() {
     }
 
     #[test]
-    fn eval_var_shadowed_if() {
+    fn eval_var_shadowed_in_if() {
         let input = " 
 package main
 
 func main() {
   var a = 3*4
   if true {
+    var a = 1
+    println(a)
+  }
+}
+";
+
+        let (builtins_len, fn_defs, eval) = run(&input).unwrap();
+        assert_eq!(fn_defs.len(), builtins_len + 1);
+        assert_eq!(eval.stdout, b"1\n");
+    }
+
+    #[test]
+    fn eval_var_shadowed_in_block() {
+        let input = " 
+package main
+
+func main() {
+  var a = 3*4
+  {
     var a = 1
     println(a)
   }
