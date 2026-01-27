@@ -1248,7 +1248,7 @@ func main() {
     }
 
     #[test]
-    fn eval_var_not_in_scope_block() {
+    fn err_var_not_in_scope_block() {
         let input = " 
 package main
 
@@ -1269,7 +1269,7 @@ func main() {
     }
 
     #[test]
-    fn eval_var_in_if_not_in_scope_in_else() {
+    fn err_var_in_if_not_in_scope_in_else() {
         let input = " 
 package main
 
@@ -1289,7 +1289,7 @@ func main() {
     }
 
     #[test]
-    fn eval_var_in_else_not_in_scope_in_if() {
+    fn err_var_in_else_not_in_scope_in_if() {
         let input = " 
 package main
 
@@ -1328,5 +1328,25 @@ func main() {
         let (builtins_len, fn_defs, eval) = run(&input).unwrap();
         assert_eq!(fn_defs.len(), builtins_len + 1);
         assert_eq!(eval.stdout, b"12\n");
+    }
+
+    #[test]
+    fn err_var_redefined_in_current_scope() {
+        let input = " 
+package main
+
+func main() {
+    var a = 3*4
+    var b = 3*4
+    var a = 3*4
+}
+";
+
+        let errs = run(&input).unwrap_err();
+        assert!(
+            errs.iter()
+                .find(|e| e.kind == ErrorKind::NameAlreadyDefined)
+                .is_some()
+        );
     }
 }
