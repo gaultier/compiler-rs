@@ -217,7 +217,11 @@ pub fn check_node(
         }
         NodeKind::Identifier(identifier) => {
             let def_id = name_to_def.get_definitive(identifier).unwrap();
-            let def_type = node_to_type.get(def_id).unwrap();
+            // This could happen due to some parsing/resolving errors.
+            // Pretend the type exists and is `any` to make progress
+            // and report more errors.
+            let default_type = Type::new_any();
+            let def_type = node_to_type.get(def_id).unwrap_or(&default_type);
 
             node_to_type.insert(node_id, def_type.clone());
         }

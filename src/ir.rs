@@ -1248,7 +1248,7 @@ func main() {
     }
 
     #[test]
-    fn eval_var_not_in_scope() {
+    fn eval_var_not_in_scope_block() {
         let input = " 
 package main
 
@@ -1266,5 +1266,47 @@ func main() {
         assert_eq!(errs.len(), 1);
         let err = &errs[0];
         assert_eq!(err.kind, ErrorKind::UnknownIdentifier);
+    }
+
+    #[test]
+    fn eval_var_in_if_not_in_scope_in_else() {
+        let input = " 
+package main
+
+func main() {
+  if true {
+    var a = 3*4
+  } else {
+    println(a)
+  }
+}
+";
+
+        let errs = run(&input).unwrap_err();
+        assert_eq!(errs.len(), 1);
+        let err = &errs[0];
+        assert_eq!(err.kind, ErrorKind::UnknownIdentifier);
+    }
+
+    #[test]
+    fn eval_var_in_else_not_in_scope_in_if() {
+        let input = " 
+package main
+
+func main() {
+  if true {
+    println(a)
+  } else {
+    var a = 3*4
+  }
+}
+";
+
+        let errs = run(&input).unwrap_err();
+        assert!(
+            errs.iter()
+                .find(|e| e.kind == ErrorKind::UnknownIdentifier)
+                .is_some()
+        );
     }
 }

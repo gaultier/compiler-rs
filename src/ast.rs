@@ -889,6 +889,8 @@ impl<'a> Parser<'a> {
             NodeKind::Package(_) | NodeKind::Number(_) | NodeKind::Bool(_) => {}
 
             NodeKind::Identifier(name) => {
+                dbg!(name, &name_to_def, node_id, &node.kind);
+
                 let def_id = if let Some(def_id) = name_to_def.get_scoped(name) {
                     def_id
                 } else {
@@ -925,28 +927,7 @@ impl<'a> Parser<'a> {
 
                 // TODO: Check shadowing of function name?
                 name_to_def.insert(identifier.to_owned(), node_id);
-                dbg!(identifier, node_id);
-                //if let Some(scopes) = self.var_name_to_type.get(identifier)
-                //    && scopes
-                //        .last()
-                //        .map(|(_, _, scope)| *scope)
-                //        .unwrap_or_default()
-                //        == self.current_scope
-                //{
-                //    let prev_origin = scopes.last().map(|(_, origin, _)| origin).unwrap();
-                //    self.add_error_with_explanation(
-                //        ErrorKind::NameAlreadyDefined,
-                //        node.origin,
-                //        format!(
-                //            "variable redefines existing name, defined here: {}",
-                //            prev_origin.display(self.file_id_to_name)
-                //        ),
-                //    );
-                //}
-                //self.var_name_to_type
-                //    .entry(identifier.to_owned())
-                //    .or_default()
-                //    .push((node.typ.clone(), node.origin, self.current_scope));
+                dbg!(identifier, node_id, &node.kind);
             }
             NodeKind::FnCall { callee, args } => {
                 Self::resolve_node(*callee, nodes, errors, name_to_def, file_id_to_name);
