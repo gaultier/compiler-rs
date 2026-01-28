@@ -287,6 +287,7 @@ impl<'a> Emitter<'a> {
 
                 self.fn_def_mut().live_ranges = self.fn_def_mut().compute_live_ranges();
             }
+            NodeKind::Unary(op, expr) => todo!(),
             NodeKind::For { cond, block } => {
                 let loop_label = format!(".{}_for_loop", self.label_current);
                 let end_label = format!(".{}_for_end", self.label_current);

@@ -36,6 +36,7 @@ pub enum NodeKind {
     Divide(NodeId, NodeId),
     Cmp(NodeId, NodeId),
     Identifier(String),
+    Unary(TokenKind, NodeId),
     Assignment(NodeId, TokenKind, NodeId),
     FnCall {
         // Can be a variable (function pointer), or a string.
@@ -233,6 +234,16 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn eat_token(&mut self) -> Option<&Token> {
+        assert!(self.tokens_consumed <= self.tokens.len());
+        if self.tokens_consumed == self.tokens.len() {
+            None
+        } else {
+            self.tokens_consumed += 1;
+            Some(&self.tokens[self.tokens_consumed - 1])
+        }
+    }
+
     // Used to avoid an avalanche of errors for the same line.
     fn skip_to_next_line(&mut self) {
         let current_line = self.peek_token().map(|t| t.origin.line).unwrap_or(1);
@@ -336,6 +347,12 @@ impl<'a> Parser<'a> {
     //                 PrimaryExpr Slice |
     //                 PrimaryExpr TypeAssertion |
     //                 PrimaryExpr Arguments .
+    // Selector      = "." identifier .
+    // Index         = "[" Expression [ "," ] "]" .
+    // Slice         = "[" [ Expression ] ":" [ Expression ] "]" |
+    //                 "[" [ Expression ] ":" Expression ":" Expression "]" .
+    // TypeAssertion = "." "(" Type ")" .
+    // Arguments     = "(" [ ( ExpressionList | Type [ "," ExpressionList ] ) [ "..." ] [ "," ] ] ")" .
     fn parse_primary_expr(&mut self) -> Option<NodeId> {
         if self.error_mode {
             return None;
@@ -345,7 +362,13 @@ impl<'a> Parser<'a> {
             return Some(op);
         }
 
-        // TODO
+        // TODO: Conversion.
+        // TODO: MethodExpr.
+        // TODO: PrimaryExpr Selector.
+        // TODO: PrimaryExpr Index.
+        // TODO: PrimaryExpr Slice.
+        // TODO: PrimaryExpr TypeAssertion.
+        // TODO: PrimaryExpr Arguments.
 
         None
     }
@@ -483,7 +506,19 @@ impl<'a> Parser<'a> {
         match self.peek_token().map(|t| t.kind) {
             // TODO: More
             Some(TokenKind::Plus | TokenKind::Star) => {
-                todo!()
+                let token = *self.eat_token().unwrap();
+                let expr = self.parse_unary_expr().or_else(|| {
+                    let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
+                    self.errors.push(Error::new(
+                        ErrorKind::MissingExpr,
+                        token.origin,
+                        format!("expected expression in unary expression after operator but found: {:?}", found)));
+                    None
+                })?;
+                return Some(self.new_node(Node {
+                    kind: NodeKind::Unary(token.kind, expr),
+                    origin: token.origin,
+                }));
             }
             _ => self.parse_primary_expr(),
         }
@@ -939,6 +974,10 @@ impl<'a> Parser<'a> {
             }
             // Nothing to do.
             NodeKind::Package(_) | NodeKind::Number(_) | NodeKind::Bool(_) => {}
+
+            NodeKind::Unary(_, expr) => {
+                Self::resolve_node(*expr, nodes, errors, name_to_def, file_id_to_name);
+            }
 
             NodeKind::Assignment(lhs, _, rhs) => {
                 Self::resolve_node(*lhs, nodes, errors, name_to_def, file_id_to_name);
