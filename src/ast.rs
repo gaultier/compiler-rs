@@ -938,8 +938,6 @@ impl<'a> Parser<'a> {
                 ),
             );
         }
-
-        self.resolve_nodes();
     }
 
     #[warn(unused_results)]
