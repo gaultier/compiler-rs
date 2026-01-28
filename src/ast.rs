@@ -551,7 +551,7 @@ impl<'a> Parser<'a> {
             let stmt = self.parse_statement()?;
             stmts.push(stmt);
         }
-        self.expect_token_exactly_one(TokenKind::RightCurly, "block")?;
+        self.expect_token_one(TokenKind::RightCurly, "block")?;
 
         Some(self.new_node(Node {
             kind: NodeKind::Block(stmts),
@@ -612,8 +612,8 @@ impl<'a> Parser<'a> {
     // VarSpec = IdentifierList ( Type [ "=" ExpressionList ] | "=" ExpressionList ) .
     fn parse_statement_var_decl(&mut self) -> Option<NodeId> {
         let var = self.match_kind(TokenKind::KeywordVar)?;
-        let identifier = self.expect_token_exactly_one(TokenKind::Identifier, "var declaration")?;
-        let eq = self.expect_token_exactly_one(TokenKind::Eq, "var declaration")?;
+        let identifier = self.expect_token_one(TokenKind::Identifier, "var declaration")?;
+        let eq = self.expect_token_one(TokenKind::Eq, "var declaration")?;
         let expr = if let Some(expr) = self.parse_expr() {
             expr
         } else {
@@ -645,7 +645,7 @@ impl<'a> Parser<'a> {
         // TODO: Expression list.
 
         let lhs = self.parse_expr()?;
-        let eq = self.expect_token_exactly_one(TokenKind::Eq, "assignment")?;
+        let eq = self.expect_token_one(TokenKind::Eq, "assignment")?;
         let rhs = self.parse_expr().or_else(|| {
             let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
             self.add_error_with_explanation(
@@ -728,8 +728,8 @@ impl<'a> Parser<'a> {
     // PackageClause = "package" PackageName .
     // PackageName   = identifier .
     fn parse_package_clause(&mut self) -> Option<NodeId> {
-        self.expect_token_exactly_one(TokenKind::KeywordPackage, "package clause")?;
-        let package = self.expect_token_exactly_one(TokenKind::Identifier, "package clause")?;
+        self.expect_token_one(TokenKind::KeywordPackage, "package clause")?;
+        let package = self.expect_token_one(TokenKind::Identifier, "package clause")?;
 
         Some(self.new_node(Node {
             kind: NodeKind::Package(Self::str_from_source(self.input, &package.origin).to_owned()),
@@ -745,7 +745,7 @@ impl<'a> Parser<'a> {
         self.tokens.len() - self.tokens_consumed
     }
 
-    fn expect_token_exactly_one(&mut self, token_kind: TokenKind, context: &str) -> Option<Token> {
+    fn expect_token_one(&mut self, token_kind: TokenKind, context: &str) -> Option<Token> {
         if let Some(token) = self.match_kind(token_kind) {
             Some(token)
         } else {
@@ -760,27 +760,20 @@ impl<'a> Parser<'a> {
 
     // FunctionDecl = "func" FunctionName [ TypeParameters ] Signature [ FunctionBody ] .
     // FunctionName = identifier .
+    //Signature     = Parameters [ Result ] .
+    // Result        = Parameters | Type .
+    // Parameters    = "(" [ ParameterList [ "," ] ] ")" .
+    // ParameterList = ParameterDecl { "," ParameterDecl } .
+    // ParameterDecl = [ IdentifierList ] [ "..." ] Type .
     // FunctionBody = Block .
     fn parse_function_declaration(&mut self) -> Option<NodeId> {
-        let func = self.expect_token_exactly_one(TokenKind::KeywordFunc, "function declaration")?;
-
-        let name = if let Some(name) = self.match_kind(TokenKind::Identifier) {
-            name
-        } else {
-            self.add_error_with_explanation(
-                ErrorKind::MissingExpected(TokenKind::Identifier),
-                self.current_or_last_token_origin().unwrap(),
-                String::from("failed to parse function declaration: missing function name"),
-            );
-            return None;
-        };
-
-        self.expect_token_exactly_one(TokenKind::LeftParen, "function declaration")?;
+        let func = self.match_kind(TokenKind::KeywordFunc)?;
+        let name = self.expect_token_one(TokenKind::Identifier, "function declaration")?;
+        self.expect_token_one(TokenKind::LeftParen, "function declaration")?;
 
         // TODO: Args.
 
-        let rparen =
-            self.expect_token_exactly_one(TokenKind::RightParen, "function declaration")?;
+        let rparen = self.expect_token_one(TokenKind::RightParen, "function declaration")?;
 
         // TODO: Return type.
 
@@ -819,6 +812,9 @@ impl<'a> Parser<'a> {
             return None;
         }
 
+        // TODO: Const decl.
+        // TODO: Type decl.
+
         if let Some(stmt) = self.parse_statement_var_decl() {
             return Some(stmt);
         };
@@ -839,6 +835,8 @@ impl<'a> Parser<'a> {
         if let Some(fn_def) = self.parse_function_declaration() {
             return Some(fn_def);
         }
+
+        // TODO: Methods.
 
         None
     }
