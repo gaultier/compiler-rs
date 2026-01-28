@@ -645,6 +645,7 @@ impl<'a> Parser<'a> {
         // TODO: Expression list.
 
         let lhs = self.parse_expr()?;
+        // TODO: More operators.
         let eq = self.expect_token_one(TokenKind::Eq, "assignment")?;
         let rhs = self.parse_expr().or_else(|| {
             let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
@@ -668,9 +669,19 @@ impl<'a> Parser<'a> {
             return None;
         }
 
+        // TODO: EmptyStmt ???
+        if let Some(expr_stmt) = self.parse_expr() {
+            return Some(expr_stmt);
+        }
+
+        // TODO: SendStmt.
+        // TODO: IncDecStmt.
+
         if let Some(stmt) = self.parse_assignment() {
             return Some(stmt);
         };
+
+        // TODO: ShortVarDecl.
 
         None
     }
@@ -688,9 +699,18 @@ impl<'a> Parser<'a> {
             return Some(stmt);
         }
 
+        // TODO: Labeled stmt.
+
         if let Some(stmt) = self.parse_simple_statement() {
             return Some(stmt);
         }
+
+        // TODO: Go stmt.
+        // TODO: Return stmt.
+        // TODO: Break stmt.
+        // TODO: Continue stmt.
+        // TODO: Goto stmt.
+        // TODO: Fallthrough stmt.
 
         if let Some(stmt) = self.parse_statement_block() {
             return Some(stmt);
@@ -700,11 +720,16 @@ impl<'a> Parser<'a> {
             return Some(stmt);
         };
 
+        // TODO: Switch stmt.
+        // TODO: Select stmt.
+
         if let Some(stmt) = self.parse_statement_for() {
             return Some(stmt);
         };
 
-        self.parse_expr()
+        // TODO: Defer stmt.
+
+        None
     }
 
     // Best effort to find the closest token when doing error reporting.
