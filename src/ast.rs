@@ -725,19 +725,11 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // PackageClause = "package" PackageName .
+    // PackageName   = identifier .
     fn parse_package_clause(&mut self) -> Option<NodeId> {
         self.expect_token_exactly_one(TokenKind::KeywordPackage, "package clause")?;
-
-        let package = if let Some(p) = self.match_kind(TokenKind::Identifier) {
-            p
-        } else {
-            self.add_error_with_explanation(
-                ErrorKind::MissingTopLevelPackage,
-                self.current_or_last_token_origin().unwrap(),
-                String::from("the package keyword must be followed by a package name"),
-            );
-            return None;
-        };
+        let package = self.expect_token_exactly_one(TokenKind::Identifier, "package clause")?;
 
         Some(self.new_node(Node {
             kind: NodeKind::Package(Self::str_from_source(self.input, &package.origin).to_owned()),
