@@ -509,10 +509,10 @@ impl<'a> Parser<'a> {
                         format!("expected expression in unary expression after operator but found: {:?}", found)));
                     None
                 })?;
-                return Some(self.new_node(Node {
+                Some(self.new_node(Node {
                     kind: NodeKind::Unary(token.kind, expr),
                     origin: token.origin,
-                }));
+                }))
             }
             _ => self.parse_primary_expr(),
         }
