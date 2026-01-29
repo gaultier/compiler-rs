@@ -1,5 +1,8 @@
 package main
 
 func main() {
-	println(1)
+	var a = 3 * 4
+	var b = 1 + 2 + a
+	println(a)
+	println(b)
 }

@@ -223,7 +223,6 @@ impl<'a> Parser<'a> {
         );
         self.nodes[root].kind.as_file_mut().unwrap().push(println);
         self.name_to_def.insert(String::from("println"), println);
-        dbg!(&println, &println_type);
         self.node_to_type.insert(println, println_type);
     }
 
@@ -861,7 +860,7 @@ impl<'a> Parser<'a> {
             self.add_error_with_explanation(
                 ErrorKind::MissingExpected(token_kind),
                 self.current_or_last_token_origin().unwrap(),
-                format!("failed to parse {}: missing {:#?}", context, token_kind),
+                format!("failed to parse {}: missing {:?}", context, token_kind),
             );
             None
         }
@@ -992,7 +991,7 @@ impl<'a> Parser<'a> {
                 ErrorKind::ParseDeclaration,
                 self.current_or_last_token_origin().unwrap(),
                 format!(
-                    "catch-all parse declaration error: encountered unexpected token {:#?}",
+                    "catch-all parse declaration error: encountered unexpected token {:?}",
                     token
                 ),
             );
@@ -1044,8 +1043,6 @@ impl<'a> Parser<'a> {
             }
 
             NodeKind::Identifier(name) => {
-                dbg!(name, &name_to_def, node_id, &node.kind);
-
                 let def_id = if let Some((def_id, _)) = name_to_def.get_scoped(name) {
                     def_id
                 } else {
@@ -1096,7 +1093,6 @@ impl<'a> Parser<'a> {
                 }
 
                 name_to_def.insert(identifier.to_owned(), node_id);
-                dbg!(identifier, node_id, &node.kind);
             }
             NodeKind::FnCall { callee, args } => {
                 Self::resolve_node(*callee, nodes, errors, name_to_def, file_id_to_name);
@@ -1210,9 +1206,9 @@ impl<'a> Parser<'a> {
 fn log(nodes: &[Node], node_id: NodeId, indent: usize) {
     let node = &nodes[node_id];
     trace!(
-        "{:indent$} id={:?} kind={:?}",
+        "{:indent$} id={} kind={:?}",
         "",
-        node_id,
+        node_id.0,
         node.kind,
         indent = indent
     );

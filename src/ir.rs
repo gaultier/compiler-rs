@@ -356,8 +356,6 @@ impl<'a> Emitter<'a> {
             }
             crate::ast::NodeKind::Identifier(identifier) => {
                 let def_id = self.name_to_def.get_definitive(identifier).unwrap();
-                dbg!(identifier, def_id);
-                dbg!(&self.fn_def_mut().node_to_vreg);
                 let vreg = *self.fn_def_mut().node_to_vreg.get(def_id).unwrap();
 
                 let typ = self.node_to_type.get(&node_id).unwrap();
@@ -409,8 +407,8 @@ impl<'a> Emitter<'a> {
                 let operands = vec![Operand::new_vreg(arg_vreg, arg_typ)];
 
                 trace!(
-                    "ir: emit fn call: ast_name={} real_name={} arg_type={:?}",
-                    ast_fn_name, real_fn_name, arg_type,
+                    "ir: emit fn call: ast_name={} real_name={} arg_type={}",
+                    ast_fn_name, real_fn_name, call_arg0_type_str,
                 );
 
                 self.fn_def_mut().instructions.push(Instruction {

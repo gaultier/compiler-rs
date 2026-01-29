@@ -190,12 +190,12 @@ pub fn compile(
 ) -> CompileResult {
     let mut lexer = Lexer::new(file_id);
     lexer.lex(input);
-    trace!("lexer: {:#?}", lexer);
+    trace!("lexer: {:?}", lexer);
 
     let mut parser = Parser::new(input, &lexer, file_id_to_name);
     parser.parse();
-    trace!("ast_nodes: {:#?}", &parser.nodes);
-    trace!("parser errors: {:#?}", parser.errors);
+    trace!("ast_nodes: {:?}", &parser.nodes);
+    trace!("parser errors: {:?}", parser.errors);
 
     let mut errors = parser.errors;
     errors.extend(type_checker::check_nodes(
@@ -215,7 +215,7 @@ pub fn compile(
 
     let mut ir_emitter = ir::Emitter::new(&parser.nodes, &parser.node_to_type, &parser.name_to_def);
     ir_emitter.emit_nodes();
-    trace!("ir_emitter: {:#?}", ir_emitter);
+    trace!("ir_emitter: {:?}", ir_emitter);
 
     let mut ir_text = String::with_capacity(input.len() * 3);
     for fn_def in &ir_emitter.fn_defs {
@@ -244,13 +244,13 @@ pub fn compile(
 
         let (vreg_to_memory_location, stack_offset) =
             register_alloc::regalloc(&fn_def.live_ranges, &vreg_to_size, &asm::abi(&target.arch));
-        trace!("vreg_to_memory_location: {:#?}", vreg_to_memory_location);
+        trace!("vreg_to_memory_location: {:?}", vreg_to_memory_location);
 
         let (fn_asm_instructions, _) =
             asm::emit_fn_def(fn_def, &vreg_to_memory_location, stack_offset, target);
 
         trace!(
-            "asm_instructions: fn_name={} ins={:#?}",
+            "asm_instructions: fn_name={} ins={:?}",
             fn_def.name, fn_asm_instructions
         );
         writeln!(&mut asm_text, "{}:", &fn_def.name).unwrap();

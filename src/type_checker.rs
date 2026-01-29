@@ -226,7 +226,6 @@ pub fn check_node(
             node_to_type.insert(node_id, def_type.clone());
         }
         NodeKind::FnCall { callee, args } => {
-            dbg!(callee);
             let callee_name = nodes[*callee].kind.as_identifier().unwrap();
             let def_id = name_to_def.get_definitive(callee_name).unwrap();
             let def_type = node_to_type.get(def_id).unwrap();
@@ -268,7 +267,6 @@ pub fn check_node(
                 };
             }
 
-            dbg!(node_id, &ret_type);
             node_to_type.insert(node_id, ret_type);
         }
         NodeKind::Add(lhs, rhs) | NodeKind::Multiply(lhs, rhs) | NodeKind::Divide(lhs, rhs) => {
