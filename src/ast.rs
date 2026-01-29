@@ -337,7 +337,7 @@ impl<'a> Parser<'a> {
 
                 let node_id = self.new_node(Node {
                     kind: NodeKind::Number(num),
-                    origin: origin,
+                    origin,
                 });
                 self.node_to_type.insert(node_id, Type::new_int());
                 Some(node_id)
