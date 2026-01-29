@@ -376,35 +376,33 @@ impl<'a> Emitter<'a> {
 
                 let callee_type = self.node_to_type.get(def_id).unwrap();
                 let arg_type = callee_type.to_string();
-                let arg0_typ = args
-                    .first()
-                    .map(|x| self.node_to_type.get(x).unwrap().to_string())
-                    .unwrap_or_default();
-                let real_fn_name = fn_name_ast_to_ir(ast_fn_name, &arg_type, &arg0_typ);
 
                 // Check type.
                 let typ = self.node_to_type.get(&node_id).unwrap();
-                let (res_vreg, ret_type) = match &*callee_type.kind {
-                    TypeKind::Function(ret_type, _) if *ret_type.kind == TypeKind::Void => {
-                        (None, ret_type.clone())
+                let (res_vreg, ret_type, arg_types) = match &*callee_type.kind {
+                    TypeKind::Function(ret_type, arg_types) if *ret_type.kind == TypeKind::Void => {
+                        (None, ret_type.clone(), arg_types)
                     }
-                    TypeKind::Function(ret_type, _) => {
-                        (Some(self.fn_def_mut().make_vreg(typ)), ret_type.clone())
-                    }
+                    TypeKind::Function(ret_type, arg_types) => (
+                        Some(self.fn_def_mut().make_vreg(typ)),
+                        ret_type.clone(),
+                        arg_types,
+                    ),
                     _ => panic!("not a function type: {:#?}", typ),
                 };
 
-                let mut operands = Vec::with_capacity(args.len());
-                for arg in args {
-                    self.emit_node(*arg);
-                    let (vreg, typ) = self
-                        .fn_def_mut()
-                        .instructions
-                        .last()
-                        .map(|x| (x.res_vreg.unwrap(), &x.typ))
-                        .unwrap();
-                    operands.push(Operand::new_vreg(vreg, typ));
-                }
+                let arg0_typ = arg_types.first().map(|x| x.to_string()).unwrap_or_default();
+                let real_fn_name = fn_name_ast_to_ir(ast_fn_name, &arg_type, &arg0_typ);
+
+                self.emit_node(*args);
+                // TODO: Handle multiple args.
+                let (arg_vreg, arg_typ) = self
+                    .fn_def_mut()
+                    .instructions
+                    .last()
+                    .map(|x| (x.res_vreg.unwrap(), &x.typ))
+                    .unwrap();
+                let operands = vec![Operand::new_vreg(arg_vreg, arg_typ)];
 
                 trace!(
                     "ir: emit fn call: ast_name={} real_name={} arg_type={:?}",

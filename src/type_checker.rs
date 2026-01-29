@@ -240,6 +240,11 @@ pub fn check_node(
                 todo!();
             }
 
+            let args = match &nodes[*args].kind {
+                NodeKind::Arguments(args) => args,
+                _ => panic!("invalid function arguments"),
+            };
+
             if args.len() != args_type.len() {
                 errs.push(Error::new_incompatible_arguments_count(
                     &node.origin,

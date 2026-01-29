@@ -43,7 +43,7 @@ pub enum NodeKind {
     FnCall {
         // Can be a variable (function pointer), or a string.
         callee: NodeId,
-        args: Vec<NodeId>,
+        args: NodeId,
     },
     FnDef(FnDef),
     Package(String),
@@ -529,6 +529,26 @@ impl<'a> Parser<'a> {
         self.parse_bin_expr_logic_or()
     }
 
+    fn parse_call_expr(&mut self) -> Option<NodeId> {
+        let prim = self.parse_primary_expr()?;
+
+        let tok = self.peek_token();
+        if let Some(Token {
+            kind: TokenKind::LeftParen,
+            ..
+        }) = tok
+        {
+            let origin = tok.unwrap().origin;
+            let args = self.parse_arguments()?;
+            Some(self.new_node(Node {
+                kind: NodeKind::FnCall { callee: prim, args },
+                origin,
+            }))
+        } else {
+            Some(prim)
+        }
+    }
+
     // UnaryExpr  = PrimaryExpr | unary_op UnaryExpr .
     // unary_op   = "+" | "-" | "!" | "^" | "*" | "&" | "<-" .
     fn parse_unary_expr(&mut self) -> Option<NodeId> {
@@ -553,7 +573,7 @@ impl<'a> Parser<'a> {
                     origin: token.origin,
                 }))
             }
-            _ => self.parse_primary_expr(),
+            _ => self.parse_call_expr(),
         }
     }
 
@@ -1106,9 +1126,7 @@ impl<'a> Parser<'a> {
                     }
                 }
 
-                for op in args {
-                    Self::resolve_node(*op, nodes, errors, name_to_def, file_id_to_name);
-                }
+                Self::resolve_node(*args, nodes, errors, name_to_def, file_id_to_name);
             }
             NodeKind::Arguments(args) => {
                 for arg in args {
@@ -1224,9 +1242,7 @@ fn log(nodes: &[Node], node_id: NodeId, indent: usize) {
         }
         NodeKind::FnCall { callee, args } => {
             log(nodes, *callee, indent + 2);
-            for id in args {
-                log(nodes, *id, indent + 2);
-            }
+            log(nodes, *args, indent + 2);
         }
         NodeKind::FnDef(FnDef {
             name: _,
