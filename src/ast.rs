@@ -294,49 +294,70 @@ impl<'a> Parser<'a> {
             return None;
         }
 
-        if let Some(token) = self.match_kind(TokenKind::LiteralNumber) {
-            let src = &self.input[token.origin.offset as usize..][..token.origin.len as usize];
-            let num: u64 = match str::parse(src) {
-                Ok(num) => num,
-                Err::<_, ParseIntError>(err) => {
-                    self.add_error_with_explanation(
-                        ErrorKind::InvalidLiteralNumber,
-                        token.origin,
-                        err.to_string(),
-                    );
-                    return None;
-                }
-            };
-            let node_id = self.new_node(Node {
-                kind: NodeKind::Number(num),
-                origin: token.origin,
-            });
-            self.node_to_type.insert(node_id, Type::new_int());
-            return Some(node_id);
+        let tok = self.peek_token();
+        let origin = tok.map(|t| t.origin).unwrap_or(Origin::new_unknown());
+        match tok.map(|t| t.kind) {
+            Some(TokenKind::LeftParen) => {
+                self.eat_token().unwrap();
+                let e = self.parse_bin_expr_add().or_else(|| {
+                    let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
+                    self.errors.push(Error::new(
+                        ErrorKind::MissingExpr,
+                        origin,
+                        format!("expected expression after '(' but found: {:?}", found),
+                    ));
+                    None
+                })?;
+                self.expect_token_one(TokenKind::RightParen, "parenthesized operand");
+                Some(e)
+            }
+            Some(TokenKind::Identifier) => Some(self.new_node(Node {
+                kind: NodeKind::Identifier(Self::str_from_source(self.input, &origin).to_owned()),
+                origin,
+            })),
+            Some(TokenKind::LiteralNumber) => {
+                let src = Self::str_from_source(self.input, &origin);
+                let num: u64 = str::parse(src)
+                    .map_err(|err: ParseIntError| {
+                        self.add_error_with_explanation(
+                            ErrorKind::InvalidLiteralNumber,
+                            origin,
+                            err.to_string(),
+                        );
+                    })
+                    .ok()?;
+
+                let node_id = self.new_node(Node {
+                    kind: NodeKind::Number(num),
+                    origin: origin,
+                });
+                self.node_to_type.insert(node_id, Type::new_int());
+                Some(node_id)
+            }
+            Some(TokenKind::LiteralBool) => {
+                let src = Self::str_from_source(self.input, &origin);
+
+                assert!(src == "true" || src == "false");
+
+                let node_id = self.new_node(Node {
+                    kind: NodeKind::Bool(src == "true"),
+                    origin,
+                });
+                self.node_to_type.insert(node_id, Type::new_bool());
+                Some(node_id)
+            }
+            _ => None,
         }
-        if let Some(token) = self.match_kind(TokenKind::LiteralBool) {
-            let src = &self.input[token.origin.offset as usize..][..token.origin.len as usize];
+    }
 
-            assert!(src == "true" || src == "false");
+    // Arguments     = "(" [ ( ExpressionList | Type [ "," ExpressionList ] ) [ "..." ] [ "," ] ] ")" .
+    fn parse_arguments(&mut self) -> Option<NodeId> {
+        // TODO: ExpressionList.
 
-            let node_id = self.new_node(Node {
-                kind: NodeKind::Bool(src == "true"),
-                origin: token.origin,
-            });
-            self.node_to_type.insert(node_id, Type::new_bool());
-            return Some(node_id);
-        }
-
-        if let Some(token) = self.match_kind(TokenKind::Identifier) {
-            return Some(self.new_node(Node {
-                kind: NodeKind::Identifier(
-                    Self::str_from_source(self.input, &token.origin).to_owned(),
-                ),
-                origin: token.origin,
-            }));
-        }
-
-        None
+        let _lparen = self.match_kind(TokenKind::LeftParen)?;
+        let e = self.parse_expr();
+        let _rparen = self.expect_token_one(TokenKind::RightParen, "arguments");
+        e
     }
 
     // PrimaryExpr   = Operand |
@@ -356,6 +377,10 @@ impl<'a> Parser<'a> {
     fn parse_primary_expr(&mut self) -> Option<NodeId> {
         if self.error_mode {
             return None;
+        }
+
+        if let Some(args) = self.parse_arguments() {
+            return Some(args);
         }
 
         if let Some(op) = self.parse_operand() {
