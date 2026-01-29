@@ -312,11 +312,17 @@ impl<'a> Parser<'a> {
                 self.expect_token_one(TokenKind::RightParen, "parenthesized operand");
                 Some(e)
             }
-            Some(TokenKind::Identifier) => Some(self.new_node(Node {
-                kind: NodeKind::Identifier(Self::str_from_source(self.input, &origin).to_owned()),
-                origin,
-            })),
+            Some(TokenKind::Identifier) => {
+                self.eat_token().unwrap();
+                Some(self.new_node(Node {
+                    kind: NodeKind::Identifier(
+                        Self::str_from_source(self.input, &origin).to_owned(),
+                    ),
+                    origin,
+                }))
+            }
             Some(TokenKind::LiteralNumber) => {
+                self.eat_token().unwrap();
                 let src = Self::str_from_source(self.input, &origin);
                 let num: u64 = str::parse(src)
                     .map_err(|err: ParseIntError| {
@@ -336,6 +342,7 @@ impl<'a> Parser<'a> {
                 Some(node_id)
             }
             Some(TokenKind::LiteralBool) => {
+                self.eat_token().unwrap();
                 let src = Self::str_from_source(self.input, &origin);
 
                 assert!(src == "true" || src == "false");
@@ -599,12 +606,8 @@ impl<'a> Parser<'a> {
         let mut stmts = Vec::new();
 
         for _ in 0..self.remaining_tokens_count() {
-            match self.peek_token() {
-                None
-                | Some(Token {
-                    kind: TokenKind::RightCurly,
-                    ..
-                }) => break,
+            match self.peek_token().map(|t| t.kind) {
+                None | Some(TokenKind::Eof) | Some(TokenKind::RightCurly) => break,
                 _ => {}
             }
 
