@@ -377,22 +377,26 @@ impl<'a> Emitter<'a> {
                 let callee_type = self.node_to_type.get(def_id).unwrap();
                 let arg_type = callee_type.to_string();
 
+                let call_args = self.nodes[*args].kind.as_arguments().unwrap();
+                if call_args.len() != 1 {
+                    todo!()
+                }
+                let arg0_node_id = call_args[0];
+                let call_arg0_type_str = self.node_to_type[&arg0_node_id].to_string();
+
                 // Check type.
-                let typ = self.node_to_type.get(&node_id).unwrap();
-                let (res_vreg, ret_type, arg_types) = match &*callee_type.kind {
-                    TypeKind::Function(ret_type, arg_types) if *ret_type.kind == TypeKind::Void => {
-                        (None, ret_type.clone(), arg_types)
+                let fn_type = self.node_to_type.get(&node_id).unwrap();
+                let (res_vreg, ret_type) = match &*callee_type.kind {
+                    TypeKind::Function(ret_type, _) if *ret_type.kind == TypeKind::Void => {
+                        (None, ret_type.clone())
                     }
-                    TypeKind::Function(ret_type, arg_types) => (
-                        Some(self.fn_def_mut().make_vreg(typ)),
-                        ret_type.clone(),
-                        arg_types,
-                    ),
-                    _ => panic!("not a function type: {:#?}", typ),
+                    TypeKind::Function(ret_type, _) => {
+                        (Some(self.fn_def_mut().make_vreg(fn_type)), ret_type.clone())
+                    }
+                    _ => panic!("not a function type: {:#?}", fn_type),
                 };
 
-                let arg0_typ = arg_types.first().map(|x| x.to_string()).unwrap_or_default();
-                let real_fn_name = fn_name_ast_to_ir(ast_fn_name, &arg_type, &arg0_typ);
+                let real_fn_name = fn_name_ast_to_ir(ast_fn_name, &arg_type, &call_arg0_type_str);
 
                 self.emit_node(*args);
                 // TODO: Handle multiple args.

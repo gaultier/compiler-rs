@@ -1293,6 +1293,13 @@ impl NodeKind {
             _ => None,
         }
     }
+
+    pub(crate) fn as_arguments(&self) -> Option<&[NodeId]> {
+        match self {
+            NodeKind::Arguments(args) => Some(args),
+            _ => None,
+        }
+    }
 }
 
 #[cfg(test)]
