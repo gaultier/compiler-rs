@@ -356,6 +356,8 @@ impl<'a> Emitter<'a> {
             }
             crate::ast::NodeKind::Identifier(identifier) => {
                 let def_id = self.name_to_def.get_definitive(identifier).unwrap();
+                dbg!(identifier, def_id);
+                dbg!(&self.fn_def_mut().node_to_vreg);
                 let vreg = *self.fn_def_mut().node_to_vreg.get(def_id).unwrap();
 
                 let typ = self.node_to_type.get(&node_id).unwrap();

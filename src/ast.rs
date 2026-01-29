@@ -11,6 +11,7 @@ use crate::{
     origin::{FileId, Origin, OriginKind},
     type_checker::Type,
 };
+use log::trace;
 use serde::Serialize;
 
 // TODO: u32?
@@ -982,6 +983,8 @@ impl<'a> Parser<'a> {
     pub fn parse(&mut self) {
         self.parse_source_file();
 
+        log(&self.nodes, NodeId(0), 0);
+
         self.resolve_nodes();
     }
 
@@ -1183,6 +1186,80 @@ impl<'a> Parser<'a> {
             &mut self.name_to_def,
             self.file_id_to_name,
         );
+    }
+}
+
+fn log(nodes: &[Node], node_id: NodeId, indent: usize) {
+    let node = &nodes[node_id];
+    trace!(
+        "{:indent$} id={:?} kind={:?}",
+        "",
+        node_id,
+        node.kind,
+        indent = indent
+    );
+    match &node.kind {
+        NodeKind::Block(node_ids) | NodeKind::Arguments(node_ids) | NodeKind::File(node_ids) => {
+            for id in node_ids {
+                log(nodes, *id, indent + 2);
+            }
+        }
+
+        NodeKind::Package(_)
+        | NodeKind::Number(_)
+        | NodeKind::Identifier(_)
+        | NodeKind::Bool(_) => {}
+
+        NodeKind::Assignment(lhs, _, rhs)
+        | NodeKind::Divide(lhs, rhs)
+        | NodeKind::Cmp(lhs, rhs)
+        | NodeKind::Multiply(lhs, rhs)
+        | NodeKind::Add(lhs, rhs) => {
+            log(nodes, *lhs, indent + 2);
+            log(nodes, *rhs, indent + 2);
+        }
+
+        NodeKind::VarDecl(_, node_id) | NodeKind::Unary(_, node_id) => {
+            log(nodes, *node_id, indent + 2);
+        }
+        NodeKind::FnCall { callee, args } => {
+            log(nodes, *callee, indent + 2);
+            for id in args {
+                log(nodes, *id, indent + 2);
+            }
+        }
+        NodeKind::FnDef(FnDef {
+            name: _,
+            args,
+            ret,
+            body,
+        }) => {
+            for id in args {
+                log(nodes, *id, indent + 2);
+            }
+
+            if let Some(ret) = ret {
+                log(nodes, *ret, indent + 2);
+            }
+            log(nodes, *body, indent + 2);
+        }
+        NodeKind::If {
+            cond,
+            then_block,
+            else_block,
+        } => {
+            log(nodes, *cond, indent + 2);
+            log(nodes, *then_block, indent + 2);
+            if let Some(else_block) = else_block {
+                log(nodes, *else_block, indent + 2);
+            }
+        }
+        NodeKind::For { cond, block } => {
+            if let Some(cond) = cond {
+                log(nodes, *cond, indent + 2);
+            }
+            log(nodes, *block, indent + 2);
+        }
     }
 }
 
