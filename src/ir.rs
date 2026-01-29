@@ -647,6 +647,12 @@ impl<'a> Emitter<'a> {
             NodeKind::Assignment(_lhs, _op, _rhs) => {
                 todo!()
             }
+            NodeKind::Arguments(args) => {
+                // TODO: More?
+                for arg in args {
+                    self.emit_node(*arg);
+                }
+            }
         }
     }
 

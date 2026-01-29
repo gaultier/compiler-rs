@@ -38,6 +38,7 @@ pub enum NodeKind {
     Identifier(String),
     Unary(TokenKind, NodeId),
     Assignment(NodeId, TokenKind, NodeId),
+    Arguments(Vec<NodeId>),
     FnCall {
         // Can be a variable (function pointer), or a string.
         callee: NodeId,
@@ -354,10 +355,15 @@ impl<'a> Parser<'a> {
     fn parse_arguments(&mut self) -> Option<NodeId> {
         // TODO: ExpressionList.
 
-        let _lparen = self.match_kind(TokenKind::LeftParen)?;
+        let lparen = self.match_kind(TokenKind::LeftParen)?;
+        // TODO: Multiple arguments
         let e = self.parse_expr();
+        let args = if let Some(e) = e { vec![e] } else { Vec::new() };
         let _rparen = self.expect_token_one(TokenKind::RightParen, "arguments");
-        e
+        Some(self.new_node(Node {
+            kind: NodeKind::Arguments(args),
+            origin: lparen.origin,
+        }))
     }
 
     // PrimaryExpr   = Operand |
@@ -568,7 +574,7 @@ impl<'a> Parser<'a> {
             Some(cond)
         };
 
-        let block = self.parse_statement_block().or_else(|| {
+        let block = self.parse_block().or_else(|| {
             let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
             self.add_error_with_explanation(
                 ErrorKind::MissingExpected(TokenKind::LeftCurly),
@@ -587,7 +593,7 @@ impl<'a> Parser<'a> {
 
     // Block         = "{" StatementList "}" .
     // StatementList = { Statement ";" } .
-    fn parse_statement_block(&mut self) -> Option<NodeId> {
+    fn parse_block(&mut self) -> Option<NodeId> {
         let left_curly = self.match_kind(TokenKind::LeftCurly)?;
 
         let mut stmts = Vec::new();
@@ -622,7 +628,7 @@ impl<'a> Parser<'a> {
         let keyword_if = self.match_kind(TokenKind::KeywordIf)?;
         let cond = self.parse_expr()?;
 
-        let then_block = if let Some(b) = self.parse_statement_block() {
+        let then_block = if let Some(b) = self.parse_block() {
             b
         } else {
             let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
@@ -636,7 +642,7 @@ impl<'a> Parser<'a> {
         };
 
         let else_block = if self.match_kind(TokenKind::KeywordElse).is_some() {
-            let block = self.parse_statement_block().or_else(|| {
+            let block = self.parse_block().or_else(|| {
                 let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
                 self.add_error_with_explanation(
                     ErrorKind::MissingExpected(TokenKind::LeftCurly),
@@ -766,7 +772,7 @@ impl<'a> Parser<'a> {
         // TODO: Goto stmt.
         // TODO: Fallthrough stmt.
 
-        if let Some(stmt) = self.parse_statement_block() {
+        if let Some(stmt) = self.parse_block() {
             return Some(stmt);
         };
 
@@ -848,23 +854,33 @@ impl<'a> Parser<'a> {
     fn parse_function_declaration(&mut self) -> Option<NodeId> {
         let func = self.match_kind(TokenKind::KeywordFunc)?;
         let name = self.expect_token_one(TokenKind::Identifier, "function declaration")?;
-        self.expect_token_one(TokenKind::LeftParen, "function declaration")?;
 
-        // TODO: Args.
+        let _args = self.parse_arguments().or_else(|| {
+            let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
+            self.add_error_with_explanation(
+                ErrorKind::MissingArguments,
+                name.origin,
+                format!(
+                    "expected arguments in function declaration, found: {:?}",
+                    found
+                ),
+            );
+            None
+        })?;
 
-        let rparen = self.expect_token_one(TokenKind::RightParen, "function declaration")?;
+        // TODO: Store args.
 
         // TODO: Return type.
 
-        let body = if let Some(b) = self.parse_statement_block() {
+        let body = if let Some(b) = self.parse_block() {
             b
         } else {
             let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
             self.add_error_with_explanation(
                 ErrorKind::MissingExpected(TokenKind::LeftCurly),
-                rparen.origin,
+                name.origin,
                 format!(
-                    "expect block following function signature, found: {:?}",
+                    "expected block following function signature, found: {:?}",
                     found
                 ),
             );
@@ -1086,6 +1102,11 @@ impl<'a> Parser<'a> {
 
                 for op in args {
                     Self::resolve_node(*op, nodes, errors, name_to_def, file_id_to_name);
+                }
+            }
+            NodeKind::Arguments(args) => {
+                for arg in args {
+                    Self::resolve_node(*arg, nodes, errors, name_to_def, file_id_to_name);
                 }
             }
             NodeKind::Block(stmts) => {

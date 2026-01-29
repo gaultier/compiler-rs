@@ -315,6 +315,11 @@ pub fn check_node(
         NodeKind::Unary(_, expr) => {
             check_node(*expr, nodes, errs, node_to_type, name_to_def);
         }
+        NodeKind::Arguments(args) => {
+            for arg in args {
+                check_node(*arg, nodes, errs, node_to_type, name_to_def);
+            }
+        }
         NodeKind::Assignment(lhs, _, rhs) => {
             check_node(*lhs, nodes, errs, node_to_type, name_to_def);
             check_node(*rhs, nodes, errs, node_to_type, name_to_def);

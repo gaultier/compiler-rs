@@ -29,6 +29,7 @@ pub enum ErrorKind {
     CallingANonFunction,
     MissingExpected(TokenKind),
     MissingExpr,
+    MissingArguments,
     NameAlreadyDefined,
 }
 
