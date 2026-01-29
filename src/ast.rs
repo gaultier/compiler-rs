@@ -373,108 +373,31 @@ impl<'a> Parser<'a> {
         None
     }
 
-    // Expression = UnaryExpr | Expression binary_op Expression .
-    // binary_op  = "||" | "&&" | rel_op | add_op | mul_op .
-    // rel_op     = "==" | "!=" | "<" | "<=" | ">" | ">=" .
-    // add_op     = "+" | "-" | "|" | "^" .
-    // mul_op     = "*" | "/" | "%" | "<<" | ">>" | "&" | "&^" .
-    fn parse_expr(&mut self) -> Option<NodeId> {
-        if self.error_mode {
-            return None;
-        }
+    // TODO
+    fn parse_bin_expr_logic_or(&mut self) -> Option<NodeId> {
+        self.parse_bin_expr_logic_and()
+    }
 
-        // TODO
+    fn parse_bin_expr_logic_and(&mut self) -> Option<NodeId> {
+        self.parse_bin_expr_cmp()
+    }
 
-        if let Some(unary) = self.parse_unary_expr() {
-            return Some(unary);
-        }
+    fn parse_bin_expr_cmp(&mut self) -> Option<NodeId> {
+        let lhs = self.parse_bin_expr_add()?;
 
-        let lhs = self.parse_expr().or_else(|| {
-            let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
-            self.add_error_with_explanation(
-                ErrorKind::MissingExpr,
-                self.current_or_last_token_origin()
-                    .unwrap_or(Origin::new_unknown()),
-                format!("expected expression but found: {:?}", found),
-            );
-
-            None
-        })?;
-
-        let token = self.peek_token();
-        match token.map(|t| t.kind) {
-            // TODO: More.
-            Some(TokenKind::Plus) => {
-                let op = self.match_kind(TokenKind::Plus).unwrap();
-
-                let rhs = self.parse_expr().or_else(|| {
-                    let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
-                    self.add_error_with_explanation(
-                        ErrorKind::MissingExpr,
-                        self.current_or_last_token_origin().unwrap_or(op.origin),
-                        format!("expected expression but found: {:?}", found),
-                    );
-
-                    None
-                })?;
-
-                Some(self.new_node(Node {
-                    kind: NodeKind::Add(lhs, rhs),
-                    origin: op.origin,
-                }))
-            }
-            // TODO: More.
-            Some(TokenKind::Star) => {
-                let op = self.match_kind(TokenKind::Star).unwrap();
-
-                let rhs = self.parse_expr().or_else(|| {
-                    let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
-                    self.add_error_with_explanation(
-                        ErrorKind::MissingExpr,
-                        self.current_or_last_token_origin().unwrap_or(op.origin),
-                        format!("expected expression but found: {:?}", found),
-                    );
-
-                    None
-                })?;
-
-                Some(self.new_node(Node {
-                    kind: NodeKind::Multiply(lhs, rhs),
-                    origin: op.origin,
-                }))
-            }
-            // TODO: More.
-            Some(TokenKind::Slash) => {
-                let op = self.match_kind(TokenKind::Slash).unwrap();
-
-                let rhs = self.parse_expr().or_else(|| {
-                    let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
-                    self.add_error_with_explanation(
-                        ErrorKind::MissingExpr,
-                        self.current_or_last_token_origin().unwrap_or(op.origin),
-                        format!("expected expression but found: {:?}", found),
-                    );
-
-                    None
-                })?;
-
-                Some(self.new_node(Node {
-                    kind: NodeKind::Divide(lhs, rhs),
-                    origin: op.origin,
-                }))
-            }
-            // TODO: More.
+        match self.peek_token().map(|t| t.kind) {
             Some(TokenKind::EqEq) => {
-                let op = self.match_kind(TokenKind::EqEq).unwrap();
-
-                let rhs = self.parse_expr().or_else(|| {
+                let op = *self.eat_token().unwrap();
+                let rhs = self.parse_bin_expr_add().or_else(|| {
                     let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
-                    self.add_error_with_explanation(
+                    self.errors.push(Error::new(
                         ErrorKind::MissingExpr,
-                        self.current_or_last_token_origin().unwrap_or(op.origin),
-                        format!("expected expression but found: {:?}", found),
-                    );
-
+                        op.origin,
+                        format!(
+                            "expected expression after {:?} but found: {:?}",
+                            op.kind, found
+                        ),
+                    ));
                     None
                 })?;
 
@@ -483,21 +406,92 @@ impl<'a> Parser<'a> {
                     origin: op.origin,
                 }))
             }
-            other => {
-                self.add_error_with_explanation(
-                    ErrorKind::MissingBinaryOp,
-                    self.current_or_last_token_origin()
-                        .unwrap_or(token.unwrap().origin),
-                    format!("expected binary operator but found: {:?}", other),
-                );
-                None
-            }
+            _ => Some(lhs),
         }
+    }
+
+    fn parse_bin_expr_add(&mut self) -> Option<NodeId> {
+        let lhs = self.parse_bin_expr_mul()?;
+
+        match self.peek_token().map(|t| t.kind) {
+            Some(TokenKind::EqEq) => {
+                let op = *self.eat_token().unwrap();
+                let rhs = self.parse_bin_expr_mul().or_else(|| {
+                    let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
+                    self.errors.push(Error::new(
+                        ErrorKind::MissingExpr,
+                        op.origin,
+                        format!(
+                            "expected expression after {:?} but found: {:?}",
+                            op.kind, found
+                        ),
+                    ));
+                    None
+                })?;
+
+                Some(self.new_node(Node {
+                    kind: NodeKind::Add(lhs, rhs),
+                    origin: op.origin,
+                }))
+            }
+            _ => Some(lhs),
+        }
+    }
+
+    fn parse_bin_expr_mul(&mut self) -> Option<NodeId> {
+        let lhs = self.parse_unary_expr()?;
+
+        match self.peek_token().map(|t| t.kind) {
+            Some(TokenKind::Star | TokenKind::Slash) => {
+                let op = *self.eat_token().unwrap();
+                let rhs = self.parse_unary_expr().or_else(|| {
+                    let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
+                    self.errors.push(Error::new(
+                        ErrorKind::MissingExpr,
+                        op.origin,
+                        format!(
+                            "expected expression after {:?} but found: {:?}",
+                            op.kind, found
+                        ),
+                    ));
+                    None
+                })?;
+
+                Some(self.new_node(Node {
+                    kind: if op.kind == TokenKind::Star {
+                        NodeKind::Multiply(lhs, rhs)
+                    } else {
+                        NodeKind::Divide(lhs, rhs)
+                    },
+                    origin: op.origin,
+                }))
+            }
+            _ => Some(lhs),
+        }
+    }
+
+    // Expression = UnaryExpr | Expression binary_op Expression .
+    // binary_op  = "||" | "&&" | rel_op | add_op | mul_op .
+    // rel_op     = "==" | "!=" | "<" | "<=" | ">" | ">=" .
+    // add_op     = "+" | "-" | "|" | "^" .
+    // mul_op     = "*" | "/" | "%" | "<<" | ">>" | "&" | "&^" .
+    //
+    // Precedence    Operator
+    //    5             *  /  %  <<  >>  &  &^
+    //    4             +  -  |  ^
+    //    3             ==  !=  <  <=  >  >=
+    //    2             &&
+    //    1             ||
+    fn parse_expr(&mut self) -> Option<NodeId> {
+        if self.error_mode {
+            return None;
+        }
+
+        self.parse_bin_expr_logic_or()
     }
 
     // UnaryExpr  = PrimaryExpr | unary_op UnaryExpr .
     // unary_op   = "+" | "-" | "!" | "^" | "*" | "&" | "<-" .
-
     fn parse_unary_expr(&mut self) -> Option<NodeId> {
         if self.error_mode {
             return None;
