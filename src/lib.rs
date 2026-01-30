@@ -222,7 +222,7 @@ pub fn compile(
         writeln!(&mut ir_text, "\n{} {{", fn_def).unwrap();
 
         for ins in &fn_def.instructions {
-            write!(&mut ir_text, "  {}", ins).unwrap();
+            writeln!(&mut ir_text, "  {}", ins).unwrap();
         }
 
         writeln!(&mut ir_text, "}}").unwrap();
@@ -246,8 +246,13 @@ pub fn compile(
             register_alloc::regalloc(&fn_def.live_ranges, &vreg_to_size, &asm::abi(&target.arch));
         trace!("vreg_to_memory_location: {:?}", vreg_to_memory_location);
 
-        let (fn_asm_instructions, _) =
-            asm::emit_fn_def(fn_def, &vreg_to_memory_location, stack_offset, target);
+        let (fn_asm_instructions, _) = asm::emit_fn_def(
+            fn_def,
+            &vreg_to_memory_location,
+            stack_offset,
+            target,
+            file_id_to_name,
+        );
 
         trace!(
             "asm_instructions: fn_name={} ins={:?}",

@@ -757,7 +757,7 @@ impl Display for Instruction {
             }
         }
 
-        writeln!(f)
+        Ok(())
     }
 }
 

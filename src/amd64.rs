@@ -567,16 +567,18 @@ pub enum InstructionKind {
     LabelDef, // Not encoded.
 }
 
-pub struct Emitter {
+pub struct Emitter<'a> {
     pub(crate) stack: Stack,
     pub(crate) asm: Vec<Instruction>,
+    file_id_to_name: &'a HashMap<FileId, String>,
 }
 
-impl Emitter {
-    pub fn new(initial_stack_offset: isize) -> Self {
+impl<'a> Emitter<'a> {
+    pub fn new(initial_stack_offset: isize, file_id_to_name: &'a HashMap<FileId, String>) -> Self {
         Self {
             stack: Stack::new(initial_stack_offset),
             asm: Vec::new(),
+            file_id_to_name,
         }
     }
 
@@ -999,7 +1001,18 @@ impl Emitter {
         }
 
         for i in 0..fn_def.instructions.len() {
+            let len_before = self.asm.len();
             self.instruction_selection(i, &fn_def.instructions, vreg_to_memory_location);
+
+            for asm in &self.asm[len_before..] {
+                trace!(
+                    "codegen: fn={} i={} ir={} asm={}",
+                    &fn_def.name,
+                    i,
+                    &fn_def.instructions[i],
+                    asm.display(self.file_id_to_name)
+                );
+            }
         }
 
         // Restore stack.

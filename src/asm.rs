@@ -130,12 +130,13 @@ pub(crate) fn emit_fn_def(
     vreg_to_memory_location: &RegisterMapping,
     stack_offset: isize,
     target: &Target,
+    file_id_to_name: &HashMap<FileId, String>,
 ) -> (Vec<Instruction>, Stack) {
     trace!("asm: stack_offset={}", stack_offset);
 
     match target.arch {
         Architecture::Amd64 => {
-            let mut emitter = amd64::Emitter::new(stack_offset);
+            let mut emitter = amd64::Emitter::new(stack_offset, file_id_to_name);
             emitter.emit_fn_def(fn_def, vreg_to_memory_location);
 
             (
