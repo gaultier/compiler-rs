@@ -651,6 +651,25 @@ impl<'a> Emitter<'a> {
                     origin: ins.origin,
                 });
             }
+            ir::InstructionKind::IAdd(
+                ir::Operand {
+                    kind: ir::OperandKind::VirtualRegister(lhs),
+                    ..
+                },
+                ir::Operand {
+                    kind: ir::OperandKind::Num(num),
+                    ..
+                },
+            ) => {
+                self.asm.push(Instruction {
+                    kind: InstructionKind::Add,
+                    operands: vec![
+                        vreg_to_memory_location.get(lhs).unwrap().into(),
+                        Operand::Immediate(*num),
+                    ],
+                    origin: ins.origin,
+                });
+            }
             ir::InstructionKind::IAdd(_, _) => unimplemented!(),
             ir::InstructionKind::IMultiply(
                 ir::Operand {
@@ -675,6 +694,25 @@ impl<'a> Emitter<'a> {
                             .unwrap()
                             .into(),
                         vreg_to_memory_location.get(rhs).unwrap().into(),
+                    ],
+                    origin: ins.origin,
+                });
+            }
+            ir::InstructionKind::IMultiply(
+                ir::Operand {
+                    kind: ir::OperandKind::VirtualRegister(lhs),
+                    ..
+                },
+                ir::Operand {
+                    kind: ir::OperandKind::Num(num),
+                    ..
+                },
+            ) => {
+                self.asm.push(Instruction {
+                    kind: InstructionKind::IMul,
+                    operands: vec![
+                        vreg_to_memory_location.get(lhs).unwrap().into(),
+                        Operand::Immediate(*num),
                     ],
                     origin: ins.origin,
                 });
