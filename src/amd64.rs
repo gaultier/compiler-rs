@@ -977,11 +977,21 @@ impl<'a> Emitter<'a> {
                     ..
                 },
                 ir::Operand {
-                    kind: ir::OperandKind::Num(_num),
+                    kind: ir::OperandKind::Num(num),
                     ..
                 },
             ) => {
-                todo!();
+                self.asm.push(Instruction {
+                    kind: InstructionKind::Cmp,
+                    operands: vec![
+                        vreg_to_memory_location
+                            .get(&ins.res_vreg.unwrap())
+                            .unwrap()
+                            .into(),
+                        Operand::Immediate(*num),
+                    ],
+                    origin: ins.origin,
+                });
             }
             ir::InstructionKind::ICmp(_, _) => unimplemented!(),
             ir::InstructionKind::JumpIfFalse(target, op) => {
@@ -1071,17 +1081,15 @@ impl<'a> Emitter<'a> {
         }
 
         for i in 0..fn_def.instructions.len() {
+            trace!(
+                "codegen: fn={} i={} ir={}",
+                &fn_def.name, i, &fn_def.instructions[i],
+            );
             let len_before = self.asm.len();
             self.instruction_selection(i, &fn_def.instructions, vreg_to_memory_location);
 
             for asm in &self.asm[len_before..] {
-                trace!(
-                    "codegen: fn={} i={} ir={} asm={}",
-                    &fn_def.name,
-                    i,
-                    &fn_def.instructions[i],
-                    asm.display(self.file_id_to_name)
-                );
+                trace!("codegen: asm={}", asm.display(self.file_id_to_name));
             }
         }
 
