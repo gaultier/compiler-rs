@@ -661,14 +661,30 @@ impl<'a> Emitter<'a> {
                     ..
                 },
             ) => {
+                let dst_loc = vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap();
+                self.emit_store(
+                    dst_loc,
+                    &vreg_to_memory_location.get(lhs).unwrap().into(),
+                    &ins.origin,
+                );
                 self.asm.push(Instruction {
                     kind: InstructionKind::Add,
-                    operands: vec![
-                        vreg_to_memory_location.get(lhs).unwrap().into(),
-                        Operand::Immediate(*num),
-                    ],
+                    operands: vec![dst_loc.into(), Operand::Immediate(*num)],
                     origin: ins.origin,
                 });
+            }
+            ir::InstructionKind::IAdd(
+                ir::Operand {
+                    kind: ir::OperandKind::Num(lhs),
+                    ..
+                },
+                ir::Operand {
+                    kind: ir::OperandKind::Num(rhs),
+                    ..
+                },
+            ) => {
+                let dst_loc = vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap();
+                self.emit_store(dst_loc, &Operand::Immediate(*lhs + *rhs), &ins.origin);
             }
             ir::InstructionKind::IAdd(_, _) => unimplemented!(),
             ir::InstructionKind::IMultiply(
@@ -708,14 +724,30 @@ impl<'a> Emitter<'a> {
                     ..
                 },
             ) => {
+                let dst_loc = vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap();
+                self.emit_store(
+                    dst_loc,
+                    &vreg_to_memory_location.get(lhs).unwrap().into(),
+                    &ins.origin,
+                );
                 self.asm.push(Instruction {
                     kind: InstructionKind::IMul,
-                    operands: vec![
-                        vreg_to_memory_location.get(lhs).unwrap().into(),
-                        Operand::Immediate(*num),
-                    ],
+                    operands: vec![dst_loc.into(), Operand::Immediate(*num)],
                     origin: ins.origin,
                 });
+            }
+            ir::InstructionKind::IMultiply(
+                ir::Operand {
+                    kind: ir::OperandKind::Num(lhs),
+                    ..
+                },
+                ir::Operand {
+                    kind: ir::OperandKind::Num(rhs),
+                    ..
+                },
+            ) => {
+                let dst_loc = vreg_to_memory_location.get(&ins.res_vreg.unwrap()).unwrap();
+                self.emit_store(dst_loc, &Operand::Immediate(*lhs * *rhs), &ins.origin);
             }
             ir::InstructionKind::IMultiply(_, _) => unimplemented!(),
             ir::InstructionKind::IDivide(
