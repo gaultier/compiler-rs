@@ -112,7 +112,7 @@ pub struct Parser<'a> {
     pub(crate) name_to_def: NameToDef,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug)]
 pub(crate) enum ScopeResolution {
     Current,
     Ancestor,
@@ -129,11 +129,12 @@ impl NameToDef {
     pub(crate) fn get_scoped(&self, name: &str) -> Option<(&NodeId, ScopeResolution)> {
         self.scopes.iter().rev().enumerate().find_map(|(i, scope)| {
             scope.get(name).map(|node_id| {
-                let scope = if i == self.scopes.len() - 1 {
+                let scope = if i == 0 {
                     ScopeResolution::Current
                 } else {
                     ScopeResolution::Ancestor
                 };
+                dbg!(name, node_id, i, &scope);
                 (node_id, scope)
             })
         })
@@ -300,7 +301,7 @@ impl<'a> Parser<'a> {
         match tok.map(|t| t.kind) {
             Some(TokenKind::LeftParen) => {
                 self.eat_token().unwrap();
-                let e = self.parse_bin_expr_add().or_else(|| {
+                let e = self.parse_expr().or_else(|| {
                     let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
                     self.errors.push(Error::new(
                         ErrorKind::MissingExpr,
@@ -417,16 +418,16 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_bin_expr_logic_and(&mut self) -> Option<NodeId> {
-        self.parse_bin_expr_cmp()
+        self.parse_bin_expr_equality()
     }
 
-    fn parse_bin_expr_cmp(&mut self) -> Option<NodeId> {
-        let lhs = self.parse_bin_expr_add()?;
+    fn parse_bin_expr_equality(&mut self) -> Option<NodeId> {
+        let lhs = self.parse_bin_expr_cmp()?;
 
         match self.peek_token().map(|t| t.kind) {
             Some(TokenKind::EqEq) => {
                 let op = *self.eat_token().unwrap();
-                let rhs = self.parse_bin_expr_add().or_else(|| {
+                let rhs = self.parse_bin_expr_equality().or_else(|| {
                     let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
                     self.errors.push(Error::new(
                         ErrorKind::MissingExpr,
@@ -448,13 +449,17 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_bin_expr_cmp(&mut self) -> Option<NodeId> {
+        self.parse_bin_expr_add()
+    }
+
     fn parse_bin_expr_add(&mut self) -> Option<NodeId> {
         let lhs = self.parse_bin_expr_mul()?;
 
         match self.peek_token().map(|t| t.kind) {
-            Some(TokenKind::EqEq) => {
+            Some(TokenKind::Plus) => {
                 let op = *self.eat_token().unwrap();
-                let rhs = self.parse_bin_expr_mul().or_else(|| {
+                let rhs = self.parse_bin_expr_add().or_else(|| {
                     let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
                     self.errors.push(Error::new(
                         ErrorKind::MissingExpr,
@@ -482,7 +487,7 @@ impl<'a> Parser<'a> {
         match self.peek_token().map(|t| t.kind) {
             Some(TokenKind::Star | TokenKind::Slash) => {
                 let op = *self.eat_token().unwrap();
-                let rhs = self.parse_unary_expr().or_else(|| {
+                let rhs = self.parse_bin_expr_mul().or_else(|| {
                     let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
                     self.errors.push(Error::new(
                         ErrorKind::MissingExpr,
@@ -729,6 +734,11 @@ impl<'a> Parser<'a> {
 
         let lhs = self.parse_expr()?;
         // TODO: More operators.
+
+        if self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof) != TokenKind::Eq {
+            return Some(lhs);
+        }
+
         let eq = self.expect_token_one(TokenKind::Eq, "assignment")?;
         let rhs = self.parse_expr().or_else(|| {
             let found = self.peek_token().map(|t| t.kind).unwrap_or(TokenKind::Eof);
@@ -752,6 +762,10 @@ impl<'a> Parser<'a> {
             return None;
         }
 
+        if let Some(stmt) = self.parse_assignment() {
+            return Some(stmt);
+        };
+
         // TODO: EmptyStmt ???
         if let Some(expr_stmt) = self.parse_expr() {
             return Some(expr_stmt);
@@ -759,10 +773,6 @@ impl<'a> Parser<'a> {
 
         // TODO: SendStmt.
         // TODO: IncDecStmt.
-
-        if let Some(stmt) = self.parse_assignment() {
-            return Some(stmt);
-        };
 
         // TODO: ShortVarDecl.
 
@@ -778,15 +788,26 @@ impl<'a> Parser<'a> {
             return None;
         }
 
+        if let Some(stmt) = self.parse_statement_for() {
+            return Some(stmt);
+        };
+
+        if let Some(stmt) = self.parse_statement_if() {
+            return Some(stmt);
+        };
+        if let Some(stmt) = self.parse_block() {
+            return Some(stmt);
+        };
+
+        if let Some(stmt) = self.parse_simple_statement() {
+            return Some(stmt);
+        }
+
         if let Some(stmt) = self.parse_declaration() {
             return Some(stmt);
         }
 
         // TODO: Labeled stmt.
-
-        if let Some(stmt) = self.parse_simple_statement() {
-            return Some(stmt);
-        }
 
         // TODO: Go stmt.
         // TODO: Return stmt.
@@ -795,22 +816,8 @@ impl<'a> Parser<'a> {
         // TODO: Goto stmt.
         // TODO: Fallthrough stmt.
 
-        if let Some(stmt) = self.parse_block() {
-            return Some(stmt);
-        };
-
-        if let Some(stmt) = self.parse_statement_if() {
-            return Some(stmt);
-        };
-
         // TODO: Switch stmt.
         // TODO: Select stmt.
-
-        if let Some(stmt) = self.parse_statement_for() {
-            return Some(stmt);
-        };
-
-        // TODO: Defer stmt.
 
         None
     }
@@ -946,11 +953,11 @@ impl<'a> Parser<'a> {
             return None;
         }
 
-        if let Some(fn_def) = self.parse_declaration() {
+        if let Some(fn_def) = self.parse_function_declaration() {
             return Some(fn_def);
         }
 
-        if let Some(fn_def) = self.parse_function_declaration() {
+        if let Some(fn_def) = self.parse_declaration() {
             return Some(fn_def);
         }
 
@@ -1076,6 +1083,8 @@ impl<'a> Parser<'a> {
             }
             NodeKind::VarDecl(identifier, expr) => {
                 Self::resolve_node(*expr, nodes, errors, name_to_def, file_id_to_name);
+
+                dbg!(identifier, &name_to_def);
 
                 if let Some((prev, scope)) = name_to_def.get_scoped(identifier)
                     && scope == ScopeResolution::Current

@@ -267,10 +267,7 @@ pub fn compile(
     trace!("asm_text: {}", &asm_text);
 
     let encoding = asm::encode(&asm_instructions, target, file_id_to_name);
-    trace!(
-        "asm encoded: entrypoint={:#X} bin={:#04X?}",
-        encoding.entrypoint, &encoding.instructions
-    );
+    trace!("asm encoded: entrypoint={:#X}", encoding.entrypoint,);
 
     CompileResult {
         lex_tokens: parser.tokens,
