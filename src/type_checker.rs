@@ -85,13 +85,13 @@ impl Type {
         }
     }
 
-    pub(crate) fn merge(&self, other: &Type) -> Result<Type, Error> {
+    pub(crate) fn merge(&self, other: &Type, origin: &Origin) -> Result<Type, Error> {
         match (&*self.kind, &*other.kind) {
             (TypeKind::Function(_, _), TypeKind::Function(_, _)) => {
                 if self == other {
                     Ok(self.clone())
                 } else {
-                    Err(Error::new_incompatible_types(&self.origin, self, other))
+                    Err(Error::new_incompatible_types(origin, self, other))
                 }
             }
             (TypeKind::Any, x) if x != &TypeKind::Any => Ok(other.clone()),
@@ -102,11 +102,11 @@ impl Type {
                 if self.size == other.size {
                     Ok(self.clone())
                 } else {
-                    Err(Error::new_incompatible_types(&self.origin, self, other))
+                    Err(Error::new_incompatible_types(origin, self, other))
                 }
             }
 
-            _ => Err(Error::new_incompatible_types(&self.origin, self, other)),
+            _ => Err(Error::new_incompatible_types(origin, self, other)),
         }
     }
 
@@ -249,7 +249,7 @@ pub fn check_node(
                 check_node(*arg, nodes, errs, node_to_type, name_to_def);
                 let arg_type = node_to_type.get(arg).unwrap();
 
-                let _typ = match arg_type.merge(&args_type[i]) {
+                let _typ = match arg_type.merge(&args_type[i], &node.origin) {
                     Err(err) => {
                         errs.push(err);
                         continue;
@@ -266,7 +266,7 @@ pub fn check_node(
 
             let lhs_type = node_to_type.get(lhs).unwrap();
             let rhs_type = node_to_type.get(rhs).unwrap();
-            let typ = lhs_type.merge(rhs_type);
+            let typ = lhs_type.merge(rhs_type, &node.origin);
             match typ {
                 Ok(typ) => {
                     node_to_type.insert(node_id, typ);
@@ -284,7 +284,7 @@ pub fn check_node(
 
             let lhs_type = node_to_type.get(lhs).unwrap();
             let rhs_type = node_to_type.get(rhs).unwrap();
-            let typ = lhs_type.merge(rhs_type);
+            let typ = lhs_type.merge(rhs_type, &node.origin);
             if let Err(err) = typ {
                 errs.push(err);
             }
@@ -314,13 +314,14 @@ pub fn check_node(
                 check_node(*arg, nodes, errs, node_to_type, name_to_def);
             }
         }
-        NodeKind::Assignment(lhs, _, rhs) => {
+        NodeKind::Assignment(lhs, op, rhs) => {
             check_node(*lhs, nodes, errs, node_to_type, name_to_def);
             check_node(*rhs, nodes, errs, node_to_type, name_to_def);
 
             let lhs_type = node_to_type.get(lhs).unwrap();
             let rhs_type = node_to_type.get(rhs).unwrap();
-            if let Err(err) = lhs_type.merge(rhs_type) {
+            if let Err(err) = lhs_type.merge(rhs_type, &op.origin) {
+                dbg!(op.origin);
                 errs.push(err);
             }
         }
