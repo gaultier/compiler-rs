@@ -238,19 +238,9 @@ impl<'a> Emitter<'a> {
         self.fn_defs.last_mut().unwrap()
     }
 
-    fn last_vreg(&self) -> VirtualRegister {
-        self.fn_defs
-            .last()
-            .unwrap()
-            .instructions
-            .last()
-            .unwrap()
-            .res_vreg
-            .unwrap()
-    }
-
     #[warn(unused_results)]
     fn emit_node(&mut self, node_id: NodeId) -> Option<Operand> {
+        trace!("ir: action=emit_node node_id={:?}", node_id);
         let node = &self.nodes[node_id];
 
         match &node.kind {
@@ -333,6 +323,7 @@ impl<'a> Emitter<'a> {
             }
             crate::ast::NodeKind::Identifier(identifier) => {
                 let vreg = *self.fn_def_mut().name_to_vreg.get(identifier).unwrap();
+                dbg!(identifier, vreg);
 
                 let typ = self.node_to_type.get(&node_id).unwrap();
                 return Some(Operand::new_vreg(vreg, typ));
@@ -366,8 +357,8 @@ impl<'a> Emitter<'a> {
 
                 let real_fn_name = fn_name_ast_to_ir(ast_fn_name, &arg_type, &call_arg0_type_str);
 
-                let op = self.emit_node(*args).unwrap();
-                let operands = vec![op];
+                let args = self.nodes[*args].kind.as_arguments().unwrap();
+                let operands = args.iter().map(|a| self.emit_node(*a).unwrap()).collect();
 
                 trace!(
                     "ir: emit fn call: ast_name={} real_name={} arg_type={}",
@@ -378,8 +369,9 @@ impl<'a> Emitter<'a> {
                     kind: InstructionKind::FnCall(real_fn_name, operands),
                     origin: node.origin,
                     res_vreg,
-                    typ: ret_type,
+                    typ: ret_type.clone(),
                 });
+                return res_vreg.map(|r| Operand::new_vreg(r, &ret_type));
             }
             crate::ast::NodeKind::Cmp(lhs, rhs) => {
                 // Set by the parser.
@@ -401,6 +393,7 @@ impl<'a> Emitter<'a> {
                     res_vreg: Some(res_vreg),
                     typ: typ.clone(),
                 });
+                return Some(Operand::new_vreg(res_vreg, typ));
             }
             crate::ast::NodeKind::Add(lhs_ast, rhs_ast) => {
                 let typ = self.node_to_type.get(&node_id).unwrap();
@@ -420,6 +413,7 @@ impl<'a> Emitter<'a> {
                     res_vreg: Some(res_vreg),
                     typ: typ.clone(),
                 });
+                return Some(Operand::new_vreg(res_vreg, typ));
             }
             crate::ast::NodeKind::Multiply(lhs_ast, rhs_ast) => {
                 let typ = self.node_to_type.get(&node_id).unwrap();
@@ -439,6 +433,7 @@ impl<'a> Emitter<'a> {
                     res_vreg: Some(res_vreg),
                     typ: typ.clone(),
                 });
+                return Some(Operand::new_vreg(res_vreg, typ));
             }
             crate::ast::NodeKind::Divide(lhs_ast, rhs_ast) => {
                 let typ = self.node_to_type.get(&node_id).unwrap();
@@ -458,6 +453,7 @@ impl<'a> Emitter<'a> {
                     res_vreg: Some(res_vreg),
                     typ: typ.clone(),
                 });
+                return Some(Operand::new_vreg(res_vreg, typ));
             }
             NodeKind::Block(stmts) => {
                 for stmt in stmts {
@@ -531,11 +527,30 @@ impl<'a> Emitter<'a> {
             }
             NodeKind::VarDecl(identifier, expr_ast) => {
                 let expr_ir = self.emit_node(*expr_ast).unwrap();
+                dbg!(node_id, identifier, &expr_ir);
 
-                // TODO: make vreg
-                self.fn_def_mut()
+                let vreg = match expr_ir.kind {
+                    OperandKind::Num(_) | OperandKind::Bool(_) => {
+                        let res_vreg = self.fn_def_mut().make_vreg(&expr_ir.typ);
+                        dbg!(res_vreg);
+                        let typ = expr_ir.typ.clone();
+                        self.fn_def_mut().instructions.push(Instruction {
+                            kind: InstructionKind::Set(expr_ir),
+                            origin: node.origin,
+                            res_vreg: Some(res_vreg),
+                            typ: typ.clone(),
+                        });
+                        res_vreg
+                    }
+                    OperandKind::VirtualRegister(vreg) => vreg,
+
+                    OperandKind::Fn(_) | OperandKind::Label(_) => unreachable!(),
+                };
+                let _ = self
+                    .fn_def_mut()
                     .name_to_vreg
                     .insert(identifier.to_owned(), vreg);
+                dbg!(identifier, vreg);
             }
             NodeKind::Assignment(lhs_ast, op, rhs_ast) => {
                 if op.kind != TokenKind::Eq {
@@ -543,7 +558,7 @@ impl<'a> Emitter<'a> {
                 }
 
                 let rhs_ir = self.emit_node(*rhs_ast).unwrap();
-                let lhs_ir = self.emit_node(*lhs_ast).unwrap();
+                let _lhs_ir = self.emit_node(*lhs_ast).unwrap();
 
                 // Do not care about lhs's vreg since the value is overriden.
                 match &self.nodes[*lhs_ast].kind {
@@ -757,17 +772,28 @@ pub fn eval(irs: &[Instruction]) -> Eval {
 
         match &ir.kind {
             InstructionKind::JumpIfFalse(label, cond) => {
-                let vreg = cond.as_vreg().unwrap();
-                let val = eval.vregs.get(&vreg).unwrap();
-                if let EvalValue {
-                    kind:
-                        EvalValueKind::Bool(false) | EvalValueKind::Num(-1) | EvalValueKind::Num(1),
-                    ..
-                } = val
-                {
-                    pc = *jump_locations.get(label).unwrap();
-                    continue;
-                }
+                match cond.kind {
+                    OperandKind::Num(-1) | OperandKind::Num(1) | OperandKind::Bool(false) => {
+                        pc = *jump_locations.get(label).unwrap();
+                        continue;
+                    }
+                    OperandKind::Num(_) | OperandKind::Bool(_) => {}
+                    OperandKind::VirtualRegister(vreg) => {
+                        let val = eval.vregs.get(&vreg).unwrap();
+                        if let EvalValue {
+                            kind:
+                                EvalValueKind::Bool(false)
+                                | EvalValueKind::Num(-1)
+                                | EvalValueKind::Num(1),
+                            ..
+                        } = val
+                        {
+                            pc = *jump_locations.get(label).unwrap();
+                            continue;
+                        }
+                    }
+                    _ => unreachable!(),
+                };
             }
             InstructionKind::Jump(label) => {
                 pc = *jump_locations.get(label).unwrap();
@@ -778,19 +804,25 @@ pub fn eval(irs: &[Instruction]) -> Eval {
                 "builtin.println_int" => {
                     for op in operands {
                         let val = match op.kind {
-                            OperandKind::VirtualRegister(vreg) => eval.vregs.get(&vreg).unwrap(),
+                            OperandKind::VirtualRegister(vreg) => {
+                                eval.vregs.get(&vreg).unwrap().as_num()
+                            }
+                            OperandKind::Num(n) => n,
                             _ => panic!("unexpected fn call operand: {:#?}", op),
                         };
-                        writeln!(&mut eval.stdout, "{}", val.as_num()).unwrap();
+                        writeln!(&mut eval.stdout, "{}", val).unwrap();
                     }
                 }
                 "builtin.println_bool" => {
                     for op in operands {
                         let val = match op.kind {
-                            OperandKind::VirtualRegister(vreg) => eval.vregs.get(&vreg).unwrap(),
+                            OperandKind::VirtualRegister(vreg) => {
+                                eval.vregs.get(&vreg).unwrap().as_bool()
+                            }
+                            OperandKind::Bool(b) => b,
                             _ => panic!("unexpected fn call operand: {:#?}", op),
                         };
-                        writeln!(&mut eval.stdout, "{}", val.as_bool()).unwrap();
+                        writeln!(&mut eval.stdout, "{}", val).unwrap();
                     }
                 }
                 _ => unimplemented!("{}", fn_name),
