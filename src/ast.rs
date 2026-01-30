@@ -58,6 +58,7 @@ pub enum NodeKind {
     },
     Block(Vec<NodeId>),
     VarDecl(String, NodeId), // TODO: Vec in case of identifier list.
+    Break,                   // TODO: label argument.
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
@@ -594,7 +595,9 @@ impl<'a> Parser<'a> {
         }
 
         let keyword_for = self.match_kind(TokenKind::KeywordFor)?;
-        let cond: Option<NodeId> = if self.match_kind(TokenKind::LeftCurly).is_some() {
+        let cond: Option<NodeId> = if let Some(token) = self.peek_token()
+            && token.kind == TokenKind::LeftCurly
+        {
             None
         } else {
             let cond = if let Some(cond) = self.parse_expr() {
@@ -784,6 +787,20 @@ impl<'a> Parser<'a> {
         None
     }
 
+    // BreakStmt = "break" [ Label ] .
+    fn parse_break_stmt(&mut self) -> Option<NodeId> {
+        if self.error_mode {
+            return None;
+        }
+
+        let keyword = self.match_kind(TokenKind::KeywordBreak)?;
+
+        Some(self.new_node(Node {
+            kind: NodeKind::Break,
+            origin: keyword.origin,
+        }))
+    }
+
     // Statement  = Declaration | LabeledStmt | SimpleStmt |
     //              GoStmt | ReturnStmt | BreakStmt | ContinueStmt | GotoStmt |
     //              FallthroughStmt | Block | IfStmt | SwitchStmt | SelectStmt | ForStmt |
@@ -800,7 +817,12 @@ impl<'a> Parser<'a> {
         if let Some(stmt) = self.parse_statement_if() {
             return Some(stmt);
         };
+
         if let Some(stmt) = self.parse_block() {
+            return Some(stmt);
+        };
+
+        if let Some(stmt) = self.parse_break_stmt() {
             return Some(stmt);
         };
 
@@ -1043,7 +1065,7 @@ impl<'a> Parser<'a> {
                 name_to_def.leave();
             }
             // Nothing to do.
-            NodeKind::Package(_) | NodeKind::Number(_) | NodeKind::Bool(_) => {}
+            NodeKind::Break | NodeKind::Package(_) | NodeKind::Number(_) | NodeKind::Bool(_) => {}
 
             NodeKind::Unary(_, expr) => {
                 Self::resolve_node(*expr, nodes, errors, name_to_def, file_id_to_name);
@@ -1231,7 +1253,8 @@ fn log(nodes: &[Node], node_id: NodeId, indent: usize) {
             }
         }
 
-        NodeKind::Package(_)
+        NodeKind::Break
+        | NodeKind::Package(_)
         | NodeKind::Number(_)
         | NodeKind::Identifier(_)
         | NodeKind::Bool(_) => {}

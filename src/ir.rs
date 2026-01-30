@@ -259,7 +259,19 @@ impl<'a> Emitter<'a> {
                 }
             }
             NodeKind::Package(_) => {}
-            // Start of a new function.
+            NodeKind::Break => {
+                // Assume we are inside a for loop.
+                // TODO: Return an error if not. Need CFG for that.
+                assert!(self.label_current > 0);
+                let end_label = format!(".{}_for_end", self.label_current - 1);
+
+                self.fn_def_mut().instructions.push(Instruction {
+                    kind: InstructionKind::Jump(end_label),
+                    origin: node.origin,
+                    res_vreg: None,
+                    typ: Type::new_void(),
+                });
+            }
             NodeKind::FnDef(crate::ast::FnDef {
                 name,
                 args: _,

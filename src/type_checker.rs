@@ -149,7 +149,7 @@ pub fn check_node(
                 check_node(*decl, nodes, errs, node_to_type, name_to_def);
             }
         }
-        NodeKind::Package(_) => {}
+        NodeKind::Break | NodeKind::Package(_) => {}
         NodeKind::VarDecl(_identifier, expr) => {
             check_node(*expr, nodes, errs, node_to_type, name_to_def);
 

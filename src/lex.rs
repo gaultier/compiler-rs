@@ -38,6 +38,7 @@ pub enum TokenKind {
     KeywordElse,
     KeywordFor,
     KeywordVar,
+    KeywordBreak,
     Unknown,
 }
 
@@ -98,6 +99,7 @@ impl Lexer {
             "else" => TokenKind::KeywordElse,
             "for" => TokenKind::KeywordFor,
             "var" => TokenKind::KeywordVar,
+            "break" => TokenKind::KeywordBreak,
             _ => TokenKind::Identifier,
         };
 
