@@ -1,1 +1,1 @@
-println specialization
+add tests for type mismatch (add, mul, div, cmp, assign)

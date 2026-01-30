@@ -212,27 +212,20 @@ impl Lexer {
                     }
                 }
                 '=' => {
+                    let origin = self.origin;
                     self.advance(c, &mut it);
                     if let Some(next) = it.peek()
                         && *next == '='
                     {
-                        let origin = Origin {
-                            len: 2,
-                            ..self.origin
-                        };
                         self.tokens.push(Token {
                             kind: TokenKind::EqEq,
-                            origin,
+                            origin: Origin { len: 2, ..origin },
                         });
                         self.advance(c, &mut it);
                     } else {
-                        let origin = Origin {
-                            len: 1,
-                            ..self.origin
-                        };
                         self.tokens.push(Token {
                             kind: TokenKind::Eq,
-                            origin,
+                            origin: Origin { len: 1, ..origin },
                         });
                     }
                 }
