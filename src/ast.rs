@@ -38,7 +38,7 @@ pub enum NodeKind {
     Cmp(NodeId, NodeId),
     Identifier(String),
     Unary(TokenKind, NodeId),
-    Assignment(NodeId, TokenKind, NodeId),
+    Assignment(NodeId, Token, NodeId),
     Arguments(Vec<NodeId>),
     FnCall {
         // Can be a variable (function pointer), or a string.
@@ -756,7 +756,7 @@ impl<'a> Parser<'a> {
         })?;
 
         Some(self.new_node(Node {
-            kind: NodeKind::Assignment(lhs, eq.kind, rhs),
+            kind: NodeKind::Assignment(lhs, eq, rhs),
             origin: eq.origin,
         }))
     }

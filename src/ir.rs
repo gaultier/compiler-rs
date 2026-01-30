@@ -10,6 +10,7 @@ use serde::Serialize;
 
 use crate::{
     ast::{NameToDef, Node, NodeId, NodeKind},
+    lex::TokenKind,
     origin::Origin,
     type_checker::{Size, Type, TypeKind},
 };
@@ -28,7 +29,6 @@ pub enum InstructionKind {
     JumpIfFalse(String, Operand),
     Jump(String),
     LabelDef(String),
-    VarDecl(String, Operand),
 }
 
 #[derive(Serialize, Debug)]
@@ -82,7 +82,7 @@ pub struct FnDef {
     typ: Type,
     pub origin: Origin,
     pub stack_size: usize,
-    node_to_vreg: HashMap<NodeId, VirtualRegister>,
+    name_to_vreg: HashMap<String, VirtualRegister>,
 }
 
 impl Display for FnDef {
@@ -123,7 +123,7 @@ impl FnDef {
             typ: typ.clone(),
             origin,
             stack_size,
-            node_to_vreg: HashMap::new(),
+            name_to_vreg: HashMap::new(),
         }
     }
 
@@ -149,19 +149,6 @@ impl FnDef {
         for (i, ins) in self.instructions.iter().enumerate() {
             let i = i as u32;
             match &ins.kind {
-                InstructionKind::VarDecl(_, op) => {
-                    assert!(ins.res_vreg.is_none());
-
-                    if let Operand {
-                        kind: OperandKind::VirtualRegister(vreg),
-                        ..
-                    } = op
-                    {
-                        Self::extend_live_range_on_use(*vreg, i, &mut res);
-                    } else {
-                        panic!("expected vreg operand");
-                    }
-                }
                 InstructionKind::FnCall(_, operands) => {
                     if let Some(res_vreg) = ins.res_vreg {
                         assert!(res_vreg.0 > 0);
@@ -251,7 +238,7 @@ impl<'a> Emitter<'a> {
         self.fn_defs.last_mut().unwrap()
     }
 
-    fn vreg(&self) -> VirtualRegister {
+    fn last_vreg(&self) -> VirtualRegister {
         self.fn_defs
             .last()
             .unwrap()
@@ -302,7 +289,7 @@ impl<'a> Emitter<'a> {
 
                 if let Some(cond) = cond {
                     self.emit_node(*cond);
-                    let vreg = self.vreg();
+                    let vreg = self.last_vreg();
 
                     let op = Operand {
                         kind: OperandKind::VirtualRegister(vreg),
@@ -355,8 +342,8 @@ impl<'a> Emitter<'a> {
                 });
             }
             crate::ast::NodeKind::Identifier(identifier) => {
-                let def_id = self.name_to_def.get_definitive(identifier).unwrap();
-                let vreg = *self.fn_def_mut().node_to_vreg.get(def_id).unwrap();
+                let vreg = *self.fn_def_mut().name_to_vreg.get(identifier).unwrap();
+                dbg!(identifier, vreg);
 
                 let typ = self.node_to_type.get(&node_id).unwrap();
                 let res_vreg = self.fn_def_mut().make_vreg(typ);
@@ -429,9 +416,9 @@ impl<'a> Emitter<'a> {
                 assert_ne!(*rhs_type.kind, TypeKind::Any);
 
                 self.emit_node(*lhs);
-                let lhs_vreg = self.vreg();
+                let lhs_vreg = self.last_vreg();
                 self.emit_node(*rhs);
-                let rhs_vreg = self.vreg();
+                let rhs_vreg = self.last_vreg();
 
                 let res_vreg = self.fn_def_mut().make_vreg(typ);
 
@@ -461,13 +448,13 @@ impl<'a> Emitter<'a> {
 
                 self.emit_node(*ast_lhs);
                 let (ir_lhs_vreg, ir_lhs_typ) = (
-                    self.vreg(),
+                    self.last_vreg(),
                     self.fn_def_mut().instructions.last().unwrap().typ.clone(),
                 );
 
                 self.emit_node(*ast_rhs);
                 let (ir_rhs_vreg, ir_rhs_typ) = (
-                    self.vreg(),
+                    self.last_vreg(),
                     self.fn_def_mut().instructions.last().unwrap().typ.clone(),
                 );
 
@@ -493,13 +480,13 @@ impl<'a> Emitter<'a> {
 
                 self.emit_node(*ast_lhs);
                 let (ir_lhs_vreg, ir_lhs_typ) = (
-                    self.vreg(),
+                    self.last_vreg(),
                     self.fn_def_mut().instructions.last().unwrap().typ.clone(),
                 );
 
                 self.emit_node(*ast_rhs);
                 let (ir_rhs_vreg, ir_rhs_typ) = (
-                    self.vreg(),
+                    self.last_vreg(),
                     self.fn_def_mut().instructions.last().unwrap().typ.clone(),
                 );
 
@@ -525,13 +512,13 @@ impl<'a> Emitter<'a> {
 
                 self.emit_node(*ast_lhs);
                 let (ir_lhs_vreg, ir_lhs_typ) = (
-                    self.vreg(),
+                    self.last_vreg(),
                     self.fn_def_mut().instructions.last().unwrap().typ.clone(),
                 );
 
                 self.emit_node(*ast_rhs);
                 let (ir_rhs_vreg, ir_rhs_typ) = (
-                    self.vreg(),
+                    self.last_vreg(),
                     self.fn_def_mut().instructions.last().unwrap().typ.clone(),
                 );
 
@@ -573,7 +560,7 @@ impl<'a> Emitter<'a> {
                 let end_label = format!(".{}_if_end", self.label_current);
                 self.label_current += 1;
 
-                let vreg: VirtualRegister = self.vreg();
+                let vreg: VirtualRegister = self.last_vreg();
                 let typ = self.fn_def_mut().instructions.last().unwrap().typ.clone();
                 assert_eq!(*typ.kind, TypeKind::Bool);
 
@@ -625,29 +612,39 @@ impl<'a> Emitter<'a> {
             }
             NodeKind::VarDecl(identifier, expr) => {
                 self.emit_node(*expr);
-                let op_vreg = self.vreg();
-                let op_typ = self.fn_def_mut().instructions.last().unwrap().typ.clone();
+                let op_vreg = self.last_vreg();
 
-                // TODO: Should every `make_vreg()` call also insert in this map?
-                // But the only use of the map is to map a name to a vreg.
-                self.fn_def_mut().node_to_vreg.insert(node_id, op_vreg);
-
-                let typ = self.node_to_type.get(&node_id).unwrap();
-                self.fn_def_mut().instructions.push(Instruction {
-                    kind: InstructionKind::VarDecl(
-                        identifier.clone(),
-                        Operand {
-                            kind: OperandKind::VirtualRegister(op_vreg),
-                            typ: op_typ,
-                        },
-                    ),
-                    origin: node.origin,
-                    res_vreg: None,
-                    typ: typ.clone(),
-                });
+                self.fn_def_mut()
+                    .name_to_vreg
+                    .insert(identifier.to_owned(), op_vreg);
             }
-            NodeKind::Assignment(_lhs, _op, _rhs) => {
-                todo!()
+            NodeKind::Assignment(lhs, op, rhs) => {
+                if op.kind != TokenKind::Eq {
+                    todo!()
+                }
+
+                self.emit_node(*rhs);
+                let rhs_vreg = self.last_vreg();
+
+                self.emit_node(*lhs);
+                // Do not care about lhs's vreg since the value is overriden.
+                match &self.nodes[*lhs].kind {
+                    NodeKind::Identifier(name) => {
+                        let typ = self.node_to_type.get(lhs).unwrap();
+                        let res_vreg = self.fn_def_mut().make_vreg(typ);
+                        self.fn_def_mut().instructions.push(Instruction {
+                            kind: InstructionKind::Set(Operand {
+                                kind: OperandKind::VirtualRegister(rhs_vreg),
+                                typ: typ.clone(),
+                            }),
+                            origin: op.origin,
+                            res_vreg: Some(res_vreg),
+                            typ: typ.clone(),
+                        });
+                        *self.fn_def_mut().name_to_vreg.get_mut(name).unwrap() = res_vreg;
+                    }
+                    _ => unimplemented!(),
+                };
             }
             NodeKind::Arguments(args) => {
                 // TODO: More?
@@ -746,9 +743,6 @@ impl Display for Instruction {
             InstructionKind::LabelDef(op) => {
                 write!(f, "label {}", op)?;
             }
-            InstructionKind::VarDecl(identifier, op) => {
-                write!(f, "var_decl {} {}", identifier, op)?;
-            }
         }
 
         writeln!(f)
@@ -846,10 +840,6 @@ pub fn eval(irs: &[Instruction]) -> Eval {
         let ir = &irs[pc];
 
         match &ir.kind {
-            InstructionKind::VarDecl(_, op) => {
-                assert!(ir.res_vreg.is_none());
-                let __vreg = op.as_vreg().unwrap();
-            }
             InstructionKind::JumpIfFalse(label, cond) => {
                 let vreg = cond.as_vreg().unwrap();
                 let val = eval.vregs.get(&vreg).unwrap();

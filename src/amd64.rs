@@ -596,14 +596,6 @@ impl Emitter {
         let ins = &all_ins[ins_idx];
 
         match &ins.kind {
-            ir::InstructionKind::VarDecl(
-                _,
-                ir::Operand {
-                    kind: ir::OperandKind::VirtualRegister(_),
-                    ..
-                },
-            ) => {} // No-op.
-            ir::InstructionKind::VarDecl(_, _) => unimplemented!(),
             ir::InstructionKind::IAdd(
                 ir::Operand {
                     kind: ir::OperandKind::VirtualRegister(lhs),

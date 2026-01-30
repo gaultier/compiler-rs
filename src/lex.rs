@@ -41,7 +41,7 @@ pub enum TokenKind {
     Unknown,
 }
 
-#[derive(Serialize, Debug, Copy, Clone)]
+#[derive(Serialize, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Token {
     pub kind: TokenKind,
     pub origin: Origin,

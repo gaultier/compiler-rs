@@ -155,15 +155,6 @@ pub fn check_node(
 
             let expr_typ = node_to_type.get(expr).unwrap();
             node_to_type.insert(node_id, expr_typ.clone());
-
-            // FIXME: Since the current scope gets popped
-            // when exiting it, we lose information.
-            //var_name_to_type
-            //    .get_mut(identifier)
-            //    .unwrap()
-            //    .last_mut()
-            //    .unwrap()
-            //    .0 = node.typ.clone();
         }
         NodeKind::For { cond, block } => {
             if let Some(cond) = cond {
@@ -274,7 +265,7 @@ pub fn check_node(
             check_node(*rhs, nodes, errs, node_to_type, name_to_def);
 
             let lhs_type = node_to_type.get(lhs).unwrap();
-            let rhs_type = node_to_type.get(lhs).unwrap();
+            let rhs_type = node_to_type.get(rhs).unwrap();
             let typ = lhs_type.merge(rhs_type);
             match typ {
                 Ok(typ) => {
@@ -292,7 +283,7 @@ pub fn check_node(
             check_node(*rhs, nodes, errs, node_to_type, name_to_def);
 
             let lhs_type = node_to_type.get(lhs).unwrap();
-            let rhs_type = node_to_type.get(lhs).unwrap();
+            let rhs_type = node_to_type.get(rhs).unwrap();
             let typ = lhs_type.merge(rhs_type);
             if let Err(err) = typ {
                 errs.push(err);
@@ -326,6 +317,12 @@ pub fn check_node(
         NodeKind::Assignment(lhs, _, rhs) => {
             check_node(*lhs, nodes, errs, node_to_type, name_to_def);
             check_node(*rhs, nodes, errs, node_to_type, name_to_def);
+
+            let lhs_type = node_to_type.get(lhs).unwrap();
+            let rhs_type = node_to_type.get(rhs).unwrap();
+            if let Err(err) = lhs_type.merge(rhs_type) {
+                errs.push(err);
+            }
         }
     }
 }
