@@ -249,13 +249,14 @@ impl<'a> Emitter<'a> {
             .unwrap()
     }
 
-    fn emit_node(&mut self, node_id: NodeId) {
+    #[warn(unused_results)]
+    fn emit_node(&mut self, node_id: NodeId) -> Option<Operand> {
         let node = &self.nodes[node_id];
 
         match &node.kind {
             NodeKind::File(decls) => {
                 for decl in decls {
-                    self.emit_node(*decl);
+                    let _ = self.emit_node(*decl);
                 }
             }
             NodeKind::Package(_) => {}
@@ -282,7 +283,7 @@ impl<'a> Emitter<'a> {
                 let typ = self.node_to_type.get(&node_id).unwrap();
                 self.fn_defs
                     .push(FnDef::new(name.to_owned(), typ, node.origin, stack_size));
-                self.emit_node(*body);
+                let _ = self.emit_node(*body);
 
                 self.fn_def_mut().live_ranges = self.fn_def_mut().compute_live_ranges();
             }
@@ -300,13 +301,8 @@ impl<'a> Emitter<'a> {
                 });
 
                 if let Some(cond) = cond {
-                    self.emit_node(*cond);
-                    let vreg = self.last_vreg();
+                    let op = self.emit_node(*cond).unwrap();
 
-                    let op = Operand {
-                        kind: OperandKind::VirtualRegister(vreg),
-                        typ: self.fn_def_mut().instructions.last().unwrap().typ.clone(),
-                    };
                     self.fn_def_mut().instructions.push(Instruction {
                         kind: InstructionKind::JumpIfFalse(end_label.clone(), op),
                         origin: node.origin,
@@ -314,7 +310,7 @@ impl<'a> Emitter<'a> {
                         typ: Type::new_void(),
                     });
                 }
-                self.emit_node(*block);
+                let _ = self.emit_node(*block);
                 self.fn_def_mut().instructions.push(Instruction {
                     kind: InstructionKind::Jump(loop_label.clone()),
                     origin: node.origin,
@@ -330,41 +326,16 @@ impl<'a> Emitter<'a> {
                 });
             }
             crate::ast::NodeKind::Number(num) => {
-                let typ = self.node_to_type.get(&node_id).unwrap();
-                assert_eq!(*typ.kind, TypeKind::Number);
-
-                let res_vreg = self.fn_def_mut().make_vreg(typ);
-                self.fn_def_mut().instructions.push(Instruction {
-                    kind: InstructionKind::Set(Operand::new_int(*num as i64)),
-                    origin: node.origin,
-                    res_vreg: Some(res_vreg),
-                    typ: typ.clone(),
-                });
+                return Some(Operand::new_int(*num as i64));
             }
             crate::ast::NodeKind::Bool(b) => {
-                let typ = self.node_to_type.get(&node_id).unwrap();
-                assert_eq!(*typ.kind, TypeKind::Bool);
-
-                let res_vreg = self.fn_def_mut().make_vreg(typ);
-                self.fn_def_mut().instructions.push(Instruction {
-                    kind: InstructionKind::Set(Operand::new_bool(*b)),
-                    origin: node.origin,
-                    res_vreg: Some(res_vreg),
-                    typ: typ.clone(),
-                });
+                return Some(Operand::new_bool(*b));
             }
             crate::ast::NodeKind::Identifier(identifier) => {
                 let vreg = *self.fn_def_mut().name_to_vreg.get(identifier).unwrap();
-                dbg!(identifier, vreg);
 
                 let typ = self.node_to_type.get(&node_id).unwrap();
-                let res_vreg = self.fn_def_mut().make_vreg(typ);
-                self.fn_def_mut().instructions.push(Instruction {
-                    kind: InstructionKind::Set(Operand::new_vreg(vreg, typ)),
-                    origin: node.origin,
-                    res_vreg: Some(res_vreg),
-                    typ: typ.clone(),
-                });
+                return Some(Operand::new_vreg(vreg, typ));
             }
             crate::ast::NodeKind::FnCall { callee, args } => {
                 // TODO: Support function pointers.
@@ -395,15 +366,8 @@ impl<'a> Emitter<'a> {
 
                 let real_fn_name = fn_name_ast_to_ir(ast_fn_name, &arg_type, &call_arg0_type_str);
 
-                self.emit_node(*args);
-                // TODO: Handle multiple args.
-                let (arg_vreg, arg_typ) = self
-                    .fn_def_mut()
-                    .instructions
-                    .last()
-                    .map(|x| (x.res_vreg.unwrap(), &x.typ))
-                    .unwrap();
-                let operands = vec![Operand::new_vreg(arg_vreg, arg_typ)];
+                let op = self.emit_node(*args).unwrap();
+                let operands = vec![op];
 
                 trace!(
                     "ir: emit fn call: ast_name={} real_name={} arg_type={}",
@@ -427,120 +391,69 @@ impl<'a> Emitter<'a> {
                 assert_ne!(*lhs_type.kind, TypeKind::Any);
                 assert_ne!(*rhs_type.kind, TypeKind::Any);
 
-                self.emit_node(*lhs);
-                let lhs_vreg = self.last_vreg();
-                self.emit_node(*rhs);
-                let rhs_vreg = self.last_vreg();
-
+                let lhs_ir = self.emit_node(*lhs).unwrap();
+                let rhs_ir = self.emit_node(*rhs).unwrap();
                 let res_vreg = self.fn_def_mut().make_vreg(typ);
 
                 self.fn_def_mut().instructions.push(Instruction {
-                    kind: InstructionKind::ICmp(
-                        Operand {
-                            kind: OperandKind::VirtualRegister(lhs_vreg),
-                            typ: lhs_type.clone(),
-                        },
-                        Operand {
-                            kind: OperandKind::VirtualRegister(rhs_vreg),
-                            typ: rhs_type.clone(),
-                        },
-                    ),
+                    kind: InstructionKind::ICmp(lhs_ir, rhs_ir),
                     origin: node.origin,
                     res_vreg: Some(res_vreg),
                     typ: typ.clone(),
                 });
             }
-            crate::ast::NodeKind::Add(ast_lhs, ast_rhs) => {
+            crate::ast::NodeKind::Add(lhs_ast, rhs_ast) => {
                 let typ = self.node_to_type.get(&node_id).unwrap();
-                let lhs_type = self.node_to_type.get(ast_lhs).unwrap();
-                let rhs_type = self.node_to_type.get(ast_rhs).unwrap();
+                let lhs_type = self.node_to_type.get(lhs_ast).unwrap();
+                let rhs_type = self.node_to_type.get(rhs_ast).unwrap();
                 assert_eq!(*lhs_type.kind, TypeKind::Number);
                 assert_eq!(*rhs_type.kind, TypeKind::Number);
                 assert_eq!(*typ.kind, TypeKind::Number);
 
-                self.emit_node(*ast_lhs);
-                let (ir_lhs_vreg, ir_lhs_typ) = (
-                    self.last_vreg(),
-                    self.fn_def_mut().instructions.last().unwrap().typ.clone(),
-                );
-
-                self.emit_node(*ast_rhs);
-                let (ir_rhs_vreg, ir_rhs_typ) = (
-                    self.last_vreg(),
-                    self.fn_def_mut().instructions.last().unwrap().typ.clone(),
-                );
-
+                let lhs_ir = self.emit_node(*lhs_ast).unwrap();
+                let rhs_ir = self.emit_node(*rhs_ast).unwrap();
                 let res_vreg = self.fn_def_mut().make_vreg(typ);
 
                 self.fn_def_mut().instructions.push(Instruction {
-                    kind: InstructionKind::IAdd(
-                        Operand::new_vreg(ir_lhs_vreg, &ir_lhs_typ),
-                        Operand::new_vreg(ir_rhs_vreg, &ir_rhs_typ),
-                    ),
+                    kind: InstructionKind::IAdd(lhs_ir, rhs_ir),
                     origin: node.origin,
                     res_vreg: Some(res_vreg),
                     typ: typ.clone(),
                 });
             }
-            crate::ast::NodeKind::Multiply(ast_lhs, ast_rhs) => {
+            crate::ast::NodeKind::Multiply(lhs_ast, rhs_ast) => {
                 let typ = self.node_to_type.get(&node_id).unwrap();
-                let lhs_type = self.node_to_type.get(ast_lhs).unwrap();
-                let rhs_type = self.node_to_type.get(ast_rhs).unwrap();
+                let lhs_type = self.node_to_type.get(lhs_ast).unwrap();
+                let rhs_type = self.node_to_type.get(rhs_ast).unwrap();
                 assert_eq!(*lhs_type.kind, TypeKind::Number);
                 assert_eq!(*rhs_type.kind, TypeKind::Number);
                 assert_eq!(*typ.kind, TypeKind::Number);
 
-                self.emit_node(*ast_lhs);
-                let (ir_lhs_vreg, ir_lhs_typ) = (
-                    self.last_vreg(),
-                    self.fn_def_mut().instructions.last().unwrap().typ.clone(),
-                );
-
-                self.emit_node(*ast_rhs);
-                let (ir_rhs_vreg, ir_rhs_typ) = (
-                    self.last_vreg(),
-                    self.fn_def_mut().instructions.last().unwrap().typ.clone(),
-                );
-
+                let lhs_ir = self.emit_node(*lhs_ast).unwrap();
+                let rhs_ir = self.emit_node(*rhs_ast).unwrap();
                 let res_vreg = self.fn_def_mut().make_vreg(typ);
 
                 self.fn_def_mut().instructions.push(Instruction {
-                    kind: InstructionKind::IMultiply(
-                        Operand::new_vreg(ir_lhs_vreg, &ir_lhs_typ),
-                        Operand::new_vreg(ir_rhs_vreg, &ir_rhs_typ),
-                    ),
+                    kind: InstructionKind::IMultiply(lhs_ir, rhs_ir),
                     origin: node.origin,
                     res_vreg: Some(res_vreg),
                     typ: typ.clone(),
                 });
             }
-            crate::ast::NodeKind::Divide(ast_lhs, ast_rhs) => {
+            crate::ast::NodeKind::Divide(lhs_ast, rhs_ast) => {
                 let typ = self.node_to_type.get(&node_id).unwrap();
-                let lhs_type = self.node_to_type.get(ast_lhs).unwrap();
-                let rhs_type = self.node_to_type.get(ast_rhs).unwrap();
+                let lhs_type = self.node_to_type.get(lhs_ast).unwrap();
+                let rhs_type = self.node_to_type.get(rhs_ast).unwrap();
                 assert_eq!(*lhs_type.kind, TypeKind::Number);
                 assert_eq!(*rhs_type.kind, TypeKind::Number);
                 assert_eq!(*typ.kind, TypeKind::Number);
 
-                self.emit_node(*ast_lhs);
-                let (ir_lhs_vreg, ir_lhs_typ) = (
-                    self.last_vreg(),
-                    self.fn_def_mut().instructions.last().unwrap().typ.clone(),
-                );
-
-                self.emit_node(*ast_rhs);
-                let (ir_rhs_vreg, ir_rhs_typ) = (
-                    self.last_vreg(),
-                    self.fn_def_mut().instructions.last().unwrap().typ.clone(),
-                );
-
+                let lhs_ir = self.emit_node(*lhs_ast).unwrap();
+                let rhs_ir = self.emit_node(*rhs_ast).unwrap();
                 let res_vreg = self.fn_def_mut().make_vreg(typ);
 
                 self.fn_def_mut().instructions.push(Instruction {
-                    kind: InstructionKind::IDivide(
-                        Operand::new_vreg(ir_lhs_vreg, &ir_lhs_typ),
-                        Operand::new_vreg(ir_rhs_vreg, &ir_rhs_typ),
-                    ),
+                    kind: InstructionKind::IDivide(lhs_ir, rhs_ir),
                     origin: node.origin,
                     res_vreg: Some(res_vreg),
                     typ: typ.clone(),
@@ -548,7 +461,7 @@ impl<'a> Emitter<'a> {
             }
             NodeKind::Block(stmts) => {
                 for stmt in stmts {
-                    self.emit_node(*stmt);
+                    let _ = self.emit_node(*stmt);
                 }
             }
             NodeKind::If {
@@ -559,7 +472,7 @@ impl<'a> Emitter<'a> {
                 let cond_type = &self.node_to_type.get(cond).unwrap();
                 assert_eq!(*cond_type.kind, TypeKind::Bool);
 
-                self.emit_node(*cond);
+                let cond_ir = self.emit_node(*cond).unwrap();
 
                 let then_block = &self.nodes[*then_block_id];
                 assert!(matches!(then_block.kind, NodeKind::Block(_)));
@@ -572,18 +485,12 @@ impl<'a> Emitter<'a> {
                 let end_label = format!(".{}_if_end", self.label_current);
                 self.label_current += 1;
 
-                let vreg: VirtualRegister = self.last_vreg();
-                let typ = self.fn_def_mut().instructions.last().unwrap().typ.clone();
-                assert_eq!(*typ.kind, TypeKind::Bool);
+                assert_eq!(*cond_ir.typ.kind, TypeKind::Bool);
 
-                let op = Operand {
-                    kind: OperandKind::VirtualRegister(vreg),
-                    typ,
-                };
                 self.fn_def_mut().instructions.push(Instruction {
                     kind: InstructionKind::JumpIfFalse(
                         else_label.clone().unwrap_or_else(|| end_label.clone()),
-                        op,
+                        cond_ir,
                     ),
                     origin: node.origin,
                     res_vreg: None,
@@ -591,7 +498,7 @@ impl<'a> Emitter<'a> {
                 });
 
                 // Then-body.
-                self.emit_node(*then_block_id);
+                let _ = self.emit_node(*then_block_id);
 
                 // Else body.
                 if let Some(else_block_id) = else_block_id {
@@ -609,7 +516,7 @@ impl<'a> Emitter<'a> {
                         typ: Type::new_void(),
                     });
 
-                    self.emit_node(*else_block_id);
+                    let _ = self.emit_node(*else_block_id);
                 }
 
                 // End.
@@ -622,33 +529,29 @@ impl<'a> Emitter<'a> {
                     });
                 }
             }
-            NodeKind::VarDecl(identifier, expr) => {
-                self.emit_node(*expr);
-                let op_vreg = self.last_vreg();
+            NodeKind::VarDecl(identifier, expr_ast) => {
+                let expr_ir = self.emit_node(*expr_ast).unwrap();
 
+                // TODO: make vreg
                 self.fn_def_mut()
                     .name_to_vreg
-                    .insert(identifier.to_owned(), op_vreg);
+                    .insert(identifier.to_owned(), vreg);
             }
-            NodeKind::Assignment(lhs, op, rhs) => {
+            NodeKind::Assignment(lhs_ast, op, rhs_ast) => {
                 if op.kind != TokenKind::Eq {
                     todo!()
                 }
 
-                self.emit_node(*rhs);
-                let rhs_vreg = self.last_vreg();
+                let rhs_ir = self.emit_node(*rhs_ast).unwrap();
+                let lhs_ir = self.emit_node(*lhs_ast).unwrap();
 
-                self.emit_node(*lhs);
                 // Do not care about lhs's vreg since the value is overriden.
-                match &self.nodes[*lhs].kind {
+                match &self.nodes[*lhs_ast].kind {
                     NodeKind::Identifier(name) => {
-                        let typ = self.node_to_type.get(lhs).unwrap();
+                        let typ = self.node_to_type.get(lhs_ast).unwrap();
                         let res_vreg = self.fn_def_mut().make_vreg(typ);
                         self.fn_def_mut().instructions.push(Instruction {
-                            kind: InstructionKind::Set(Operand {
-                                kind: OperandKind::VirtualRegister(rhs_vreg),
-                                typ: typ.clone(),
-                            }),
+                            kind: InstructionKind::Set(rhs_ir),
                             origin: op.origin,
                             res_vreg: Some(res_vreg),
                             typ: typ.clone(),
@@ -661,10 +564,11 @@ impl<'a> Emitter<'a> {
             NodeKind::Arguments(args) => {
                 // TODO: More?
                 for arg in args {
-                    self.emit_node(*arg);
+                    let _ = self.emit_node(*arg);
                 }
             }
         }
+        None
     }
 
     pub fn emit_nodes(&mut self) {
