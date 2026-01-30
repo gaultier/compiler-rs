@@ -134,7 +134,6 @@ impl NameToDef {
                 } else {
                     ScopeResolution::Ancestor
                 };
-                dbg!(name, node_id, i, &scope);
                 (node_id, scope)
             })
         })
@@ -145,6 +144,12 @@ impl NameToDef {
     }
 
     pub(crate) fn insert(&mut self, name: String, node_id: NodeId) {
+        // Technically, a variable cannot be redeclared inside the same block, so
+        // we could panic if there is already an entry.
+        // However, we in this case:
+        // 1. Record the error
+        // 2. Override the existing entry
+        // 3. Keep going to report further errors
         self.scopes
             .last_mut()
             .unwrap()
@@ -1083,8 +1088,6 @@ impl<'a> Parser<'a> {
             }
             NodeKind::VarDecl(identifier, expr) => {
                 Self::resolve_node(*expr, nodes, errors, name_to_def, file_id_to_name);
-
-                dbg!(identifier, &name_to_def);
 
                 if let Some((prev, scope)) = name_to_def.get_scoped(identifier)
                     && scope == ScopeResolution::Current
