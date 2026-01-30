@@ -367,6 +367,7 @@ pub(crate) fn encode(
     }
 
     for (label, to_patch) in &jumps_to_patch {
+        dbg!(label);
         let target_pos = jump_target_locations.get(label).unwrap();
         assert!(*target_pos < w.len());
 

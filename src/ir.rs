@@ -67,6 +67,7 @@ pub struct Emitter<'a> {
     pub fn_defs: Vec<FnDef>,
     pub labels: Vec<String>,
     label_current: usize,
+    label_for_current: Option<usize>,
     node_to_type: &'a HashMap<NodeId, Type>,
     nodes: &'a [Node],
     name_to_def: &'a NameToDef,
@@ -228,6 +229,7 @@ impl<'a> Emitter<'a> {
             fn_defs: Vec::new(),
             labels: Vec::new(),
             label_current: 0,
+            label_for_current: None,
             node_to_type,
             nodes,
             name_to_def,
@@ -253,8 +255,7 @@ impl<'a> Emitter<'a> {
             NodeKind::Break => {
                 // Assume we are inside a for loop.
                 // TODO: Return an error if not. Need CFG for that.
-                assert!(self.label_current > 0);
-                let end_label = format!(".{}_for_end", self.label_current - 1);
+                let end_label = format!(".{}_for_end", self.label_for_current.unwrap());
 
                 self.fn_def_mut().instructions.push(Instruction {
                     kind: InstructionKind::Jump(end_label),
@@ -279,6 +280,7 @@ impl<'a> Emitter<'a> {
             }
             NodeKind::Unary(_op, _expr) => todo!(),
             NodeKind::For { cond, block } => {
+                self.label_for_current = Some(self.label_current);
                 let loop_label = format!(".{}_for_loop", self.label_current);
                 let end_label = format!(".{}_for_end", self.label_current);
                 self.label_current += 1;
@@ -314,6 +316,7 @@ impl<'a> Emitter<'a> {
                     res_vreg: None,
                     typ: Type::new_void(),
                 });
+                self.label_for_current = None;
             }
             crate::ast::NodeKind::Number(num) => {
                 return Some(Operand::new_int(*num as i64));
@@ -323,7 +326,6 @@ impl<'a> Emitter<'a> {
             }
             crate::ast::NodeKind::Identifier(identifier) => {
                 let vreg = *self.fn_def_mut().name_to_vreg.get(identifier).unwrap();
-                dbg!(identifier, vreg);
 
                 let typ = self.node_to_type.get(&node_id).unwrap();
                 return Some(Operand::new_vreg(vreg, typ));
@@ -527,12 +529,10 @@ impl<'a> Emitter<'a> {
             }
             NodeKind::VarDecl(identifier, expr_ast) => {
                 let expr_ir = self.emit_node(*expr_ast).unwrap();
-                dbg!(node_id, identifier, &expr_ir);
 
                 let vreg = match expr_ir.kind {
                     OperandKind::Num(_) | OperandKind::Bool(_) => {
                         let res_vreg = self.fn_def_mut().make_vreg(&expr_ir.typ);
-                        dbg!(res_vreg);
                         let typ = expr_ir.typ.clone();
                         self.fn_def_mut().instructions.push(Instruction {
                             kind: InstructionKind::Set(expr_ir),
@@ -550,7 +550,6 @@ impl<'a> Emitter<'a> {
                     .fn_def_mut()
                     .name_to_vreg
                     .insert(identifier.to_owned(), vreg);
-                dbg!(identifier, vreg);
             }
             NodeKind::Assignment(lhs_ast, op, rhs_ast) => {
                 if op.kind != TokenKind::Eq {

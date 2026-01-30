@@ -321,7 +321,6 @@ pub fn check_node(
             let lhs_type = node_to_type.get(lhs).unwrap();
             let rhs_type = node_to_type.get(rhs).unwrap();
             if let Err(err) = lhs_type.merge(rhs_type, &op.origin) {
-                dbg!(op.origin);
                 errs.push(err);
             }
         }
