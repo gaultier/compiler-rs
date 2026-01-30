@@ -1,1 +1,5 @@
 add tests for type mismatch (add, mul, div, cmp, assign)
+
+fibo:
+- SSA block/phi function
+- break/continue/for clause/for range

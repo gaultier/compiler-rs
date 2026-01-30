@@ -5,5 +5,5 @@ func main() {
 	var b = 3 * 4
 	a = 2
 	println(a)
-	a == true
+	a == 1
 }
