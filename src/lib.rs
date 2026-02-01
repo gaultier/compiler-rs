@@ -1,9 +1,10 @@
 pub mod amd64;
 pub mod asm;
 pub mod ast;
+mod cfg;
 pub mod elf;
 pub mod error;
-pub mod ir;
+pub(crate) mod ir;
 pub mod lex;
 pub mod macho;
 mod origin;

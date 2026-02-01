@@ -168,6 +168,7 @@ impl FnDef {
                 }
 
                 // Nothing to do for these instructions as they don't operate on virtual registers.
+                // TODO: CFG
                 InstructionKind::LabelDef(_)
                 | InstructionKind::Jump(_)
                 | InstructionKind::JumpIfFalse(_, _) => {}
