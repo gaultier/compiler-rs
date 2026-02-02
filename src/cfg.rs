@@ -11,6 +11,7 @@ pub(crate) struct ControlFlowGraph {
     blocks: Vec<ControlFlowBlock>,
     name_to_block: HashMap<String, BlockId>,
     current_block: Option<BlockId>,
+    ir_to_block: HashMap<usize, BlockId>,
 }
 
 pub(crate) struct ControlFlowBlock {
@@ -58,6 +59,7 @@ impl ControlFlowGraph {
             blocks: Vec::new(),
             name_to_block: HashMap::new(),
             current_block: None,
+            ir_to_block: HashMap::new(),
         }
     }
 
@@ -69,7 +71,26 @@ impl ControlFlowGraph {
         id
     }
 
+    fn collect_all_blocks(&mut self, irs: &[ir::Instruction]) {
+        for (i, ir) in irs.iter().enumerate() {
+            match &ir.kind {
+                ir::InstructionKind::LabelDef(name) => {
+                    let block_id = self.new_block(ControlFlowBlock {
+                        start: i,
+                        end: i,
+                        name: name.to_owned(),
+                        children: HashSet::new(),
+                    });
+                    assert_eq!(self.ir_to_block.insert(i, block_id), None);
+                }
+                _ => {}
+            }
+        }
+    }
+
     pub(crate) fn compute(&mut self, irs: &[ir::Instruction]) {
+        self.collect_all_blocks(irs);
+
         for (i, ir) in irs.iter().enumerate() {
             match &ir.kind {
                 ir::InstructionKind::IAdd(_, _)
@@ -88,13 +109,9 @@ impl ControlFlowGraph {
                     current_block.children.insert(target_block_id);
                 }
 
-                ir::InstructionKind::LabelDef(name) => {
-                    self.new_block(ControlFlowBlock {
-                        start: i,
-                        end: i,
-                        name: name.to_owned(),
-                        children: HashSet::new(),
-                    });
+                ir::InstructionKind::LabelDef(_) => {
+                    let block_id = self.ir_to_block.get(&i).unwrap();
+                    self.current_block = Some(*block_id);
                 }
             }
         }
@@ -127,7 +144,7 @@ impl ControlFlowBlock {
         let block = &blocks[id];
         writeln!(
             f,
-            "{}: name={} start={} end={}\n",
+            "{}: name={} start={} end={}",
             id.0, block.name, block.start, block.end
         )?;
 
