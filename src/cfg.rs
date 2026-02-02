@@ -71,6 +71,7 @@ impl ControlFlowGraph {
         id
     }
 
+    // TODO: Patch the `end` field.
     fn collect_all_blocks(&mut self, irs: &[ir::Instruction]) {
         for (i, ir) in irs.iter().enumerate() {
             match &ir.kind {
@@ -82,6 +83,15 @@ impl ControlFlowGraph {
                         children: HashSet::new(),
                     });
                     assert_eq!(self.ir_to_block.insert(i, block_id), None);
+                }
+                ir::InstructionKind::JumpIfFalse(_name, _) => {
+                    let block_id = self.new_block(ControlFlowBlock {
+                        start: i + 1,
+                        end: i + 1,
+                        name: String::new(), // TODO: Should we invent a name here e.g. 'if-then`?
+                        children: HashSet::new(),
+                    });
+                    assert_eq!(self.ir_to_block.insert(i + 1, block_id), None);
                 }
                 _ => {}
             }
@@ -100,8 +110,16 @@ impl ControlFlowGraph {
                 | ir::InstructionKind::Set(_)
                 | ir::InstructionKind::FnCall(_, _) => {}
 
-                ir::InstructionKind::JumpIfFalse(name, _) | ir::InstructionKind::Jump(name) => {
-                    // FIXME: In case of forward jump, the block does not exist yet.
+                ir::InstructionKind::JumpIfFalse(name, _) => {
+                    let target_block_id = *self.name_to_block.get(name).unwrap();
+                    let fallthrough_block_id = *self.ir_to_block.get(&(i + 1)).unwrap();
+
+                    let current_block_id = self.current_block.unwrap();
+                    let current_block = &mut self.blocks[current_block_id];
+                    current_block.children.insert(target_block_id);
+                    current_block.children.insert(fallthrough_block_id);
+                }
+                ir::InstructionKind::Jump(name) => {
                     let target_block_id = *self.name_to_block.get(name).unwrap();
 
                     let current_block_id = self.current_block.unwrap();

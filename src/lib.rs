@@ -191,11 +191,9 @@ pub fn compile(
 ) -> CompileResult {
     let mut lexer = Lexer::new(file_id);
     lexer.lex(input);
-    trace!("lexer: {:?}", lexer);
 
     let mut parser = Parser::new(input, &lexer, file_id_to_name);
     parser.parse();
-    trace!("ast_nodes: {:?}", &parser.nodes);
     trace!("parser errors: {:?}", parser.errors);
 
     let mut errors = parser.errors;
@@ -216,14 +214,13 @@ pub fn compile(
 
     let mut ir_emitter = ir::Emitter::new(&parser.nodes, &parser.node_to_type, &parser.name_to_def);
     ir_emitter.emit_nodes();
-    trace!("ir_emitter: {:?}", ir_emitter);
 
     let mut ir_text = String::with_capacity(input.len() * 3);
     for fn_def in &ir_emitter.fn_defs {
         writeln!(&mut ir_text, "\n{} {{", fn_def).unwrap();
 
-        for ins in &fn_def.instructions {
-            writeln!(&mut ir_text, "  {}", ins).unwrap();
+        for (i, ins) in fn_def.instructions.iter().enumerate() {
+            writeln!(&mut ir_text, "{:04}| {}", i, ins).unwrap();
         }
 
         writeln!(&mut ir_text, "}}").unwrap();
@@ -255,10 +252,6 @@ pub fn compile(
             file_id_to_name,
         );
 
-        trace!(
-            "asm_instructions: fn_name={} ins={:?}",
-            fn_def.name, fn_asm_instructions
-        );
         writeln!(&mut asm_text, "{}:", &fn_def.name).unwrap();
 
         for ins in &fn_asm_instructions {
