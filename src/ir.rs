@@ -1,7 +1,7 @@
 use std::{
     collections::{BTreeMap, HashMap},
     fmt::Display,
-    io::{Stdout, Write, stdout},
+    io::Write,
     panic,
 };
 
