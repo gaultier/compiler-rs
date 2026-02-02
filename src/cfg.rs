@@ -10,14 +10,12 @@ use crate::ir;
 pub(crate) struct ControlFlowGraph {
     blocks: Vec<ControlFlowBlock>,
     name_to_block: HashMap<String, BlockId>,
-    current_block: Option<BlockId>,
     ir_to_block: HashMap<usize, BlockId>,
 }
 
 pub(crate) struct ControlFlowBlock {
-    // IR indices inside the function body.
+    // IR index inside the function body.
     start: usize,
-    end: usize,
     name: String,
     children: HashSet<BlockId>,
 }
@@ -58,7 +56,6 @@ impl ControlFlowGraph {
         Self {
             blocks: Vec::new(),
             name_to_block: HashMap::new(),
-            current_block: None,
             ir_to_block: HashMap::new(),
         }
     }
@@ -78,7 +75,6 @@ impl ControlFlowGraph {
                 ir::InstructionKind::LabelDef(name) => {
                     let block_id = self.new_block(ControlFlowBlock {
                         start: i,
-                        end: i,
                         name: name.to_owned(),
                         children: HashSet::new(),
                     });
@@ -87,7 +83,6 @@ impl ControlFlowGraph {
                 ir::InstructionKind::JumpIfFalse(_name, _) => {
                     let block_id = self.new_block(ControlFlowBlock {
                         start: i + 1,
-                        end: i + 1,
                         name: String::new(), // TODO: Should we invent a name here e.g. 'if-then`?
                         children: HashSet::new(),
                     });
@@ -103,34 +98,24 @@ impl ControlFlowGraph {
 
         for (i, ir) in irs.iter().enumerate() {
             match &ir.kind {
-                ir::InstructionKind::IAdd(_, _)
-                | ir::InstructionKind::IMultiply(_, _)
-                | ir::InstructionKind::IDivide(_, _)
-                | ir::InstructionKind::ICmp(_, _)
-                | ir::InstructionKind::Set(_)
-                | ir::InstructionKind::FnCall(_, _) => {}
-
                 ir::InstructionKind::JumpIfFalse(name, _) => {
                     let target_block_id = *self.name_to_block.get(name).unwrap();
+                    dbg!(i, target_block_id, name);
                     let fallthrough_block_id = *self.ir_to_block.get(&(i + 1)).unwrap();
 
-                    let current_block_id = self.current_block.unwrap();
-                    let current_block = &mut self.blocks[current_block_id];
+                    let current_block = self.blocks.last_mut().unwrap();
                     current_block.children.insert(target_block_id);
                     current_block.children.insert(fallthrough_block_id);
                 }
                 ir::InstructionKind::Jump(name) => {
                     let target_block_id = *self.name_to_block.get(name).unwrap();
+                    dbg!(i, target_block_id, name);
 
-                    let current_block_id = self.current_block.unwrap();
-                    let current_block = &mut self.blocks[current_block_id];
+                    let current_block = self.blocks.last_mut().unwrap();
                     current_block.children.insert(target_block_id);
                 }
 
-                ir::InstructionKind::LabelDef(_) => {
-                    let block_id = self.ir_to_block.get(&i).unwrap();
-                    self.current_block = Some(*block_id);
-                }
+                _ => {}
             }
         }
     }
@@ -160,11 +145,7 @@ impl ControlFlowBlock {
         }
 
         let block = &blocks[id];
-        writeln!(
-            f,
-            "{}: name={} start={} end={}",
-            id.0, block.name, block.start, block.end
-        )?;
+        writeln!(f, "{}: name={} start={}", id.0, block.name, block.start)?;
 
         for child in &block.children {
             writeln!(f, "{} -> {}", id.0, child.0)?;
