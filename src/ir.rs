@@ -1,7 +1,7 @@
 use std::{
     collections::{BTreeMap, HashMap},
     fmt::Display,
-    io::Write,
+    io::{Stdout, Write, stdout},
     panic,
 };
 
@@ -10,6 +10,7 @@ use serde::Serialize;
 
 use crate::{
     ast::{NameToDef, Node, NodeId, NodeKind},
+    cfg::ControlFlowGraph,
     lex::TokenKind,
     origin::Origin,
     type_checker::{Size, Type, TypeKind},
@@ -276,6 +277,10 @@ impl<'a> Emitter<'a> {
                 self.fn_defs
                     .push(FnDef::new(name.to_owned(), typ, node.origin, stack_size));
                 let _ = self.emit_node(*body);
+
+                let mut cfg = ControlFlowGraph::new();
+                cfg.compute(&self.fn_def_mut().instructions);
+                println!("CFG:\n{}", cfg);
 
                 self.fn_def_mut().live_ranges = self.fn_def_mut().compute_live_ranges();
             }
