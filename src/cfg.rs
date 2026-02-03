@@ -96,7 +96,7 @@ impl ControlFlowGraph {
                 ir::InstructionKind::JumpIfFalse(_name, _) => {
                     self.new_block(ControlFlowBlock {
                         start: i + 1,
-                        name: String::new(), // TODO: Should we invent a name here e.g. 'if-then`?
+                        name: String::new(),
                         children: HashSet::new(),
                     });
                 }
