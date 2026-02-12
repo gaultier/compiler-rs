@@ -1,6 +1,5 @@
 -add tests for type mismatch (add, mul, div, cmp, assign)
 - track which registers are live to avoid spilling/unspilling all due to function call (noisy)
 -fibo:
-- SSA block/phi function
+- SSA block arguments
 - break/continue/for clause/for range
-- CFG

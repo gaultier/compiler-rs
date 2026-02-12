@@ -2,8 +2,11 @@ package main
 
 func main() {
 	var a = 3 * 4
-	{
-		var a = 1
-		println(a)
+	var b = 0
+	if a == 12 {
+		b = 1
+	} else {
+		b = 2
 	}
+	println(b)
 }
